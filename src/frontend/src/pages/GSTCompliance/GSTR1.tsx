@@ -13,16 +13,70 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useInvoices } from "@/hooks/useGSTStore";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
-import { Download, FileSpreadsheet, ShieldCheck } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  ShieldCheck,
+} from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+type FilingStatus = "not_filed" | "filed" | "acknowledged";
+interface FilingRecord {
+  status: FilingStatus;
+  arn?: string;
+}
+
+function randomArn() {
+  return `GST${Array.from(
+    { length: 14 },
+    () =>
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)],
+  ).join("")}`;
+}
 
 export function GSTR1() {
   const { invoices } = useInvoices();
   const { start: defStart, end: defEnd } = getCurrentMonth();
   const [dateFrom, setDateFrom] = useState(defStart);
   const [dateTo, setDateTo] = useState(defEnd);
+
+  const currentPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const [filingStatus, setFilingStatus] = useLocalStorage<
+    Record<string, FilingRecord>
+  >("gst_gstr1_status", {});
+
+  const periodStatus = filingStatus[currentPeriod] ?? {
+    status: "not_filed" as FilingStatus,
+  };
+
+  const handleFilingAction = () => {
+    if (periodStatus.status === "not_filed") {
+      const arn = randomArn();
+      setFilingStatus((prev) => ({
+        ...prev,
+        [currentPeriod]: { status: "filed", arn },
+      }));
+      toast.success(
+        `GSTR-1 filed successfully for ${currentPeriod}. ARN: ${arn}`,
+      );
+    }
+  };
+
+  const handleMarkAcknowledged = () => {
+    setFilingStatus((prev) => ({
+      ...prev,
+      [currentPeriod]: {
+        ...periodStatus,
+        status: "acknowledged",
+      },
+    }));
+    toast.success("GSTR-1 marked as Acknowledged");
+  };
 
   const filtered = invoices.filter(
     (inv) =>
@@ -65,6 +119,66 @@ export function GSTR1() {
 
   return (
     <div className="space-y-4" data-ocid="gstr1.section">
+      {/* Filing Status Banner */}
+      <Card className="bg-card border-border/70">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">
+                Filing Status ({currentPeriod}):
+              </span>
+              {periodStatus.status === "not_filed" && (
+                <Badge variant="destructive" data-ocid="gstr1.status.badge">
+                  Not Filed
+                </Badge>
+              )}
+              {periodStatus.status === "filed" && (
+                <Badge variant="default" data-ocid="gstr1.status.badge">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Filed
+                </Badge>
+              )}
+              {periodStatus.status === "acknowledged" && (
+                <Badge variant="secondary" data-ocid="gstr1.status.badge">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Acknowledged
+                </Badge>
+              )}
+              {periodStatus.arn && (
+                <span className="text-xs font-mono text-muted-foreground">
+                  ARN: {periodStatus.arn}
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {periodStatus.status === "not_filed" && (
+                <Button
+                  size="sm"
+                  onClick={handleFilingAction}
+                  data-ocid="gstr1.file.primary_button"
+                  className="gap-2"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  File GSTR-1
+                </Button>
+              )}
+              {periodStatus.status === "filed" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleMarkAcknowledged}
+                  data-ocid="gstr1.acknowledge.secondary_button"
+                  className="gap-2"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Mark Acknowledged
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <Card className="bg-card border-border/70">
         <CardContent className="pt-4">

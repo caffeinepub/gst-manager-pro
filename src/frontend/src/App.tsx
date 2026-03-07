@@ -5,6 +5,7 @@ import { AIAssistant } from "@/pages/AIAssistant/AIAssistant";
 import { BankAccounts } from "@/pages/Accounting/BankAccounts";
 import { BankReconciliation } from "@/pages/Accounting/BankReconciliation";
 import { CashBook } from "@/pages/Accounting/CashBook";
+import { ChartOfAccounts } from "@/pages/Accounting/ChartOfAccounts";
 import { JournalEntries } from "@/pages/Accounting/JournalEntries";
 import { Purchases } from "@/pages/Accounting/Purchases";
 import { Dashboard } from "@/pages/Dashboard";
@@ -13,6 +14,7 @@ import { GSTR1 } from "@/pages/GSTCompliance/GSTR1";
 import { GSTR3B } from "@/pages/GSTCompliance/GSTR3B";
 import { ITCReconciliation } from "@/pages/GSTCompliance/ITCReconciliation";
 import { RCMTracker } from "@/pages/GSTCompliance/RCMTracker";
+import { InventoryERP } from "@/pages/Inventory/InventoryERP";
 import { InvoiceList } from "@/pages/Invoicing/InvoiceList";
 import { Payments } from "@/pages/Invoicing/Payments";
 import { Login } from "@/pages/Login";
@@ -80,6 +82,10 @@ function PageContent({
       return <AuditTrail />;
     case "accounting-reconciliation":
       return <BankReconciliation />;
+    case "accounting-chart-of-accounts":
+      return <ChartOfAccounts />;
+    case "inventory-erp":
+      return <InventoryERP />;
     case "reports-stock":
       return <StockSummary />;
     case "reports-cashflow":

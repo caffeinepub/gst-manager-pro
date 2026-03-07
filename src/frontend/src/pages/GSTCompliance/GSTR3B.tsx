@@ -1,13 +1,24 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
-import { ClipboardList, Download } from "lucide-react";
+import { CheckCircle2, ClipboardList, Download } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+function randomArn3b() {
+  return `GST3B${Array.from(
+    { length: 11 },
+    () =>
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)],
+  ).join("")}`;
+}
 
 export function GSTR3B() {
   const { invoices } = useInvoices();
@@ -15,6 +26,22 @@ export function GSTR3B() {
   const { start: defStart, end: defEnd } = getCurrentMonth();
   const [dateFrom, setDateFrom] = useState(defStart);
   const [dateTo, setDateTo] = useState(defEnd);
+
+  const currentPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const [filingStatus, setFilingStatus] = useLocalStorage<
+    Record<string, { status: "not_filed" | "filed"; arn?: string }>
+  >("gst_gstr3b_status", {});
+
+  const periodStatus = filingStatus[currentPeriod] ?? { status: "not_filed" };
+
+  const handleFile = () => {
+    const arn = randomArn3b();
+    setFilingStatus((prev) => ({
+      ...prev,
+      [currentPeriod]: { status: "filed", arn },
+    }));
+    toast.success(`GSTR-3B filed successfully. ARN: ${arn}`);
+  };
 
   const data = useMemo(() => {
     const outward = invoices.filter(
@@ -94,6 +121,81 @@ export function GSTR3B() {
 
   return (
     <div className="space-y-4" data-ocid="gstr3b.section">
+      {/* Filing Status Banner */}
+      <Card className="bg-card border-border/70">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">
+                GSTR-3B Status ({currentPeriod}):
+              </span>
+              {periodStatus.status === "not_filed" ? (
+                <Badge variant="destructive" data-ocid="gstr3b.status.badge">
+                  Not Filed
+                </Badge>
+              ) : (
+                <Badge variant="default" data-ocid="gstr3b.status.badge">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Filed
+                </Badge>
+              )}
+              {periodStatus.arn && (
+                <span className="text-xs font-mono text-muted-foreground">
+                  ARN: {periodStatus.arn}
+                </span>
+              )}
+            </div>
+            {periodStatus.status === "not_filed" && (
+              <Button
+                size="sm"
+                onClick={handleFile}
+                data-ocid="gstr3b.file.primary_button"
+                className="gap-2"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                Generate & File GSTR-3B
+              </Button>
+            )}
+          </div>
+          {periodStatus.status === "not_filed" && (
+            <div className="mt-3 p-3 rounded bg-muted/40 text-xs">
+              <p className="font-medium mb-1">Tax Summary (current data):</p>
+              <div className="grid grid-cols-4 gap-2">
+                <span>
+                  CGST:{" "}
+                  <span className="font-bold text-primary">
+                    {formatINR(data.netPayable.cgst)}
+                  </span>
+                </span>
+                <span>
+                  SGST:{" "}
+                  <span className="font-bold text-primary">
+                    {formatINR(data.netPayable.sgst)}
+                  </span>
+                </span>
+                <span>
+                  IGST:{" "}
+                  <span className="font-bold text-primary">
+                    {formatINR(data.netPayable.igst)}
+                  </span>
+                </span>
+                <span>
+                  Total:{" "}
+                  <span className="font-bold text-primary">
+                    {formatINR(
+                      data.netPayable.cgst +
+                        data.netPayable.sgst +
+                        data.netPayable.igst +
+                        data.netPayable.cess,
+                    )}
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="bg-card border-border/70">
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-4 items-end">

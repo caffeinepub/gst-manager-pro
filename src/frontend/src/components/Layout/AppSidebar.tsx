@@ -136,9 +136,25 @@ const navItems: NavItem[] = [
         icon: Banknote,
       },
       {
+        label: "Chart of Accounts",
+        page: "accounting-chart-of-accounts" as AppPage,
+        icon: BookMarked,
+      },
+      {
         label: "Bank Reconciliation",
         page: "accounting-reconciliation" as AppPage,
         icon: RefreshCw,
+      },
+    ],
+  },
+  {
+    label: "Inventory",
+    icon: Package,
+    children: [
+      {
+        label: "Inventory ERP",
+        page: "inventory-erp" as AppPage,
+        icon: BarChart3,
       },
     ],
   },

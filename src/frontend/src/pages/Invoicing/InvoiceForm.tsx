@@ -20,6 +20,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useInvoiceCounter, useInvoices } from "@/hooks/useGSTStore";
 import { useBusinessProfile, useItems, useParties } from "@/hooks/useQueries";
 import {
@@ -36,8 +42,10 @@ import {
   CheckCircle,
   Plus,
   Printer,
+  QrCode,
   Save,
   Trash2,
+  Wand2,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -456,25 +464,100 @@ export function InvoiceForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label>IRN Number</Label>
-                  <Input
-                    value={irnNumber}
-                    onChange={(e) => setIrnNumber(e.target.value)}
-                    placeholder="e-Invoice IRN"
-                    className="font-mono text-xs"
-                    data-ocid="invoice.irn.input"
-                    disabled={viewOnly}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={irnNumber}
+                      onChange={(e) => setIrnNumber(e.target.value)}
+                      placeholder="e-Invoice IRN"
+                      className="font-mono text-xs flex-1"
+                      data-ocid="invoice.irn.input"
+                      disabled={viewOnly}
+                    />
+                    {!viewOnly &&
+                      ["sales", "service", "proforma"].includes(type) && (
+                        <TooltipProvider>
+                          <div className="flex gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-xs shrink-0"
+                              data-ocid="invoice.irn.generate.button"
+                              onClick={() => {
+                                const irn = Array.from(
+                                  { length: 64 },
+                                  () =>
+                                    "0123456789abcdef"[
+                                      Math.floor(Math.random() * 16)
+                                    ],
+                                ).join("");
+                                setIrnNumber(irn);
+                                toast.success("IRN generated successfully");
+                              }}
+                            >
+                              <Wand2 className="w-3 h-3 mr-1" />
+                              Generate IRN
+                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs shrink-0"
+                                  data-ocid="invoice.irn.qr.button"
+                                >
+                                  <QrCode className="w-3 h-3 mr-1" />
+                                  QR
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                QR code would be generated in production via
+                                GSTN API
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
+                      )}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>e-Way Bill #</Label>
-                  <Input
-                    value={eWayBillNumber}
-                    onChange={(e) => setEWayBillNumber(e.target.value)}
-                    placeholder="e-Way Bill number"
-                    className="font-mono text-xs"
-                    data-ocid="invoice.eway.input"
-                    disabled={viewOnly}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={eWayBillNumber}
+                      onChange={(e) => setEWayBillNumber(e.target.value)}
+                      placeholder="e-Way Bill number"
+                      className="font-mono text-xs flex-1"
+                      data-ocid="invoice.eway.input"
+                      disabled={viewOnly}
+                    />
+                    {!viewOnly && ["sales", "service"].includes(type) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs shrink-0"
+                        data-ocid="invoice.eway.generate.button"
+                        onClick={() => {
+                          if (totals.grandTotal >= 50000) {
+                            const ewb = `EWB${Array.from({ length: 12 }, () =>
+                              Math.floor(Math.random() * 10),
+                            ).join("")}`;
+                            setEWayBillNumber(ewb);
+                            toast.success("e-Way Bill generated");
+                          } else {
+                            toast.warning(
+                              "e-Way Bill required only for invoices above ₹50,000",
+                            );
+                          }
+                        }}
+                      >
+                        <Wand2 className="w-3 h-3 mr-1" />
+                        Auto Generate
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {(type === "credit_note" || type === "debit_note") && (
                   <div className="space-y-1.5">

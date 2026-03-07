@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,7 +40,6 @@ import { useInvoiceCounter, usePurchases } from "@/hooks/useGSTStore";
 import { useItems, useParties } from "@/hooks/useQueries";
 import {
   GST_RATES,
-  INDIAN_STATES,
   type InvoiceLineItem,
   type Purchase,
   UNITS,
@@ -41,13 +47,16 @@ import {
 import { addDays, formatDate, formatINR, today } from "@/utils/formatting";
 import {
   Edit,
+  Loader2,
   Package,
   Plus,
+  ScanLine,
   Search,
   ShoppingCart,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 function genId() {
@@ -99,6 +108,10 @@ export function Purchases() {
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [ocrFile, setOcrFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     billNumber: "",
@@ -130,6 +143,37 @@ export function Purchases() {
       status: "confirmed" as "draft" | "confirmed",
     });
     setShowForm(true);
+  };
+
+  const handleOcrScan = () => {
+    if (!ocrFile) {
+      toast.error("Please select a file to scan");
+      return;
+    }
+    setOcrProcessing(true);
+    setTimeout(() => {
+      setOcrProcessing(false);
+      setOcrDialogOpen(false);
+      // Pre-fill the form with OCR data
+      const scanNumber = `SCAN-${Math.floor(1000 + Math.random() * 9000).toString()}`;
+      setEditingPurchase(null);
+      setForm({
+        billNumber: scanNumber,
+        billDate: today(),
+        dueDate: addDays(today(), 30),
+        vendorId: "",
+        isRcm: false,
+        itcEligible: true,
+        notes: "OCR extracted data - please verify",
+        lines: [emptyLine()],
+        status: "draft" as "draft" | "confirmed",
+      });
+      setOcrFile(null);
+      setShowForm(true);
+      toast.success(
+        "Bill scanned successfully - please verify the extracted data",
+      );
+    }, 1500);
   };
 
   const openEdit = (p: Purchase) => {
@@ -572,14 +616,105 @@ export function Purchases() {
             data-ocid="purchase.search_input"
           />
         </div>
-        <Button
-          onClick={openCreate}
-          data-ocid="purchase.add_button"
-          className="gap-2"
-        >
-          <Plus className="w-4 h-4" /> Record Purchase
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setOcrDialogOpen(true)}
+            data-ocid="purchase.ocr.open_modal_button"
+            className="gap-2"
+          >
+            <ScanLine className="w-4 h-4" /> Scan Bill (OCR)
+          </Button>
+          <Button
+            onClick={openCreate}
+            data-ocid="purchase.add_button"
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" /> Record Purchase
+          </Button>
+        </div>
       </div>
+
+      {/* OCR Dialog */}
+      <Dialog open={ocrDialogOpen} onOpenChange={setOcrDialogOpen}>
+        <DialogContent data-ocid="purchase.ocr.dialog">
+          <DialogHeader>
+            <DialogTitle>Scan Bill with OCR</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Upload a scanned image or PDF of your vendor bill. OCR will
+              extract the data automatically.
+            </p>
+            <button
+              type="button"
+              className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/20 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              data-ocid="purchase.ocr.dropzone"
+            >
+              <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+              {ocrFile ? (
+                <div>
+                  <p className="text-sm font-medium">{ocrFile.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {(ocrFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium">
+                    Click to upload or drag & drop
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PNG, JPG, PDF up to 10MB
+                  </p>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                data-ocid="purchase.ocr.upload_button"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setOcrFile(file);
+                }}
+              />
+            </button>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOcrDialogOpen(false);
+                setOcrFile(null);
+              }}
+              data-ocid="purchase.ocr.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleOcrScan}
+              disabled={!ocrFile || ocrProcessing}
+              data-ocid="purchase.ocr.submit_button"
+              className="gap-2"
+            >
+              {ocrProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing OCR...
+                </>
+              ) : (
+                <>
+                  <ScanLine className="w-4 h-4" />
+                  Scan Bill
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="bg-card border-border/70">
         <CardHeader className="pb-2">

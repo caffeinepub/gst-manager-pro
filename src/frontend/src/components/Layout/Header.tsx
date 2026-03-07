@@ -1,8 +1,24 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import type { AppPage } from "@/types/gst";
-import { FileText, Plus, ShoppingCart } from "lucide-react";
+import {
+  AlertCircle,
+  Bell,
+  Calendar,
+  CheckCircle2,
+  FileText,
+  Plus,
+  ShoppingCart,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 const PAGE_TITLES: Record<AppPage, string> = {
   dashboard: "Dashboard",
@@ -23,6 +39,7 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "accounting-journal": "Journal Entries",
   "accounting-bank": "Bank Accounts",
   "accounting-cashbook": "Cash Book / Transactions",
+  "accounting-chart-of-accounts": "Chart of Accounts",
   "gst-gstr1": "GSTR-1 Report",
   "gst-gstr3b": "GSTR-3B Return",
   "gst-itc": "ITC Reconciliation",
@@ -39,6 +56,7 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "reports-stock": "Stock Summary",
   "reports-cashflow": "Cash Flow Statement",
   "accounting-reconciliation": "Bank Reconciliation",
+  "inventory-erp": "Inventory ERP",
   "ai-assistant": "AI Tax Assistant",
 };
 
@@ -60,6 +78,7 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "accounting-journal": ["Accounting", "Journal Entries"],
   "accounting-bank": ["Accounting", "Bank Accounts"],
   "accounting-cashbook": ["Accounting", "Cash Book"],
+  "accounting-chart-of-accounts": ["Accounting", "Chart of Accounts"],
   "gst-gstr1": ["GST Compliance", "GSTR-1"],
   "gst-gstr3b": ["GST Compliance", "GSTR-3B"],
   "gst-itc": ["GST Compliance", "ITC Reconciliation"],
@@ -76,7 +95,111 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "reports-stock": ["Reports", "Stock Summary"],
   "reports-cashflow": ["Reports", "Cash Flow"],
   "accounting-reconciliation": ["Accounting", "Bank Reconciliation"],
+  "inventory-erp": ["Inventory", "Inventory ERP"],
 };
+
+interface Notification {
+  id: string;
+  icon: React.ReactNode;
+  message: string;
+  timeAgo: string;
+  type: "warning" | "info" | "error";
+}
+
+function useNotifications() {
+  const { invoices } = useInvoices();
+  const { purchases } = usePurchases();
+
+  return useMemo(() => {
+    const today = new Date();
+    const notifications: Notification[] = [];
+
+    // Overdue invoices
+    const overdueInvoices = invoices.filter((inv) => {
+      if (inv.status !== "confirmed") return false;
+      if (!["sales", "service"].includes(inv.type)) return false;
+      const dueDate = new Date(inv.dueDate);
+      return dueDate < today;
+    });
+
+    if (overdueInvoices.length > 0) {
+      notifications.push({
+        id: "overdue",
+        icon: <AlertCircle className="w-4 h-4 text-destructive" />,
+        message: `${overdueInvoices.length} invoice${overdueInvoices.length > 1 ? "s" : ""} overdue`,
+        timeAgo: "Now",
+        type: "error",
+      });
+    }
+
+    // Upcoming invoices (due within 7 days)
+    const upcomingInvoices = invoices.filter((inv) => {
+      if (inv.status !== "confirmed") return false;
+      if (!["sales", "service"].includes(inv.type)) return false;
+      const dueDate = new Date(inv.dueDate);
+      const diffDays = Math.ceil(
+        (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      return diffDays >= 0 && diffDays <= 7;
+    });
+
+    if (upcomingInvoices.length > 0) {
+      notifications.push({
+        id: "upcoming",
+        icon: <FileText className="w-4 h-4 text-yellow-500" />,
+        message: `${upcomingInvoices.length} invoice${upcomingInvoices.length > 1 ? "s" : ""} due within 7 days`,
+        timeAgo: "Upcoming",
+        type: "warning",
+      });
+    }
+
+    // GSTR-1 due (11th of next month)
+    const gstr1Due = new Date(today.getFullYear(), today.getMonth() + 1, 11);
+    const gstr1DiffDays = Math.ceil(
+      (gstr1Due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (gstr1DiffDays >= 0 && gstr1DiffDays <= 7) {
+      notifications.push({
+        id: "gstr1-due",
+        icon: <Calendar className="w-4 h-4 text-orange-500" />,
+        message: `GSTR-1 filing due in ${gstr1DiffDays} day${gstr1DiffDays !== 1 ? "s" : ""}`,
+        timeAgo: `${gstr1DiffDays}d`,
+        type: "warning",
+      });
+    }
+
+    // GSTR-3B due (20th of next month)
+    const gstr3bDue = new Date(today.getFullYear(), today.getMonth() + 1, 20);
+    const gstr3bDiffDays = Math.ceil(
+      (gstr3bDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (gstr3bDiffDays >= 0 && gstr3bDiffDays <= 7) {
+      notifications.push({
+        id: "gstr3b-due",
+        icon: <Calendar className="w-4 h-4 text-orange-500" />,
+        message: `GSTR-3B filing due in ${gstr3bDiffDays} day${gstr3bDiffDays !== 1 ? "s" : ""}`,
+        timeAgo: `${gstr3bDiffDays}d`,
+        type: "warning",
+      });
+    }
+
+    // RCM purchases unpaid
+    const rcmUnpaid = purchases.filter(
+      (p) => p.isRcm && p.status === "confirmed",
+    );
+    if (rcmUnpaid.length > 0) {
+      notifications.push({
+        id: "rcm",
+        icon: <ShoppingCart className="w-4 h-4 text-blue-500" />,
+        message: `${rcmUnpaid.length} RCM purchase${rcmUnpaid.length > 1 ? "s" : ""} pending tax payment`,
+        timeAgo: "Pending",
+        type: "info",
+      });
+    }
+
+    return notifications;
+  }, [invoices, purchases]);
+}
 
 interface HeaderProps {
   currentPage: AppPage;
@@ -85,6 +208,10 @@ interface HeaderProps {
 
 export function Header({ currentPage, onNavigate }: HeaderProps) {
   const breadcrumbs = PAGE_BREADCRUMBS[currentPage];
+  const notifications = useNotifications();
+  const [readAll, setReadAll] = useState(false);
+
+  const unreadCount = readAll ? 0 : notifications.length;
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border/80 bg-background/95 backdrop-blur px-4 no-print">
@@ -150,6 +277,73 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
               Print
             </Button>
           )}
+
+        {/* Notifications Bell */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-8 w-8"
+              data-ocid="header.notifications.button"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-80 p-0"
+            data-ocid="header.notifications.popover"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 className="text-sm font-semibold">Notifications</h3>
+              {notifications.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => setReadAll(true)}
+                  data-ocid="header.notifications.mark_read.button"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Mark all read
+                </Button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  <Bell className="w-6 h-6 mx-auto mb-2 text-muted-foreground/50" />
+                  No pending alerts
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {notifications.map((n) => (
+                    <li
+                      key={n.id}
+                      className={`flex items-start gap-3 px-4 py-3 text-sm ${
+                        !readAll ? "bg-muted/20" : ""
+                      }`}
+                    >
+                      <div className="mt-0.5 shrink-0">{n.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-tight">{n.message}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {n.timeAgo}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
   );

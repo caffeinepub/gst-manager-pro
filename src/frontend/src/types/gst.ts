@@ -277,4 +277,6 @@ export type AppPage =
   | "reports-stock"
   | "reports-cashflow"
   | "accounting-reconciliation"
+  | "accounting-chart-of-accounts"
+  | "inventory-erp"
   | "ai-assistant";

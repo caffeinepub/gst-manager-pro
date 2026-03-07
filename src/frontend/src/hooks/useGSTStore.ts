@@ -227,6 +227,80 @@ export function useAuditLogs() {
   return { logs, addLog };
 }
 
+export interface CustomAccount {
+  id: string;
+  code: string;
+  name: string;
+  type: "asset" | "liability" | "equity" | "income" | "expense";
+  isCustom: true;
+  createdAt: string;
+}
+
+export function useCustomAccounts() {
+  const [customAccounts, setCustomAccounts] = useLocalStorage<CustomAccount[]>(
+    "gst_custom_accounts",
+    [],
+  );
+
+  const addAccount = useCallback(
+    (a: Omit<CustomAccount, "id" | "createdAt" | "isCustom">) => {
+      const newA: CustomAccount = {
+        ...a,
+        isCustom: true,
+        id: generateId(),
+        createdAt: now(),
+      };
+      setCustomAccounts((prev) => [...prev, newA]);
+    },
+    [setCustomAccounts],
+  );
+
+  const deleteAccount = useCallback(
+    (id: string) => {
+      setCustomAccounts((prev) => prev.filter((a) => a.id !== id));
+    },
+    [setCustomAccounts],
+  );
+
+  return { customAccounts, addAccount, deleteAccount };
+}
+
+export interface StockMovement {
+  id: string;
+  itemId: string;
+  itemName: string;
+  type: "receipt" | "issue";
+  qty: number;
+  date: string;
+  reference: string;
+  narration: string;
+  createdAt: string;
+}
+
+export function useStockMovements() {
+  const [movements, setMovements] = useLocalStorage<StockMovement[]>(
+    "gst_stock_movements",
+    [],
+  );
+
+  const addMovement = useCallback(
+    (m: Omit<StockMovement, "id" | "createdAt">) => {
+      const newM: StockMovement = { ...m, id: generateId(), createdAt: now() };
+      setMovements((prev) => [newM, ...prev]);
+    },
+    [setMovements],
+  );
+
+  const deleteMovement = useCallback(
+    (id: string) => {
+      setMovements((prev) => prev.filter((m) => m.id !== id));
+    },
+    [setMovements],
+  );
+
+  return { movements, addMovement, deleteMovement };
+}
+
 export function useInvoiceCounter() {
   const [counters, setCounters] = useLocalStorage<Record<string, number>>(
     "gst_invoice_counters",
