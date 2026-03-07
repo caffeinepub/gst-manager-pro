@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cabinet Grotesk - Display */
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/assets/fonts/CabinetGrotesk-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Satoshi - Body */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/assets/fonts/Satoshi-Variable.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono - Numbers/Code */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* Enterprise Dark Theme - Slate + Emerald */
+    --background: 0.13 0.008 250;
+    --foreground: 0.94 0.01 255;
+    --card: 0.17 0.01 255;
+    --card-foreground: 0.94 0.01 255;
+    --popover: 0.19 0.012 255;
+    --popover-foreground: 0.94 0.01 255;
+    
+    /* Emerald Green as primary */
+    --primary: 0.72 0.17 162;
+    --primary-foreground: 0.1 0.02 160;
+    
+    --secondary: 0.22 0.015 255;
+    --secondary-foreground: 0.85 0.01 255;
+    
+    --muted: 0.22 0.015 255;
+    --muted-foreground: 0.56 0.02 255;
+    
+    --accent: 0.25 0.02 255;
+    --accent-foreground: 0.94 0.01 255;
+    
+    --destructive: 0.62 0.22 25;
+    --destructive-foreground: 0.98 0 0;
+    
+    --success: 0.72 0.17 162;
+    --success-foreground: 0.1 0.02 160;
+    
+    --warning: 0.78 0.18 85;
+    --warning-foreground: 0.15 0.03 80;
+    
+    --border: 0.28 0.015 255;
+    --input: 0.24 0.015 255;
+    --ring: 0.72 0.17 162;
+    
+    /* Charts */
+    --chart-1: 0.72 0.17 162;
+    --chart-2: 0.65 0.18 250;
+    --chart-3: 0.78 0.18 85;
+    --chart-4: 0.62 0.22 25;
+    --chart-5: 0.68 0.16 200;
+    
+    /* Sidebar */
+    --sidebar: 0.11 0.01 255;
+    --sidebar-foreground: 0.90 0.01 255;
+    --sidebar-primary: 0.72 0.17 162;
+    --sidebar-primary-foreground: 0.1 0.02 160;
+    --sidebar-accent: 0.20 0.015 255;
+    --sidebar-accent-foreground: 0.94 0.01 255;
+    --sidebar-border: 0.22 0.015 255;
+    --sidebar-ring: 0.72 0.17 162;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-satoshi antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-cabinet;
+  }
+}
+
+@layer components {
+  /* Number formatting */
+  .font-numeric {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Enterprise table */
+  .data-table thead tr {
+    @apply border-b border-border;
+  }
+  .data-table tbody tr {
+    @apply border-b border-border/50 hover:bg-accent/30 transition-colors;
+  }
+  
+  /* GST Amount Colors */
+  .amount-positive {
+    @apply text-emerald font-numeric;
+  }
+  .amount-negative {
+    @apply text-destructive font-numeric;
+  }
+  
+  /* Status badges */
+  .badge-draft {
+    @apply bg-muted text-muted-foreground;
+  }
+  .badge-confirmed {
+    @apply bg-emerald/20 text-emerald;
+  }
+  .badge-cancelled {
+    @apply bg-destructive/20 text-destructive;
+  }
+  .badge-paid {
+    @apply bg-emerald/20 text-emerald;
+  }
+  .badge-pending {
+    @apply bg-warning/20 text-warning-fg;
+  }
+
+  /* Print styles */
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    nav, aside, header, .sidebar { display: none !important; }
+    body { background: white !important; color: black !important; }
+    .invoice-print-area { 
+      display: block;
+      background: white !important; 
+      color: black !important; 
+      max-width: 100% !important;
+      page-break-inside: avoid;
+    }
+  }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+}
