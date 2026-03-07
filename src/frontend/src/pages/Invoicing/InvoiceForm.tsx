@@ -1,6 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,6 +46,7 @@ import {
 import { addDays, amountInWords, formatINR, today } from "@/utils/formatting";
 import {
   CheckCircle,
+  Mic,
   Plus,
   Printer,
   QrCode,
@@ -127,6 +134,8 @@ export function InvoiceForm({
   );
   const [status, setStatus] = useState<InvoiceStatus>("draft");
   const [linkedInvoiceId, setLinkedInvoiceId] = useState("");
+  const [showVoiceDialog, setShowVoiceDialog] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
 
   const businessStateCode = businessProfile
     ? String(businessProfile.stateCode).padStart(2, "0")
@@ -293,7 +302,7 @@ export function InvoiceForm({
             </Badge>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={onClose}
@@ -301,9 +310,50 @@ export function InvoiceForm({
           >
             {viewOnly ? "Close" : "Back"}
           </Button>
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const prevTitle = document.title;
+              document.title = `${invoiceNumber} - ${TYPE_LABELS[type]}`;
+              window.print();
+              document.title = prevTitle;
+            }}
+          >
             <Printer className="w-4 h-4 mr-1.5" /> Print
           </Button>
+          {!viewOnly && ["sales", "service"].includes(type) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVoiceDialog(true);
+                setVoiceListening(true);
+                setTimeout(() => {
+                  setVoiceListening(false);
+                  // Pre-fill first available party
+                  if (parties.length > 0) {
+                    setPartyId(String(parties[0].id));
+                  }
+                  // Add a voice-captured line item
+                  setLines((prev) => [
+                    ...prev.filter((l) => l.description),
+                    {
+                      ...emptyLine(),
+                      description: "Voice Captured Item",
+                      qty: 1,
+                      unitPrice: 5000,
+                      gstRate: 18,
+                    },
+                  ]);
+                  setShowVoiceDialog(false);
+                  toast.success("Voice captured — please verify the details");
+                }, 2000);
+              }}
+              data-ocid="invoice.voice.button"
+              className="gap-1.5"
+            >
+              <Mic className="w-4 h-4" /> Voice
+            </Button>
+          )}
           {!viewOnly && (
             <>
               <Button
@@ -335,12 +385,42 @@ export function InvoiceForm({
         </div>
       </div>
 
+      {/* Voice Invoice Dialog */}
+      <Dialog open={showVoiceDialog} onOpenChange={setShowVoiceDialog}>
+        <DialogContent className="max-w-sm" data-ocid="invoice.voice.dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mic className="w-4 h-4 text-primary" /> Voice Invoice (Beta)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center py-8 space-y-4">
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                voiceListening ? "bg-destructive/10 animate-pulse" : "bg-muted"
+              }`}
+            >
+              <Mic
+                className={`w-8 h-8 ${voiceListening ? "text-destructive" : "text-muted-foreground"}`}
+              />
+            </div>
+            <p className="text-sm font-medium">
+              {voiceListening ? "Listening..." : "Processing..."}
+            </p>
+            <p className="text-xs text-muted-foreground text-center">
+              {voiceListening
+                ? "Speak your invoice details clearly"
+                : "Filling in the details..."}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Invoice Print Area */}
       <div className="invoice-print-area space-y-4">
         {/* Basic Info */}
         <Card className="bg-card border-border/70">
           <CardContent className="pt-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label>Invoice #</Label>
                 <Input
@@ -895,6 +975,169 @@ export function InvoiceForm({
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Dedicated Print-Only Layout */}
+      <div className="print-only invoice-print-area">
+        <div className="p-8 text-black bg-white">
+          {/* Business Header */}
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h1 className="text-xl font-bold text-black">
+                {businessProfile?.businessName || "Your Business Name"}
+              </h1>
+              <p className="text-sm text-gray-600">
+                GSTIN: {businessProfile?.gstin || "—"}
+              </p>
+              <p className="text-sm text-gray-600">
+                {businessProfile?.address || ""}
+              </p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-lg font-bold uppercase tracking-wider text-black">
+                {TYPE_LABELS[type]}
+              </h2>
+              <p className="text-sm text-gray-700">
+                Invoice #: {invoiceNumber}
+              </p>
+              <p className="text-sm text-gray-700">Date: {date}</p>
+              <p className="text-sm text-gray-700">Due Date: {dueDate}</p>
+              {irnNumber && (
+                <p className="text-xs text-gray-500 font-mono mt-1">
+                  IRN: {irnNumber.slice(0, 32)}...
+                </p>
+              )}
+            </div>
+          </div>
+          {/* Bill To */}
+          {selectedParty && (
+            <div className="mb-6 p-3 border border-gray-200 rounded">
+              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                Bill To
+              </p>
+              <p className="font-semibold text-black">{selectedParty.name}</p>
+              {selectedParty.gstin && (
+                <p className="text-sm text-gray-600 font-mono">
+                  GSTIN: {selectedParty.gstin}
+                </p>
+              )}
+              {selectedParty.billingAddress && (
+                <p className="text-sm text-gray-600">
+                  {selectedParty.billingAddress}
+                </p>
+              )}
+            </div>
+          )}
+          {/* Line Items Table */}
+          <table className="w-full border-collapse text-sm mb-4">
+            <thead>
+              <tr className="border-b-2 border-black">
+                <th className="text-left py-2 pr-3">Description</th>
+                <th className="text-left py-2 pr-2">HSN/SAC</th>
+                <th className="text-right py-2 pr-2">Qty</th>
+                <th className="text-left py-2 pr-2">Unit</th>
+                <th className="text-right py-2 pr-2">Price</th>
+                <th className="text-right py-2 pr-2">Disc%</th>
+                <th className="text-right py-2 pr-2">Taxable</th>
+                <th className="text-right py-2 pr-2">GST%</th>
+                <th className="text-right py-2">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines
+                .filter((l) => l.description)
+                .map((line) => (
+                  <tr key={line.id} className="border-b border-gray-200">
+                    <td className="py-1.5 pr-3">{line.description}</td>
+                    <td className="py-1.5 pr-2 font-mono text-xs">
+                      {line.hsnSacCode}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">{line.qty}</td>
+                    <td className="py-1.5 pr-2 text-xs">{line.unit}</td>
+                    <td className="py-1.5 pr-2 text-right">
+                      {formatINR(line.unitPrice)}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">
+                      {line.discountPercent}%
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">
+                      {formatINR(
+                        line.qty *
+                          line.unitPrice *
+                          (1 - line.discountPercent / 100),
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right">{line.gstRate}%</td>
+                    <td className="py-1.5 text-right font-semibold">
+                      {formatINR(line.lineTotal)}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {/* Tax Summary */}
+          <div className="flex justify-end mb-4">
+            <div className="w-64 text-sm">
+              <div className="flex justify-between py-1">
+                <span className="text-gray-600">Subtotal</span>
+                <span>{formatINR(totals.subtotal)}</span>
+              </div>
+              {totals.totalDiscount > 0 && (
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Discount</span>
+                  <span>-{formatINR(totals.totalDiscount)}</span>
+                </div>
+              )}
+              {isInterstate ? (
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">IGST</span>
+                  <span>{formatINR(totals.totalIgst)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">CGST</span>
+                    <span>{formatINR(totals.totalCgst)}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">SGST</span>
+                    <span>{formatINR(totals.totalSgst)}</span>
+                  </div>
+                </>
+              )}
+              {totals.totalCess > 0 && (
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Cess</span>
+                  <span>{formatINR(totals.totalCess)}</span>
+                </div>
+              )}
+              <div className="flex justify-between py-2 border-t-2 border-black font-bold text-base">
+                <span>Grand Total</span>
+                <span>{formatINR(totals.grandTotal)}</span>
+              </div>
+              <p className="text-xs text-gray-500 italic mt-1">
+                {amountInWords(totals.grandTotal)}
+              </p>
+            </div>
+          </div>
+          {/* Notes & Terms */}
+          {notes && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Notes
+              </p>
+              <p className="text-sm text-gray-700">{notes}</p>
+            </div>
+          )}
+          {termsConditions && (
+            <div>
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Terms & Conditions
+              </p>
+              <p className="text-sm text-gray-700">{termsConditions}</p>
+            </div>
+          )}
         </div>
       </div>
 

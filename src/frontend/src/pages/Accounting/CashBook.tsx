@@ -91,6 +91,17 @@ export function CashBook() {
   const totalDebit = filtered.reduce((s, t) => s + t.debit, 0);
   const totalCredit = filtered.reduce((s, t) => s + t.credit, 0);
 
+  // Calculate running balance sorted by date
+  const sortedFiltered = [...filtered].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  const runningBalances = new Map<string, number>();
+  let runningTotal = 0;
+  for (const txn of sortedFiltered) {
+    runningTotal += txn.credit - txn.debit;
+    runningBalances.set(txn.id, runningTotal);
+  }
+
   return (
     <div className="space-y-4" data-ocid="cashbook.section">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -162,60 +173,70 @@ export function CashBook() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="cashbook.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Date</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Debit</TableHead>
-                  <TableHead className="text-right">Credit</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((txn, idx) => {
-                  const acc = accounts.find((a) => a.id === txn.accountId);
-                  return (
-                    <TableRow
-                      key={txn.id}
-                      data-ocid={`cashbook.item.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4 text-xs text-muted-foreground">
-                        {formatDate(txn.date)}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {acc?.bankName || "Unknown"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {txn.description}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        {txn.reference || "-"}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric text-destructive">
-                        {txn.debit > 0 ? formatINR(txn.debit) : "-"}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric text-primary">
-                        {txn.credit > 0 ? formatINR(txn.credit) : "-"}
-                      </TableCell>
-                      <TableCell className="text-right pr-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(txn.id)}
-                          data-ocid={`cashbook.delete_button.${idx + 1}`}
+            <div className="overflow-x-auto">
+              <Table data-ocid="cashbook.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Date</TableHead>
+                    <TableHead>Account</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Debit</TableHead>
+                    <TableHead className="text-right">Credit</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((txn, idx) => {
+                    const acc = accounts.find((a) => a.id === txn.accountId);
+                    const balance = runningBalances.get(txn.id) ?? 0;
+                    return (
+                      <TableRow
+                        key={txn.id}
+                        data-ocid={`cashbook.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 text-xs text-muted-foreground">
+                          {formatDate(txn.date)}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {acc?.bankName || "Unknown"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {txn.description}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">
+                          {txn.reference || "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric text-destructive">
+                          {txn.debit > 0 ? formatINR(txn.debit) : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric text-primary">
+                          {txn.credit > 0 ? formatINR(txn.credit) : "-"}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-numeric font-medium text-sm ${balance >= 0 ? "text-chart-2" : "text-destructive"}`}
+                          data-ocid={`cashbook.balance.${idx + 1}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                          {formatINR(balance)}
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(txn.id)}
+                            data-ocid={`cashbook.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

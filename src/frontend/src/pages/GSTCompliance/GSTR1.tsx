@@ -21,6 +21,7 @@ import {
   Download,
   FileSpreadsheet,
   ShieldCheck,
+  Table2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -227,6 +228,57 @@ export function GSTR1() {
             >
               <Download className="w-4 h-4" /> Export JSON
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const allInvoices = [
+                  ...b2b,
+                  ...b2c,
+                  ...creditNotes,
+                  ...debitNotes,
+                ];
+                const header = [
+                  "Invoice #",
+                  "Date",
+                  "Party",
+                  "GSTIN",
+                  "Place of Supply",
+                  "Taxable",
+                  "CGST",
+                  "SGST",
+                  "IGST",
+                  "Cess",
+                  "Grand Total",
+                ].join(",");
+                const rows = allInvoices.map((inv) =>
+                  [
+                    inv.invoiceNumber,
+                    inv.date,
+                    `"${inv.partyName}"`,
+                    inv.partyGstin || "",
+                    `"${inv.placeOfSupplyName}"`,
+                    (inv.subtotal - inv.totalDiscount).toFixed(2),
+                    inv.totalCgst.toFixed(2),
+                    inv.totalSgst.toFixed(2),
+                    inv.totalIgst.toFixed(2),
+                    inv.totalCess.toFixed(2),
+                    inv.grandTotal.toFixed(2),
+                  ].join(","),
+                );
+                const csv = [header, ...rows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `GSTR1_${dateFrom}_${dateTo}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              data-ocid="gstr1.export_csv.button"
+              className="gap-2"
+            >
+              <Table2 className="w-4 h-4" /> Export CSV
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -390,49 +442,51 @@ function GSTTable({
     );
   }
   return (
-    <Table data-ocid="gstr1.list.table">
-      <TableHeader>
-        <TableRow>
-          <TableHead className="pl-4">Invoice #</TableHead>
-          <TableHead>Date</TableHead>
-          <TableHead>Party</TableHead>
-          <TableHead>GSTIN</TableHead>
-          <TableHead>Place of Supply</TableHead>
-          <TableHead className="text-right">Taxable</TableHead>
-          <TableHead className="text-right">CGST</TableHead>
-          <TableHead className="text-right">SGST</TableHead>
-          <TableHead className="text-right">IGST</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {invoices.map((inv, idx) => (
-          <TableRow key={inv.id} data-ocid={`gstr1.item.${idx + 1}`}>
-            <TableCell className="pl-4 font-mono text-xs text-primary">
-              {inv.invoiceNumber}
-            </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {formatDate(inv.date)}
-            </TableCell>
-            <TableCell className="text-sm">{inv.partyName}</TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">
-              {inv.partyGstin || "-"}
-            </TableCell>
-            <TableCell className="text-xs">{inv.placeOfSupplyName}</TableCell>
-            <TableCell className="text-right font-numeric text-sm">
-              {formatINR(inv.subtotal - inv.totalDiscount)}
-            </TableCell>
-            <TableCell className="text-right font-numeric text-sm">
-              {formatINR(inv.totalCgst)}
-            </TableCell>
-            <TableCell className="text-right font-numeric text-sm">
-              {formatINR(inv.totalSgst)}
-            </TableCell>
-            <TableCell className="text-right font-numeric text-sm">
-              {formatINR(inv.totalIgst)}
-            </TableCell>
+    <div className="overflow-x-auto">
+      <Table data-ocid="gstr1.list.table">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="pl-4">Invoice #</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Party</TableHead>
+            <TableHead>GSTIN</TableHead>
+            <TableHead>Place of Supply</TableHead>
+            <TableHead className="text-right">Taxable</TableHead>
+            <TableHead className="text-right">CGST</TableHead>
+            <TableHead className="text-right">SGST</TableHead>
+            <TableHead className="text-right">IGST</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {invoices.map((inv, idx) => (
+            <TableRow key={inv.id} data-ocid={`gstr1.item.${idx + 1}`}>
+              <TableCell className="pl-4 font-mono text-xs text-primary">
+                {inv.invoiceNumber}
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">
+                {formatDate(inv.date)}
+              </TableCell>
+              <TableCell className="text-sm">{inv.partyName}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {inv.partyGstin || "-"}
+              </TableCell>
+              <TableCell className="text-xs">{inv.placeOfSupplyName}</TableCell>
+              <TableCell className="text-right font-numeric text-sm">
+                {formatINR(inv.subtotal - inv.totalDiscount)}
+              </TableCell>
+              <TableCell className="text-right font-numeric text-sm">
+                {formatINR(inv.totalCgst)}
+              </TableCell>
+              <TableCell className="text-right font-numeric text-sm">
+                {formatINR(inv.totalSgst)}
+              </TableCell>
+              <TableCell className="text-right font-numeric text-sm">
+                {formatINR(inv.totalIgst)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

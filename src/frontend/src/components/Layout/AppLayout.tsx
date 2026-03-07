@@ -1,7 +1,8 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { AppPage } from "@/types/gst";
-import { useState } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
 
 interface AppLayoutProps {
@@ -15,17 +16,18 @@ export function AppLayout({
   onNavigate,
   children,
 }: AppLayoutProps) {
-  const [_open, setOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   return (
-    <SidebarProvider defaultOpen={true} onOpenChange={setOpen}>
+    <SidebarProvider defaultOpen={!isMobile}>
       <AppSidebar currentPage={currentPage} onNavigate={onNavigate} />
       <SidebarInset>
         <Header currentPage={currentPage} onNavigate={onNavigate} />
-        <main className="flex-1 overflow-auto p-6 animate-fade-in">
+        <main className="flex-1 overflow-auto px-4 py-4 sm:p-6 animate-fade-in pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-6">
           {children}
         </main>
-        <footer className="py-3 px-6 text-center border-t border-border/50 no-print">
+        <BottomNav currentPage={currentPage} onNavigate={onNavigate} />
+        <footer className="py-3 px-6 text-center border-t border-border/50 no-print hidden sm:block">
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()}. Built with love using{" "}
             <a

@@ -190,65 +190,70 @@ export function Payments() {
               </p>
             </div>
           ) : (
-            <Table data-ocid="payment.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Invoice #</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.map((pmt, idx) => (
-                  <TableRow key={pmt.id} data-ocid={`payment.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-mono text-xs text-primary">
-                      {pmt.invoiceNumber}
-                    </TableCell>
-                    <TableCell className="text-sm">{pmt.partyName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(pmt.date)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {pmt.mode.replace("_", "/")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {pmt.reference || "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-medium">
-                      {formatINR(pmt.amount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          pmt.type === "received" ? "default" : "secondary"
-                        }
-                        className="text-xs capitalize"
-                      >
-                        {pmt.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(pmt.id)}
-                        data-ocid={`payment.delete_button.${idx + 1}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="payment.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Invoice #</TableHead>
+                    <TableHead>Party</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Mode</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((pmt, idx) => (
+                    <TableRow
+                      key={pmt.id}
+                      data-ocid={`payment.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-mono text-xs text-primary">
+                        {pmt.invoiceNumber}
+                      </TableCell>
+                      <TableCell className="text-sm">{pmt.partyName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(pmt.date)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {pmt.mode.replace("_", "/")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {pmt.reference || "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-medium">
+                        {formatINR(pmt.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            pmt.type === "received" ? "default" : "secondary"
+                          }
+                          className="text-xs capitalize"
+                        >
+                          {pmt.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(pmt.id)}
+                          data-ocid={`payment.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -284,6 +289,23 @@ export function Payments() {
                   ))}
                 </SelectContent>
               </Select>
+              {form.invoiceId &&
+                (() => {
+                  const inv = invoices.find((i) => i.id === form.invoiceId);
+                  if (!inv) return null;
+                  return (
+                    <div className="p-2 rounded bg-muted/50 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {inv.partyName}
+                      </span>
+                      {inv.partyGstin && (
+                        <span className="font-mono ml-2">
+                          GSTIN: {inv.partyGstin}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

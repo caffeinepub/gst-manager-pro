@@ -177,99 +177,101 @@ export function Items() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="item.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Name</TableHead>
-                  <TableHead>HSN/SAC</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>GST Rate</TableHead>
-                  <TableHead>Selling Price</TableHead>
-                  <TableHead>Purchase Price</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((item, idx) => (
-                  <TableRow
-                    key={String(item.id)}
-                    data-ocid={`item.item.${idx + 1}`}
-                  >
-                    <TableCell className="pl-4 font-medium">
-                      {item.name}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {item.hsnSacCode || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {item.itemType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {String(item.gstRate)}%
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {formatINR(Number(item.sellingPrice) / 100)}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {formatINR(Number(item.purchasePrice) / 100)}
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const openingStock = Number(item.openingStock);
-                        return (
-                          <Badge
-                            variant={
-                              openingStock > 10
-                                ? "default"
-                                : openingStock > 0
-                                  ? "secondary"
-                                  : "destructive"
-                            }
-                            className="font-numeric text-xs"
-                          >
-                            {openingStock}
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={item.isActive ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {item.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEdit(item)}
-                          data-ocid={`item.edit_button.${idx + 1}`}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(item.id)}
-                          data-ocid={`item.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="item.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Name</TableHead>
+                    <TableHead>HSN/SAC</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>GST Rate</TableHead>
+                    <TableHead>Selling Price</TableHead>
+                    <TableHead>Purchase Price</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((item, idx) => (
+                    <TableRow
+                      key={String(item.id)}
+                      data-ocid={`item.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-medium">
+                        {item.name}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {item.hsnSacCode || "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {item.itemType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {String(item.gstRate)}%
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {formatINR(Number(item.sellingPrice) / 100)}
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {formatINR(Number(item.purchasePrice) / 100)}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const openingStock = Number(item.openingStock);
+                          return (
+                            <Badge
+                              variant={
+                                openingStock > 10
+                                  ? "default"
+                                  : openingStock > 0
+                                    ? "secondary"
+                                    : "destructive"
+                              }
+                              className="font-numeric text-xs"
+                            >
+                              {openingStock}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={item.isActive ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {item.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(item)}
+                            data-ocid={`item.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(item.id)}
+                            data-ocid={`item.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

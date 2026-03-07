@@ -740,81 +740,83 @@ export function Purchases() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="purchase.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Bill #</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>CGST</TableHead>
-                  <TableHead>SGST</TableHead>
-                  <TableHead>RCM</TableHead>
-                  <TableHead>ITC</TableHead>
-                  <TableHead className="text-right">Grand Total</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((p, idx) => (
-                  <TableRow key={p.id} data-ocid={`purchase.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
-                      {p.billNumber}
-                    </TableCell>
-                    <TableCell className="text-sm">{p.vendorName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(p.billDate)}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {formatINR(p.totalCgst)}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {formatINR(p.totalSgst)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={p.isRcm ? "outline" : "secondary"}
-                        className="text-xs"
-                      >
-                        {p.isRcm ? "Yes" : "No"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={p.itcEligible ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {p.itcEligible ? "Eligible" : "Blocked"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-bold">
-                      {formatINR(p.grandTotal)}
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEdit(p)}
-                          data-ocid={`purchase.edit_button.${idx + 1}`}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(p.id)}
-                          data-ocid={`purchase.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="purchase.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Bill #</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>CGST</TableHead>
+                    <TableHead>SGST</TableHead>
+                    <TableHead>RCM</TableHead>
+                    <TableHead>ITC</TableHead>
+                    <TableHead className="text-right">Grand Total</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((p, idx) => (
+                    <TableRow key={p.id} data-ocid={`purchase.item.${idx + 1}`}>
+                      <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
+                        {p.billNumber}
+                      </TableCell>
+                      <TableCell className="text-sm">{p.vendorName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(p.billDate)}
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {formatINR(p.totalCgst)}
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {formatINR(p.totalSgst)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={p.isRcm ? "outline" : "secondary"}
+                          className="text-xs"
+                        >
+                          {p.isRcm ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={p.itcEligible ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {p.itcEligible ? "Eligible" : "Blocked"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-bold">
+                        {formatINR(p.grandTotal)}
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(p)}
+                            data-ocid={`purchase.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(p.id)}
+                            data-ocid={`purchase.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

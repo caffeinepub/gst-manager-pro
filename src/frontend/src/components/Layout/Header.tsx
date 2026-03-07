@@ -8,6 +8,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import { useLanguage } from "@/hooks/useLanguage";
 import type { AppPage } from "@/types/gst";
 import {
   AlertCircle,
@@ -15,6 +16,7 @@ import {
   Calendar,
   CheckCircle2,
   FileText,
+  Languages,
   Plus,
   ShoppingCart,
 } from "lucide-react";
@@ -58,6 +60,8 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "accounting-reconciliation": "Bank Reconciliation",
   "inventory-erp": "Inventory ERP",
   "ai-assistant": "AI Tax Assistant",
+  "gst-api-integration": "GST API Integration",
+  "workflow-automation": "Workflow Automation",
 };
 
 const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
@@ -96,6 +100,8 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "reports-cashflow": ["Reports", "Cash Flow"],
   "accounting-reconciliation": ["Accounting", "Bank Reconciliation"],
   "inventory-erp": ["Inventory", "Inventory ERP"],
+  "gst-api-integration": ["GST Compliance", "API Integration"],
+  "workflow-automation": ["GST Compliance", "Workflow Automation"],
 };
 
 interface Notification {
@@ -210,6 +216,7 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
   const breadcrumbs = PAGE_BREADCRUMBS[currentPage];
   const notifications = useNotifications();
   const [readAll, setReadAll] = useState(false);
+  const { lang, setLang } = useLanguage();
 
   const unreadCount = readAll ? 0 : notifications.length;
 
@@ -242,13 +249,46 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Language Toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs font-medium gap-1.5"
+          onClick={() => setLang(lang === "en" ? "hi" : "en")}
+          data-ocid="header.language.toggle"
+          title="Toggle language"
+        >
+          <Languages className="w-3.5 h-3.5" />
+          <span className="hidden sm:flex items-center gap-1">
+            <span
+              className={
+                lang === "en"
+                  ? "text-foreground font-bold"
+                  : "text-muted-foreground"
+              }
+            >
+              EN
+            </span>
+            <span className="text-muted-foreground">|</span>
+            <span
+              className={
+                lang === "hi"
+                  ? "text-foreground font-bold"
+                  : "text-muted-foreground"
+              }
+            >
+              HI
+            </span>
+          </span>
+        </Button>
+
         {currentPage === "dashboard" && (
           <>
             <Button
               size="sm"
               variant="outline"
               onClick={() => onNavigate("invoicing-sales")}
-              className="text-xs"
+              className="hidden sm:flex text-xs"
               data-ocid="dashboard.invoice.primary_button"
             >
               <FileText className="w-3 h-3 mr-1.5" />
@@ -257,7 +297,7 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
             <Button
               size="sm"
               onClick={() => onNavigate("accounting-purchases")}
-              className="text-xs"
+              className="hidden sm:flex text-xs"
               data-ocid="dashboard.purchase.primary_button"
             >
               <Plus className="w-3 h-3 mr-1.5" />

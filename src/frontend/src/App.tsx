@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
+import { LanguageProvider } from "@/hooks/useLanguage";
 import { AIAssistant } from "@/pages/AIAssistant/AIAssistant";
 import { BankAccounts } from "@/pages/Accounting/BankAccounts";
 import { BankReconciliation } from "@/pages/Accounting/BankReconciliation";
@@ -10,10 +11,12 @@ import { JournalEntries } from "@/pages/Accounting/JournalEntries";
 import { Purchases } from "@/pages/Accounting/Purchases";
 import { Dashboard } from "@/pages/Dashboard";
 import { AuditTrail } from "@/pages/GSTCompliance/AuditTrail";
+import { GSTAPIIntegration } from "@/pages/GSTCompliance/GSTAPIIntegration";
 import { GSTR1 } from "@/pages/GSTCompliance/GSTR1";
 import { GSTR3B } from "@/pages/GSTCompliance/GSTR3B";
 import { ITCReconciliation } from "@/pages/GSTCompliance/ITCReconciliation";
 import { RCMTracker } from "@/pages/GSTCompliance/RCMTracker";
+import { WorkflowAutomation } from "@/pages/GSTCompliance/WorkflowAutomation";
 import { InventoryERP } from "@/pages/Inventory/InventoryERP";
 import { InvoiceList } from "@/pages/Invoicing/InvoiceList";
 import { Payments } from "@/pages/Invoicing/Payments";
@@ -101,6 +104,10 @@ function PageContent({
       return <Reports page={page} />;
     case "ai-assistant":
       return <AIAssistant />;
+    case "gst-api-integration":
+      return <GSTAPIIntegration />;
+    case "workflow-automation":
+      return <WorkflowAutomation />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }
@@ -133,19 +140,19 @@ export default function App() {
   // Show login if not authenticated
   if (!identity) {
     return (
-      <>
+      <LanguageProvider>
         <Login />
         <Toaster richColors />
-      </>
+      </LanguageProvider>
     );
   }
 
   return (
-    <>
+    <LanguageProvider>
       <AppLayout currentPage={currentPage} onNavigate={setCurrentPage}>
         <PageContent page={currentPage} onNavigate={setCurrentPage} />
       </AppLayout>
       <Toaster richColors position="top-right" />
-    </>
+    </LanguageProvider>
   );
 }

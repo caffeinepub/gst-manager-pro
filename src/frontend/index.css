@@ -143,6 +143,8 @@
   }
 
   /* Print styles */
+  .print-only { display: none; }
+
   @media print {
     .no-print { display: none !important; }
     .print-only { display: block !important; }
@@ -167,5 +169,10 @@
   }
   ::-webkit-scrollbar-thumb {
     @apply bg-border rounded-full;
+  }
+
+  /* Safe area support for mobile */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

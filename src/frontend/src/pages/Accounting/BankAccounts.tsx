@@ -133,72 +133,76 @@ export function BankAccounts() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="bank.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Bank Name</TableHead>
-                  <TableHead>Account Number</TableHead>
-                  <TableHead>IFSC</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Opening Balance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accounts.map((acc, idx) => (
-                  <TableRow key={acc.id} data-ocid={`bank.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-medium">
-                      {acc.bankName}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {acc.accountNumber}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {acc.ifsc}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {acc.accountType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-medium">
-                      {formatINR(acc.openingBalance)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={acc.isActive ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {acc.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEdit(acc)}
-                          data-ocid={`bank.edit_button.${idx + 1}`}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(acc.id)}
-                          data-ocid={`bank.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="bank.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Bank Name</TableHead>
+                    <TableHead>Account Number</TableHead>
+                    <TableHead>IFSC</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">
+                      Opening Balance
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {accounts.map((acc, idx) => (
+                    <TableRow key={acc.id} data-ocid={`bank.item.${idx + 1}`}>
+                      <TableCell className="pl-4 font-medium">
+                        {acc.bankName}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {acc.accountNumber}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {acc.ifsc}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {acc.accountType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-medium">
+                        {formatINR(acc.openingBalance)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={acc.isActive ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {acc.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(acc)}
+                            data-ocid={`bank.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(acc.id)}
+                            data-ocid={`bank.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

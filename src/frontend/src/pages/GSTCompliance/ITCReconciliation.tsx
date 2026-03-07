@@ -236,52 +236,54 @@ export function ITCReconciliation() {
                   No ITC eligible purchases
                 </div>
               ) : (
-                <Table data-ocid="itc.list.table">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-4">Bill #</TableHead>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>CGST</TableHead>
-                      <TableHead>SGST</TableHead>
-                      <TableHead>IGST</TableHead>
-                      <TableHead>Total ITC</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.eligible.map((p, idx) => (
-                      <TableRow key={p.id} data-ocid={`itc.item.${idx + 1}`}>
-                        <TableCell className="pl-4 font-mono text-xs text-primary">
-                          {p.billNumber}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {p.vendorName}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(p.billDate)}
-                        </TableCell>
-                        <TableCell className="font-numeric text-sm">
-                          {formatINR(p.totalCgst)}
-                        </TableCell>
-                        <TableCell className="font-numeric text-sm">
-                          {formatINR(p.totalSgst)}
-                        </TableCell>
-                        <TableCell className="font-numeric text-sm">
-                          {formatINR(p.totalIgst)}
-                        </TableCell>
-                        <TableCell className="font-numeric font-bold">
-                          {formatINR(p.totalCgst + p.totalSgst + p.totalIgst)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="default" className="text-xs">
-                            Eligible
-                          </Badge>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table data-ocid="itc.list.table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">Bill #</TableHead>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>CGST</TableHead>
+                        <TableHead>SGST</TableHead>
+                        <TableHead>IGST</TableHead>
+                        <TableHead>Total ITC</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.eligible.map((p, idx) => (
+                        <TableRow key={p.id} data-ocid={`itc.item.${idx + 1}`}>
+                          <TableCell className="pl-4 font-mono text-xs text-primary">
+                            {p.billNumber}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.vendorName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(p.billDate)}
+                          </TableCell>
+                          <TableCell className="font-numeric text-sm">
+                            {formatINR(p.totalCgst)}
+                          </TableCell>
+                          <TableCell className="font-numeric text-sm">
+                            {formatINR(p.totalSgst)}
+                          </TableCell>
+                          <TableCell className="font-numeric text-sm">
+                            {formatINR(p.totalIgst)}
+                          </TableCell>
+                          <TableCell className="font-numeric font-bold">
+                            {formatINR(p.totalCgst + p.totalSgst + p.totalIgst)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="default" className="text-xs">
+                              Eligible
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -351,53 +353,55 @@ export function ITCReconciliation() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <Table data-ocid="itc.gstr2b.table">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="pl-4">Vendor GSTIN</TableHead>
-                        <TableHead>Invoice #</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Taxable</TableHead>
-                        <TableHead className="text-right">IGST</TableHead>
-                        <TableHead className="text-right">CGST</TableHead>
-                        <TableHead className="text-right">SGST</TableHead>
-                        <TableHead>Match Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {SYNTHETIC_PORTAL_DATA.map((entry, idx) => (
-                        <TableRow
-                          key={entry.id}
-                          data-ocid={`itc.gstr2b.item.${idx + 1}`}
-                        >
-                          <TableCell className="pl-4 font-mono text-xs text-muted-foreground">
-                            {entry.vendorGstin}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-primary">
-                            {entry.invoiceNo}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {formatDate(entry.date)}
-                          </TableCell>
-                          <TableCell className="text-right font-numeric text-sm">
-                            {formatINR(entry.taxable)}
-                          </TableCell>
-                          <TableCell className="text-right font-numeric text-sm">
-                            {formatINR(entry.igst)}
-                          </TableCell>
-                          <TableCell className="text-right font-numeric text-sm">
-                            {formatINR(entry.cgst)}
-                          </TableCell>
-                          <TableCell className="text-right font-numeric text-sm">
-                            {formatINR(entry.sgst)}
-                          </TableCell>
-                          <TableCell>
-                            {getMatchBadge(entry.matchStatus)}
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table data-ocid="itc.gstr2b.table">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-4">Vendor GSTIN</TableHead>
+                          <TableHead>Invoice #</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Taxable</TableHead>
+                          <TableHead className="text-right">IGST</TableHead>
+                          <TableHead className="text-right">CGST</TableHead>
+                          <TableHead className="text-right">SGST</TableHead>
+                          <TableHead>Match Status</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {SYNTHETIC_PORTAL_DATA.map((entry, idx) => (
+                          <TableRow
+                            key={entry.id}
+                            data-ocid={`itc.gstr2b.item.${idx + 1}`}
+                          >
+                            <TableCell className="pl-4 font-mono text-xs text-muted-foreground">
+                              {entry.vendorGstin}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-primary">
+                              {entry.invoiceNo}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formatDate(entry.date)}
+                            </TableCell>
+                            <TableCell className="text-right font-numeric text-sm">
+                              {formatINR(entry.taxable)}
+                            </TableCell>
+                            <TableCell className="text-right font-numeric text-sm">
+                              {formatINR(entry.igst)}
+                            </TableCell>
+                            <TableCell className="text-right font-numeric text-sm">
+                              {formatINR(entry.cgst)}
+                            </TableCell>
+                            <TableCell className="text-right font-numeric text-sm">
+                              {formatINR(entry.sgst)}
+                            </TableCell>
+                            <TableCell>
+                              {getMatchBadge(entry.matchStatus)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </>

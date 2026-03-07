@@ -172,85 +172,170 @@ export function InvoiceList({ type }: InvoiceListProps) {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="invoice.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Invoice #</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Taxable</TableHead>
-                  <TableHead>GST</TableHead>
-                  <TableHead className="text-right">Grand Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((inv, idx) => (
-                  <TableRow key={inv.id} data-ocid={`invoice.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
-                      {inv.invoiceNumber}
-                    </TableCell>
-                    <TableCell className="text-sm">{inv.partyName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(inv.date)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(inv.dueDate)}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {formatINR(inv.subtotal - inv.totalDiscount)}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm text-primary">
-                      {formatINR(inv.totalCgst + inv.totalSgst + inv.totalIgst)}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-bold">
-                      {formatINR(inv.grandTotal)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={statusVariant(inv.status)}
-                        className="text-xs capitalize"
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table data-ocid="invoice.list.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Invoice #</TableHead>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Taxable</TableHead>
+                      <TableHead>GST</TableHead>
+                      <TableHead className="text-right">Grand Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right pr-4">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((inv, idx) => (
+                      <TableRow
+                        key={inv.id}
+                        data-ocid={`invoice.item.${idx + 1}`}
                       >
-                        {inv.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground"
-                          onClick={() => openView(inv)}
-                          data-ocid={`invoice.view_button.${idx + 1}`}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEdit(inv)}
-                          data-ocid={`invoice.edit_button.${idx + 1}`}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(inv.id)}
-                          data-ocid={`invoice.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
+                          {inv.invoiceNumber}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {inv.partyName}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(inv.date)}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(inv.dueDate)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(inv.subtotal - inv.totalDiscount)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm text-primary">
+                          {formatINR(
+                            inv.totalCgst + inv.totalSgst + inv.totalIgst,
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric font-bold">
+                          {formatINR(inv.grandTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={statusVariant(inv.status)}
+                            className="text-xs capitalize"
+                          >
+                            {inv.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground"
+                              onClick={() => openView(inv)}
+                              data-ocid={`invoice.view_button.${idx + 1}`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => openEdit(inv)}
+                              data-ocid={`invoice.edit_button.${idx + 1}`}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteId(inv.id)}
+                              data-ocid={`invoice.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {/* Mobile card list */}
+              <div className="md:hidden divide-y divide-border">
+                {filtered.map((inv, idx) => (
+                  <div
+                    key={inv.id}
+                    className="px-4 py-3 space-y-2"
+                    data-ocid={`invoice.item.${idx + 1}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs text-primary font-medium">
+                            {inv.invoiceNumber}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] capitalize"
+                          >
+                            {inv.type.replace(/_/g, " ")}
+                          </Badge>
+                        </div>
+                        <p className="text-sm truncate mt-0.5">
+                          {inv.partyName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(inv.date)}
+                          {inv.dueDate && ` · Due ${formatDate(inv.dueDate)}`}
+                        </p>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                      <div className="text-right shrink-0">
+                        <p className="font-numeric font-bold text-sm">
+                          {formatINR(inv.grandTotal)}
+                        </p>
+                        <Badge
+                          variant={statusVariant(inv.status)}
+                          className="text-[10px] capitalize mt-0.5"
+                        >
+                          {inv.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground"
+                        onClick={() => openView(inv)}
+                        data-ocid={`invoice.view_button.${idx + 1}`}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEdit(inv)}
+                        data-ocid={`invoice.edit_button.${idx + 1}`}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteId(inv.id)}
+                        data-ocid={`invoice.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

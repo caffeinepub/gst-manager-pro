@@ -9,7 +9,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -17,6 +16,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { useUserProfile } from "@/hooks/useQueries";
@@ -45,10 +45,12 @@ import {
   RefreshCw,
   Scale,
   Settings,
+  Shield,
   ShieldCheck,
   TrendingUp,
   Truck,
   Users,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -167,6 +169,16 @@ const navItems: NavItem[] = [
       { label: "ITC Reconciliation", page: "gst-itc", icon: RefreshCw },
       { label: "RCM Tracker", page: "gst-rcm", icon: PiggyBank },
       { label: "Audit Trail", page: "gst-audit", icon: History },
+      {
+        label: "API Integration",
+        page: "gst-api-integration" as AppPage,
+        icon: Shield,
+      },
+      {
+        label: "Workflow Automation",
+        page: "workflow-automation" as AppPage,
+        icon: Zap,
+      },
     ],
   },
   {
@@ -211,9 +223,8 @@ function ShoppingCartIcon({ className }: { className?: string }) {
 export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   const { clear, identity } = useInternetIdentity();
   const { data: userProfile } = useUserProfile();
-  const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(["Masters", "Invoicing", "Accounting", "GST Compliance"]),
-  );
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const toggleSection = (label: string) => {
     setOpenSections((prev) => {
@@ -229,7 +240,7 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
     item.children?.some((child) => child.page === currentPage) ?? false;
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
@@ -256,7 +267,12 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
                     <SidebarMenuItem key={item.label}>
                       <SidebarMenuButton
                         isActive={isActive(item.page)}
-                        onClick={() => item.page && onNavigate(item.page)}
+                        onClick={() => {
+                          if (item.page) {
+                            onNavigate(item.page);
+                            if (isMobile) setOpenMobile(false);
+                          }
+                        }}
                         tooltip={item.label}
                         data-ocid={`nav.${item.label.toLowerCase().replace(/\s+/g, "-")}.link`}
                       >
@@ -299,7 +315,10 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
                             <SidebarMenuSubItem key={child.page}>
                               <SidebarMenuSubButton
                                 isActive={isActive(child.page)}
-                                onClick={() => onNavigate(child.page)}
+                                onClick={() => {
+                                  onNavigate(child.page);
+                                  if (isMobile) setOpenMobile(false);
+                                }}
                                 data-ocid={`nav.${child.page.replace(/-/g, "_")}.link`}
                               >
                                 <child.icon className="w-3 h-3" />

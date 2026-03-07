@@ -513,75 +513,79 @@ export function InventoryERP() {
                     goods receipt or issue.
                   </div>
                 ) : (
-                  <Table data-ocid="inventory.movements.table">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="pl-4">Date</TableHead>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Narration</TableHead>
-                        <TableHead className="text-right pr-4 w-16">
-                          Action
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {movements.map((movement: StockMovement, idx: number) => (
-                        <TableRow
-                          key={movement.id}
-                          data-ocid={`inventory.movement.item.${idx + 1}`}
-                        >
-                          <TableCell className="pl-4 text-xs text-muted-foreground">
-                            {formatDate(movement.date)}
-                          </TableCell>
-                          <TableCell className="text-sm font-medium">
-                            {movement.itemName}
-                          </TableCell>
-                          <TableCell>
-                            {movement.type === "receipt" ? (
-                              <Badge
-                                variant="default"
-                                className="text-xs gap-1"
-                              >
-                                <ArrowDown className="w-2.5 h-2.5" />
-                                Receipt
-                              </Badge>
-                            ) : (
-                              <Badge
-                                variant="outline"
-                                className="text-xs gap-1 border-orange-400 text-orange-700 dark:text-orange-400"
-                              >
-                                <ArrowUp className="w-2.5 h-2.5" />
-                                Issue
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-numeric font-bold text-sm">
-                            {movement.qty}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {movement.reference || "—"}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                            {movement.narration || "—"}
-                          </TableCell>
-                          <TableCell className="text-right pr-4">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteId(movement.id)}
-                              data-ocid={`inventory.movement.delete_button.${idx + 1}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table data-ocid="inventory.movements.table">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-4">Date</TableHead>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead>Reference</TableHead>
+                          <TableHead>Narration</TableHead>
+                          <TableHead className="text-right pr-4 w-16">
+                            Action
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {movements.map(
+                          (movement: StockMovement, idx: number) => (
+                            <TableRow
+                              key={movement.id}
+                              data-ocid={`inventory.movement.item.${idx + 1}`}
+                            >
+                              <TableCell className="pl-4 text-xs text-muted-foreground">
+                                {formatDate(movement.date)}
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">
+                                {movement.itemName}
+                              </TableCell>
+                              <TableCell>
+                                {movement.type === "receipt" ? (
+                                  <Badge
+                                    variant="default"
+                                    className="text-xs gap-1"
+                                  >
+                                    <ArrowDown className="w-2.5 h-2.5" />
+                                    Receipt
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs gap-1 border-orange-400 text-orange-700 dark:text-orange-400"
+                                  >
+                                    <ArrowUp className="w-2.5 h-2.5" />
+                                    Issue
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-numeric font-bold text-sm">
+                                {movement.qty}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {movement.reference || "—"}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                                {movement.narration || "—"}
+                              </TableCell>
+                              <TableCell className="text-right pr-4">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteId(movement.id)}
+                                  data-ocid={`inventory.movement.delete_button.${idx + 1}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ),
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

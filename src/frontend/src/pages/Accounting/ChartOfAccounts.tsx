@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/table";
 import { type CustomAccount, useCustomAccounts } from "@/hooks/useGSTStore";
 import { CHART_OF_ACCOUNTS } from "@/types/gst";
-import { BookMarked, Lock, Plus, Search, Trash2 } from "lucide-react";
+import { BookMarked, Edit, Lock, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -63,11 +63,17 @@ const emptyForm = {
 };
 
 export function ChartOfAccounts() {
-  const { customAccounts, addAccount, deleteAccount } = useCustomAccounts();
+  const { customAccounts, addAccount, updateAccount, deleteAccount } =
+    useCustomAccounts();
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingAccount, setEditingAccount] = useState<CustomAccount | null>(
+    null,
+  );
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [form, setForm] = useState(emptyForm);
 
   // Merge system accounts + custom accounts
@@ -110,6 +116,27 @@ export function ChartOfAccounts() {
     toast.success(`Account ${form.code} - ${form.name} created`);
     setForm(emptyForm);
     setOpenDialog(false);
+  };
+
+  const handleOpenEditDialog = (account: CustomAccount) => {
+    setEditingAccount(account);
+    setEditForm({ code: account.code, name: account.name, type: account.type });
+    setOpenEditDialog(true);
+  };
+
+  const handleEditSave = () => {
+    if (!editingAccount) return;
+    if (!editForm.name.trim()) {
+      toast.error("Account name is required");
+      return;
+    }
+    updateAccount(editingAccount.id, {
+      name: editForm.name.trim(),
+      type: editForm.type,
+    });
+    toast.success("Account updated");
+    setOpenEditDialog(false);
+    setEditingAccount(null);
   };
 
   const counts = {
@@ -251,67 +278,154 @@ export function ChartOfAccounts() {
               No accounts match your search
             </div>
           ) : (
-            <Table data-ocid="coa.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4 w-24">Code</TableHead>
-                  <TableHead>Account Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead className="text-right pr-4 w-16">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((account, idx) => (
-                  <TableRow key={account.id} data-ocid={`coa.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-mono text-xs font-medium text-primary">
-                      {account.code}
-                    </TableCell>
-                    <TableCell className="text-sm">{account.name}</TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${TYPE_COLORS[account.type as AccountType]}`}
-                      >
-                        {account.type}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {account.isCustom ? (
-                        <Badge variant="outline" className="text-xs">
-                          Custom
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs flex items-center gap-1 w-fit"
-                        >
-                          <Lock className="w-2.5 h-2.5" />
-                          System
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      {account.isCustom ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(account.id)}
-                          data-ocid={`coa.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="coa.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4 w-24">Code</TableHead>
+                    <TableHead>Account Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead className="text-right pr-4 w-16">
+                      Action
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((account, idx) => (
+                    <TableRow
+                      key={account.id}
+                      data-ocid={`coa.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-mono text-xs font-medium text-primary">
+                        {account.code}
+                      </TableCell>
+                      <TableCell className="text-sm">{account.name}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${TYPE_COLORS[account.type as AccountType]}`}
+                        >
+                          {account.type}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {account.isCustom ? (
+                          <Badge variant="outline" className="text-xs">
+                            Custom
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs flex items-center gap-1 w-fit"
+                          >
+                            <Lock className="w-2.5 h-2.5" />
+                            System
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        {account.isCustom ? (
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() =>
+                                handleOpenEditDialog(account as CustomAccount)
+                              }
+                              data-ocid={`coa.edit_button.${idx + 1}`}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteId(account.id)}
+                              data-ocid={`coa.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+        <DialogContent data-ocid="coa.edit.dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Custom Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Account Code</Label>
+              <Input
+                value={editForm.code}
+                disabled
+                className="font-mono bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                Account code cannot be changed
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Account Name *</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm((p) => ({ ...p, name: e.target.value }))
+                }
+                placeholder="e.g. Office Equipment"
+                data-ocid="coa.edit.name.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Account Type *</Label>
+              <Select
+                value={editForm.type}
+                onValueChange={(v) =>
+                  setEditForm((p) => ({ ...p, type: v as AccountType }))
+                }
+              >
+                <SelectTrigger data-ocid="coa.edit.type.select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asset">Asset</SelectItem>
+                  <SelectItem value="liability">Liability</SelectItem>
+                  <SelectItem value="equity">Equity</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                  <SelectItem value="expense">Expense</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpenEditDialog(false)}
+              data-ocid="coa.edit.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleEditSave} data-ocid="coa.edit.save_button">
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Dialog */}
       <AlertDialog

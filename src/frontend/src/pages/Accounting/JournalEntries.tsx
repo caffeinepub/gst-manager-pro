@@ -103,7 +103,7 @@ export function JournalEntries() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isBalanced) {
-      toast.error("Debit and credit totals must match");
+      toast.error("Journal entry is not balanced. Debits must equal credits.");
       return;
     }
     if (totalDebit === 0) {
@@ -200,104 +200,108 @@ export function JournalEntries() {
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Account</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Narration</TableHead>
-                    <TableHead className="w-8 pr-4" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {form.lines.map((line, idx) => (
-                    <TableRow
-                      key={line.id}
-                      data-ocid={`journal.line.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4">
-                        <Select
-                          value={line.accountCode}
-                          onValueChange={(v) =>
-                            updateLine(line.id, { accountCode: v })
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Select account..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CHART_OF_ACCOUNTS.map((acc) => (
-                              <SelectItem key={acc.code} value={acc.code}>
-                                {acc.code} - {acc.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={line.type}
-                          onValueChange={(v) =>
-                            updateLine(line.id, {
-                              type: v as "debit" | "credit",
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="debit">Debit (Dr)</SelectItem>
-                            <SelectItem value="credit">Credit (Cr)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={line.amount}
-                          onChange={(e) =>
-                            updateLine(line.id, {
-                              amount: Number(e.target.value),
-                            })
-                          }
-                          className="h-8 text-xs w-28"
-                          min="0"
-                          step="0.01"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={line.narration}
-                          onChange={(e) =>
-                            updateLine(line.id, { narration: e.target.value })
-                          }
-                          className="h-8 text-xs"
-                          placeholder="Line narration"
-                        />
-                      </TableCell>
-                      <TableCell className="pr-4">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() =>
-                            setForm((p) => ({
-                              ...p,
-                              lines: p.lines.filter((l) => l.id !== line.id),
-                            }))
-                          }
-                          data-ocid={`journal.remove_line.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Account</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Narration</TableHead>
+                      <TableHead className="w-8 pr-4" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {form.lines.map((line, idx) => (
+                      <TableRow
+                        key={line.id}
+                        data-ocid={`journal.line.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4">
+                          <Select
+                            value={line.accountCode}
+                            onValueChange={(v) =>
+                              updateLine(line.id, { accountCode: v })
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select account..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CHART_OF_ACCOUNTS.map((acc) => (
+                                <SelectItem key={acc.code} value={acc.code}>
+                                  {acc.code} - {acc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={line.type}
+                            onValueChange={(v) =>
+                              updateLine(line.id, {
+                                type: v as "debit" | "credit",
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="debit">Debit (Dr)</SelectItem>
+                              <SelectItem value="credit">
+                                Credit (Cr)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={line.amount}
+                            onChange={(e) =>
+                              updateLine(line.id, {
+                                amount: Number(e.target.value),
+                              })
+                            }
+                            className="h-8 text-xs w-28"
+                            min="0"
+                            step="0.01"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={line.narration}
+                            onChange={(e) =>
+                              updateLine(line.id, { narration: e.target.value })
+                            }
+                            className="h-8 text-xs"
+                            placeholder="Line narration"
+                          />
+                        </TableCell>
+                        <TableCell className="pr-4">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() =>
+                              setForm((p) => ({
+                                ...p,
+                                lines: p.lines.filter((l) => l.id !== line.id),
+                              }))
+                            }
+                            data-ocid={`journal.remove_line.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -393,53 +397,55 @@ export function JournalEntries() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="journal.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Entry #</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Narration</TableHead>
-                  <TableHead>Lines</TableHead>
-                  <TableHead className="text-right">Total Debit</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry, idx) => (
-                  <TableRow
-                    key={entry.id}
-                    data-ocid={`journal.item.${idx + 1}`}
-                  >
-                    <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
-                      {entry.entryNumber}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(entry.date)}
-                    </TableCell>
-                    <TableCell className="text-sm max-w-48 truncate">
-                      {entry.narration}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {entry.lines.length} lines
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-medium">
-                      {formatINR(entry.totalDebit)}
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(entry.id)}
-                        data-ocid={`journal.delete_button.${idx + 1}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="journal.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Entry #</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Narration</TableHead>
+                    <TableHead>Lines</TableHead>
+                    <TableHead className="text-right">Total Debit</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {entries.map((entry, idx) => (
+                    <TableRow
+                      key={entry.id}
+                      data-ocid={`journal.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-mono text-xs text-primary font-medium">
+                        {entry.entryNumber}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(entry.date)}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-48 truncate">
+                        {entry.narration}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {entry.lines.length} lines
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-medium">
+                        {formatINR(entry.totalDebit)}
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(entry.id)}
+                          data-ocid={`journal.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -32,7 +32,7 @@ export function Login() {
         />
       </div>
 
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center mx-4 md:mx-auto">
         {/* Left: Branding */}
         <div className="space-y-6">
           <div className="space-y-3">
@@ -97,8 +97,8 @@ export function Login() {
         </div>
 
         {/* Right: Login Card */}
-        <Card className="bg-card border-border/70 shadow-card">
-          <CardContent className="pt-8 pb-8 px-8 space-y-6">
+        <Card className="bg-card border-border/70 shadow-card w-full max-w-sm mx-auto md:max-w-none">
+          <CardContent className="pt-8 pb-8 px-6 sm:px-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
                 <ShieldCheck className="w-8 h-8 text-primary" />

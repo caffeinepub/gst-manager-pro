@@ -10,7 +10,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInvoices, usePayments, usePurchases } from "@/hooks/useGSTStore";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  useInvoices,
+  usePayments,
+  usePurchases,
+  useStockMovements,
+} from "@/hooks/useGSTStore";
 import { useItems, useParties } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
 import {
@@ -22,6 +33,7 @@ import {
 } from "@/utils/formatting";
 import {
   AlertCircle,
+  Bot,
   Calendar,
   Clock,
   FileText,
@@ -31,6 +43,7 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
+  Zap,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -38,10 +51,27 @@ interface DashboardProps {
   onNavigate: (page: AppPage) => void;
 }
 
+function getDaysTo(date: Date): number {
+  return Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function getAlertColor(days: number): string {
+  if (days <= 3) return "bg-destructive/5 border-destructive/20";
+  if (days <= 7) return "bg-chart-4/5 border-chart-4/20";
+  return "bg-muted/50 border-border/50";
+}
+
+function getAlertTextColor(days: number): string {
+  if (days <= 3) return "text-destructive";
+  if (days <= 7) return "text-chart-4";
+  return "text-foreground";
+}
+
 export function Dashboard({ onNavigate }: DashboardProps) {
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
   const { payments } = usePayments();
+  const { movements } = useStockMovements();
   const { data: items = [] } = useItems();
   const { data: parties = [] } = useParties();
   const { start, end } = getCurrentMonth();
@@ -73,7 +103,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         ? Math.round((confirmedInvoices / invoices.length) * 100)
         : 100;
 
-    // Outstanding receivables (sales invoices confirmed but not fully paid)
     const outstandingReceivable = invoices
       .filter(
         (inv) =>
@@ -81,10 +110,41 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       )
       .reduce((sum, inv) => sum + inv.grandTotal, 0);
 
-    // Outstanding payables
     const outstandingPayable = purchases
       .filter((p) => p.status === "confirmed")
       .reduce((sum, p) => sum + p.grandTotal, 0);
+
+    // Stock value calculation
+    const totalStockValue = items.reduce((sum, item) => {
+      const openingStock = Number(item.openingStock ?? 0);
+      const itemId = String(item.id);
+      const soldQty = invoices
+        .filter(
+          (inv) =>
+            ["sales", "service"].includes(inv.type) &&
+            inv.status !== "cancelled",
+        )
+        .flatMap((inv) => inv.lineItems)
+        .filter((li) => li.itemId === itemId)
+        .reduce((s, li) => s + li.qty, 0);
+      const purchasedQty = purchases
+        .filter((p) => p.status !== "cancelled")
+        .flatMap((p) => p.lineItems)
+        .filter((li) => li.itemId === itemId)
+        .reduce((s, li) => s + li.qty, 0);
+      const receiptQty = movements
+        .filter((m) => m.itemId === itemId && m.type === "receipt")
+        .reduce((s, m) => s + m.qty, 0);
+      const issueQty = movements
+        .filter((m) => m.itemId === itemId && m.type === "issue")
+        .reduce((s, m) => s + m.qty, 0);
+      const closingStock = Math.max(
+        0,
+        openingStock + purchasedQty + receiptQty - soldQty - issueQty,
+      );
+      const price = Number(item.sellingPrice) / 100;
+      return sum + closingStock * price;
+    }, 0);
 
     return {
       totalSales,
@@ -92,8 +152,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       outstandingReceivable,
       outstandingPayable,
       complianceHealth,
+      totalStockValue,
     };
-  }, [invoices, purchases, start, end]);
+  }, [invoices, purchases, movements, items, start, end]);
 
   const alerts = useMemo(() => {
     const todayStr = new Date().toISOString().split("T")[0];
@@ -101,7 +162,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       ["sales", "service"].includes(inv.type),
     );
 
-    // Overdue: confirmed invoices where dueDate < today
     const overdueInvoices = salesServiceInvoices.filter(
       (inv) =>
         inv.status === "confirmed" && inv.dueDate && inv.dueDate < todayStr,
@@ -111,31 +171,169 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       0,
     );
 
-    // Unpaid: confirmed invoices with no payment recorded
     const paidInvoiceIds = new Set(payments.map((p) => p.invoiceId));
     const unpaidInvoices = salesServiceInvoices.filter(
       (inv) => inv.status === "confirmed" && !paidInvoiceIds.has(inv.id),
     );
 
-    // GST due dates
     const now = new Date();
+
+    // GSTR-1: 11th of next month
     const gstr1Due = new Date(now.getFullYear(), now.getMonth() + 1, 11);
+    const daysToGstr1 = getDaysTo(gstr1Due);
+
+    // GSTR-3B: 20th of next month
     const gstr3bDue = new Date(now.getFullYear(), now.getMonth() + 1, 20);
-    const daysToGstr1 = Math.ceil(
-      (gstr1Due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    const daysToGstr3b = Math.ceil(
-      (gstr3bDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    const daysToGstr3b = getDaysTo(gstr3bDue);
+
+    // GSTR-9: Dec 31 current year
+    const gstr9Due = new Date(now.getFullYear(), 11, 31);
+    const daysToGstr9 = getDaysTo(gstr9Due);
+
+    // TDS Return: 7th of next month
+    const tdsDue = new Date(now.getFullYear(), now.getMonth() + 1, 7);
+    const daysToTds = getDaysTo(tdsDue);
 
     return {
       overdueCount: overdueInvoices.length,
       overdueAmount,
       unpaidCount: unpaidInvoices.length,
       daysToGstr1,
+      gstr1Due: gstr1Due.toISOString().split("T")[0],
       daysToGstr3b,
+      gstr3bDue: gstr3bDue.toISOString().split("T")[0],
+      daysToGstr9,
+      gstr9Due: gstr9Due.toISOString().split("T")[0],
+      daysToTds,
+      tdsDue: tdsDue.toISOString().split("T")[0],
     };
   }, [invoices, payments]);
+
+  // Predictive analytics: 3-month forecast
+  const forecast = useMemo(() => {
+    const now = new Date();
+    const months: Array<{ start: string; end: string }> = [];
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const endStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${lastDay}`;
+      months.push({ start: startStr, end: endStr });
+    }
+
+    const monthlySales = months.map((m) =>
+      invoices
+        .filter(
+          (inv) =>
+            ["sales", "service"].includes(inv.type) &&
+            inv.status !== "cancelled" &&
+            inv.date >= m.start &&
+            inv.date <= m.end,
+        )
+        .reduce((sum, inv) => sum + inv.grandTotal, 0),
+    );
+    const monthlyPurchases = months.map((m) =>
+      purchases
+        .filter(
+          (p) =>
+            p.status !== "cancelled" &&
+            p.billDate >= m.start &&
+            p.billDate <= m.end,
+        )
+        .reduce((sum, p) => sum + p.grandTotal, 0),
+    );
+
+    const avgSales = monthlySales.reduce((s, v) => s + v, 0) / 3;
+    const avgPurchases = monthlyPurchases.reduce((s, v) => s + v, 0) / 3;
+
+    const forecastMonths = Array.from({ length: 3 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
+      return d.toLocaleString("en-IN", { month: "short", year: "numeric" });
+    });
+
+    return {
+      forecastMonths,
+      avgSales,
+      avgPurchases,
+      netPositive: avgSales > avgPurchases,
+    };
+  }, [invoices, purchases]);
+
+  // Anomaly detection
+  const anomalies = useMemo(() => {
+    const results: Array<{
+      severity: "Warning" | "Error";
+      message: string;
+    }> = [];
+
+    // 1. Duplicate invoice numbers
+    const invNumbers = invoices.map((inv) => inv.invoiceNumber);
+    const dupNums = invNumbers.filter(
+      (n, i) => invNumbers.indexOf(n) !== i && n,
+    );
+    const uniqueDups = [...new Set(dupNums)];
+    for (const dup of uniqueDups) {
+      results.push({
+        severity: "Error",
+        message: `Duplicate invoice number detected: ${dup}`,
+      });
+    }
+
+    // 2. Invoices > 50000 without GSTIN
+    const noGstinHigh = invoices.filter(
+      (inv) =>
+        inv.grandTotal > 50000 && !inv.partyGstin && inv.status !== "cancelled",
+    );
+    for (const inv of noGstinHigh) {
+      results.push({
+        severity: "Warning",
+        message: `Invoice ${inv.invoiceNumber} (${formatINR(inv.grandTotal)}) has no party GSTIN`,
+      });
+    }
+
+    // 3. Sales invoices with all 0% GST but grandTotal > 10000
+    const zeroGstHighValue = invoices.filter(
+      (inv) =>
+        ["sales", "service"].includes(inv.type) &&
+        inv.status !== "cancelled" &&
+        inv.grandTotal > 10000 &&
+        inv.lineItems.length > 0 &&
+        inv.lineItems.every((li) => li.gstRate === 0),
+    );
+    for (const inv of zeroGstHighValue) {
+      results.push({
+        severity: "Warning",
+        message: `Invoice ${inv.invoiceNumber} worth ${formatINR(inv.grandTotal)} has 0% GST on all items`,
+      });
+    }
+
+    // 4. RCM purchases with no notes
+    const rcmNoNotes = purchases.filter(
+      (p) => p.isRcm && (!p.notes || p.notes.trim() === ""),
+    );
+    for (const p of rcmNoNotes) {
+      results.push({
+        severity: "Warning",
+        message: `RCM Purchase ${p.billNumber} has no notes/justification`,
+      });
+    }
+
+    // 5. Credit/Debit notes with no linked invoice
+    const unlinkedNotes = invoices.filter(
+      (inv) =>
+        ["credit_note", "debit_note"].includes(inv.type) &&
+        inv.status !== "cancelled" &&
+        !inv.linkedInvoiceId,
+    );
+    for (const inv of unlinkedNotes) {
+      results.push({
+        severity: "Warning",
+        message: `${inv.type === "credit_note" ? "Credit" : "Debit"} Note ${inv.invoiceNumber} has no linked invoice`,
+      });
+    }
+
+    return results;
+  }, [invoices, purchases]);
 
   const recentInvoices = invoices.slice(0, 5);
 
@@ -149,8 +347,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   return (
     <div className="space-y-6" data-ocid="dashboard.section">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* KPI Cards - 5 cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <Card className="bg-card border-border/70 shadow-card">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -225,6 +423,27 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               {formatINR(stats.outstandingPayable)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Outstanding</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="bg-card border-border/70 shadow-card cursor-pointer hover:border-chart-2/40 transition-colors"
+          onClick={() => onNavigate("inventory-erp")}
+          data-ocid="dashboard.stock_value.card"
+        >
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Stock Value
+            </CardTitle>
+            <Package className="w-4 h-4 text-chart-2" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-cabinet font-bold text-chart-2 font-numeric">
+              {formatINR(stats.totalStockValue)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Current stock value
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -309,19 +528,19 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </Card>
       </div>
 
-      {/* Workflow Alerts */}
+      {/* Workflow Alerts - 6 tiles */}
       <Card
         className="bg-card border-border/70"
         data-ocid="dashboard.alerts.section"
       >
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-chart-4" />
-            Workflow Alerts
+            <Zap className="w-4 h-4 text-chart-4" />
+            Workflow Alerts & Due Dates
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* Overdue Invoices */}
             <div
               className={`p-3 rounded-lg border ${alerts.overdueCount > 0 ? "bg-destructive/5 border-destructive/20" : "bg-muted/50 border-border/50"}`}
@@ -376,40 +595,221 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
             {/* GSTR-1 Due */}
             <div
-              className={`p-3 rounded-lg border ${alerts.daysToGstr1 <= 5 ? "bg-chart-4/5 border-chart-4/20" : "bg-muted/50 border-border/50"}`}
+              className={`p-3 rounded-lg border ${getAlertColor(alerts.daysToGstr1)}`}
             >
               <p className="text-xs text-muted-foreground mb-1 font-medium">
                 GSTR-1 Due
               </p>
               <p
-                className={`text-lg font-cabinet font-bold leading-none ${alerts.daysToGstr1 <= 5 ? "text-chart-4" : "text-foreground"}`}
+                className={`text-lg font-cabinet font-bold leading-none ${getAlertTextColor(alerts.daysToGstr1)}`}
               >
                 {alerts.daysToGstr1}d
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {alerts.daysToGstr1 <= 5 ? "⚠️ Filing soon" : "days remaining"}
+              <p className="text-xs text-muted-foreground mt-0.5 font-numeric">
+                {alerts.gstr1Due}
               </p>
             </div>
 
             {/* GSTR-3B Due */}
             <div
-              className={`p-3 rounded-lg border ${alerts.daysToGstr3b <= 5 ? "bg-chart-4/5 border-chart-4/20" : "bg-muted/50 border-border/50"}`}
+              className={`p-3 rounded-lg border ${getAlertColor(alerts.daysToGstr3b)}`}
             >
               <p className="text-xs text-muted-foreground mb-1 font-medium">
                 GSTR-3B Due
               </p>
               <p
-                className={`text-lg font-cabinet font-bold leading-none ${alerts.daysToGstr3b <= 5 ? "text-chart-4" : "text-foreground"}`}
+                className={`text-lg font-cabinet font-bold leading-none ${getAlertTextColor(alerts.daysToGstr3b)}`}
               >
                 {alerts.daysToGstr3b}d
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {alerts.daysToGstr3b <= 5 ? "⚠️ Filing soon" : "days remaining"}
+              <p className="text-xs text-muted-foreground mt-0.5 font-numeric">
+                {alerts.gstr3bDue}
+              </p>
+            </div>
+
+            {/* GSTR-9 Annual */}
+            <div
+              className={`p-3 rounded-lg border ${getAlertColor(alerts.daysToGstr9)}`}
+            >
+              <p className="text-xs text-muted-foreground mb-1 font-medium">
+                GSTR-9 Annual
+              </p>
+              <p
+                className={`text-lg font-cabinet font-bold leading-none ${getAlertTextColor(alerts.daysToGstr9)}`}
+              >
+                {alerts.daysToGstr9}d
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 font-numeric">
+                {alerts.gstr9Due}
+              </p>
+            </div>
+
+            {/* TDS Return */}
+            <div
+              className={`p-3 rounded-lg border ${getAlertColor(alerts.daysToTds)}`}
+            >
+              <p className="text-xs text-muted-foreground mb-1 font-medium">
+                TDS Return
+              </p>
+              <p
+                className={`text-lg font-cabinet font-bold leading-none ${getAlertTextColor(alerts.daysToTds)}`}
+              >
+                {alerts.daysToTds}d
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 font-numeric">
+                {alerts.tdsDue}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Predictive Analytics + AI Anomaly Detection */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Predictive Cash Flow */}
+        <Card
+          className="bg-card border-border/70"
+          data-ocid="dashboard.forecast.card"
+        >
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-chart-2" />
+              Predictive Cash Flow (3-Month Forecast)
+            </CardTitle>
+            <Badge
+              variant={forecast.netPositive ? "default" : "destructive"}
+              className="text-xs"
+            >
+              {forecast.netPositive ? "↑ Positive" : "↓ Negative"}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left py-1.5 text-muted-foreground font-medium">
+                      Month
+                    </th>
+                    <th className="text-right py-1.5 text-muted-foreground font-medium">
+                      Proj. Sales
+                    </th>
+                    <th className="text-right py-1.5 text-muted-foreground font-medium">
+                      Proj. Purchases
+                    </th>
+                    <th className="text-right py-1.5 text-muted-foreground font-medium">
+                      Net
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.forecastMonths.map((month) => {
+                    const net = forecast.avgSales - forecast.avgPurchases;
+                    return (
+                      <tr key={month} className="border-b border-border/30">
+                        <td className="py-2 font-medium">{month}</td>
+                        <td className="py-2 text-right font-numeric text-chart-2">
+                          {formatINR(forecast.avgSales)}
+                        </td>
+                        <td className="py-2 text-right font-numeric text-chart-4">
+                          {formatINR(forecast.avgPurchases)}
+                        </td>
+                        <td
+                          className={`py-2 text-right font-numeric font-semibold ${net >= 0 ? "text-chart-2" : "text-destructive"}`}
+                        >
+                          {formatINR(net)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 italic">
+              Based on 3-month historical average. For planning purposes only.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* AI Anomaly Detection */}
+        <Card
+          className="bg-card border-border/70"
+          data-ocid="dashboard.anomaly.card"
+        >
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Bot className="w-4 h-4 text-primary" />
+              AI Anomaly Detection
+            </CardTitle>
+            {anomalies.length > 0 ? (
+              <Badge variant="destructive" className="text-xs">
+                {anomalies.length} issue
+                {anomalies.length !== 1 ? "s" : ""}
+              </Badge>
+            ) : (
+              <Badge
+                variant="default"
+                className="text-xs bg-chart-2 hover:bg-chart-2"
+              >
+                Clean
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent>
+            {anomalies.length === 0 ? (
+              <div
+                className="py-6 text-center space-y-2"
+                data-ocid="dashboard.anomaly.empty_state"
+              >
+                <div className="w-10 h-10 rounded-full bg-chart-2/10 flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-5 h-5 text-chart-2" />
+                </div>
+                <p className="text-sm font-medium text-chart-2">
+                  No anomalies detected
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  All invoices and purchases look clean
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {anomalies.map((anomaly, idx) => (
+                  <div
+                    key={anomaly.message.slice(0, 40)}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs ${
+                      anomaly.severity === "Error"
+                        ? "bg-destructive/5 border-destructive/20"
+                        : "bg-chart-4/5 border-chart-4/20"
+                    }`}
+                    data-ocid={`dashboard.anomaly.item.${idx + 1}`}
+                  >
+                    <AlertCircle
+                      className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                        anomaly.severity === "Error"
+                          ? "text-destructive"
+                          : "text-chart-4"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Badge
+                        variant={
+                          anomaly.severity === "Error"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                        className="text-[10px] mb-1"
+                      >
+                        {anomaly.severity}
+                      </Badge>
+                      <p className="text-muted-foreground">{anomaly.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Compliance Health */}
@@ -421,18 +821,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-end justify-between">
-              <p className="text-3xl font-cabinet font-bold text-primary">
-                {stats.complianceHealth}%
-              </p>
-              <Badge
-                variant={
-                  stats.complianceHealth >= 80 ? "default" : "destructive"
-                }
-              >
-                {stats.complianceHealth >= 80 ? "Healthy" : "Needs Attention"}
-              </Badge>
-            </div>
+            <TooltipProvider>
+              <div className="flex items-end justify-between">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="text-3xl font-cabinet font-bold text-primary cursor-help">
+                      {stats.complianceHealth}%
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs text-xs">
+                    Percentage of all invoices that are in 'Confirmed' status. A
+                    higher score means better GST filing readiness.
+                  </TooltipContent>
+                </Tooltip>
+                <Badge
+                  variant={
+                    stats.complianceHealth >= 80 ? "default" : "destructive"
+                  }
+                >
+                  {stats.complianceHealth >= 80 ? "Healthy" : "Needs Attention"}
+                </Badge>
+              </div>
+            </TooltipProvider>
             <Progress value={stats.complianceHealth} className="h-2" />
             <p className="text-xs text-muted-foreground">
               {stats.complianceHealth}% of invoices are confirmed
@@ -521,7 +931,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           data-ocid="dashboard.purchase.button"
           className="gap-2"
         >
-          <ShoppingCartIcon className="w-4 h-4" />
+          <Package className="w-4 h-4" />
           New Purchase
         </Button>
         <Button
@@ -541,6 +951,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         >
           <ShieldCheck className="w-4 h-4" />
           View GSTR-1
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onNavigate("workflow-automation")}
+          data-ocid="dashboard.workflow.button"
+          className="gap-2"
+        >
+          <Zap className="w-4 h-4" />
+          Workflows
         </Button>
       </div>
 
@@ -572,54 +991,94 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="invoice.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Invoice #</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table data-ocid="invoice.list.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Invoice #</TableHead>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentInvoices.map((inv, idx) => (
+                      <TableRow
+                        key={inv.id}
+                        data-ocid={`invoice.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 font-mono text-xs text-primary">
+                          {inv.invoiceNumber}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {inv.partyName}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(inv.date)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className="text-xs capitalize"
+                          >
+                            {inv.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-numeric font-medium">
+                          {formatINR(inv.grandTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={statusVariant(inv.status)}
+                            className="text-xs capitalize"
+                          >
+                            {inv.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {/* Mobile card list */}
+              <div className="md:hidden divide-y divide-border">
                 {recentInvoices.map((inv, idx) => (
-                  <TableRow key={inv.id} data-ocid={`invoice.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-mono text-xs text-primary">
-                      {inv.invoiceNumber}
-                    </TableCell>
-                    <TableCell className="text-sm">{inv.partyName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(inv.date)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {inv.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-numeric font-medium">
-                      {formatINR(inv.grandTotal)}
-                    </TableCell>
-                    <TableCell>
+                  <div
+                    key={inv.id}
+                    className="flex items-center gap-3 px-4 py-3"
+                    data-ocid={`invoice.item.${idx + 1}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono text-xs text-primary font-medium truncate">
+                        {inv.invoiceNumber}
+                      </p>
+                      <p className="text-sm truncate">{inv.partyName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(inv.date)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-numeric font-bold text-sm">
+                        {formatINR(inv.grandTotal)}
+                      </p>
                       <Badge
                         variant={statusVariant(inv.status)}
-                        className="text-xs capitalize"
+                        className="text-[10px] capitalize mt-0.5"
                       >
                         {inv.status}
                       </Badge>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
-
-function ShoppingCartIcon({ className }: { className?: string }) {
-  return <Package className={className} />;
 }

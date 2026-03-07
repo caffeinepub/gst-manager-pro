@@ -237,55 +237,59 @@ export function StockSummary() {
               </p>
             </div>
           ) : (
-            <Table data-ocid="stock.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Item Name</TableHead>
-                  <TableHead>HSN/SAC</TableHead>
-                  <TableHead className="text-right">Opening</TableHead>
-                  <TableHead className="text-right">Purchased</TableHead>
-                  <TableHead className="text-right">Sold</TableHead>
-                  <TableHead className="text-right">Closing</TableHead>
-                  <TableHead className="text-right">Selling Price</TableHead>
-                  <TableHead className="text-right pr-4">Stock Value</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((row, idx) => (
-                  <TableRow key={row.id} data-ocid={`stock.item.${idx + 1}`}>
-                    <TableCell className="pl-4 font-medium">
-                      {row.name}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {row.hsnSacCode || "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric text-sm">
-                      {row.openingStock}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric text-sm text-chart-2">
-                      +{row.unitsPurchased}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric text-sm text-chart-4">
-                      -{row.unitsSold}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant={stockBadgeVariant(row.closingStock)}
-                        className="font-numeric text-xs"
-                      >
-                        {row.closingStock}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-numeric text-sm">
-                      {formatINR(row.sellingPrice)}
-                    </TableCell>
-                    <TableCell className="text-right pr-4 font-numeric font-medium">
-                      {formatINR(row.stockValue)}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="stock.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Item Name</TableHead>
+                    <TableHead>HSN/SAC</TableHead>
+                    <TableHead className="text-right">Opening</TableHead>
+                    <TableHead className="text-right">Purchased</TableHead>
+                    <TableHead className="text-right">Sold</TableHead>
+                    <TableHead className="text-right">Closing</TableHead>
+                    <TableHead className="text-right">Selling Price</TableHead>
+                    <TableHead className="text-right pr-4">
+                      Stock Value
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((row, idx) => (
+                    <TableRow key={row.id} data-ocid={`stock.item.${idx + 1}`}>
+                      <TableCell className="pl-4 font-medium">
+                        {row.name}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {row.hsnSacCode || "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm">
+                        {row.openingStock}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm text-chart-2">
+                        +{row.unitsPurchased}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm text-chart-4">
+                        -{row.unitsSold}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={stockBadgeVariant(row.closingStock)}
+                          className="font-numeric text-xs"
+                        >
+                          {row.closingStock}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm">
+                        {formatINR(row.sellingPrice)}
+                      </TableCell>
+                      <TableCell className="text-right pr-4 font-numeric font-medium">
+                        {formatINR(row.stockValue)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -1,52 +1,65 @@
-# GST Manager Pro
+# GST Manager Pro - Full Functionality Audit & Enhancement
 
 ## Current State
-A full-stack GST Management Application with:
-- Dashboard with KPI cards, workflow alerts, compliance health, recent invoices
-- Masters: Business Profile (GSTIN validation), Parties (customer/vendor), Items/Services (HSN/SAC), Tax Rates
-- Invoicing: 8 invoice types (sales, service, quotation, proforma, credit note, debit note, bill of supply, delivery challan), payments
-- Accounting: Purchases with RCM/ITC, Journal Entries, Bank Accounts, Cash Book, Bank Reconciliation
-- GST Compliance: GSTR-1 (B2B/B2C/CDN), GSTR-3B (auto-calc), ITC Reconciliation (eligible/blocked), RCM Tracker, Audit Trail
-- Reports: Sales Register, Purchase Register, GST Summary, AR/AP Ageing, Trial Balance, P&L, Balance Sheet, Stock Summary, Cash Flow
-- AI Tax Assistant with 26 Q&A entries
+
+Full GST compliance & accounting application with:
+- Dashboard with KPI cards, workflow alerts, anomaly detection, predictive cash flow
+- Masters: Business Profile, Parties (with GSTIN validation), Items & Services, Tax Rates
+- Invoicing: 8 invoice types (sales, service, quotation, proforma, credit/debit notes, bill of supply, delivery challan), Payments
+- Accounting: Purchases (with OCR scan), Journal Entries, Bank Accounts, Cash Book, Chart of Accounts, Bank Reconciliation
+- GST Compliance: GSTR-1 (with auto-filing), GSTR-3B (with auto-generation), ITC Reconciliation, RCM Tracker, Audit Trail, API Integration, Workflow Automation
+- Reports: Sales/Purchase Register, GST Summary, AR/AP Ageing, Trial Balance, P&L, Balance Sheet, Stock Summary, Cash Flow
+- AI Tax Assistant (26 Q&A + free-form chat)
+- Mobile responsive with bottom nav bar, overflow-x-auto on tables
 
 ## Requested Changes (Diff)
 
 ### Add
-- Chart of Accounts page (in sidebar under Accounting) - fully interactive, pre-populated with Indian GAAP accounts, add/edit/delete custom accounts
-- Inventory ERP page - stock movement tracking, opening/closing stock, goods receipt, goods issue log, stock value
-- e-Invoice IRN generation button in invoice form - simulate IRN generation with random hash, show QR code simulation
-- e-Way Bill auto-generate button in invoice form - simulate e-Way Bill number generation for eligible invoices
-- GSTR-2B tab inside ITC Reconciliation - portal data simulation for vendor invoice matching
-- GSTR-1 auto-filing workflow - "File GSTR-1" button with status tracking (draft → filed → acknowledged)
-- GSTR-3B auto-generation with submit workflow - "Generate & File GSTR-3B" button with status tracking
-- Document OCR upload in Purchases page - file upload button that "scans" and auto-fills purchase fields
-- Workflow Automation panel (Notifications) - accessible from header bell icon showing pending reminders and due date alerts
-- AppPage types for new pages: `accounting-chart-of-accounts`, `inventory-erp`
-- Sidebar nav items for new pages
+- **Invoice print view**: Full-featured print layout for Sales & Service invoices with business header, GSTIN, party details, line items table, tax summary, amount-in-words, terms & IRN/QR placeholder
+- **Payments page - Link Payment to Invoice**: Currently payments are stored but not visually linked; add "Link to Invoice" dropdown in payment form
+- **GSTR-1 Summary export to CSV** (in addition to existing JSON export)
+- **GSTR-3B Summary export to CSV**
+- **RCM Tracker - Mark as Paid feature**: Currently shows RCM purchases but no way to mark tax as paid; add "Mark Paid" toggle per RCM entry
+- **Items page - HSN/SAC code lookup hint**: Show common HSN codes in a tooltip near the field
+- **Purchases page - ITC Eligible checkbox**: Verify it exists and works (currently in schema but confirm UI has it)
+- **Chart of Accounts - edit existing accounts**: Currently can add/delete but not edit account name or type
+- **Audit Trail - filter by action type**: Add filter dropdown (Create/Update/Delete) on Audit Trail page
+- **Dashboard - compliance health tooltip**: Explain what the % means on hover
+- **WorkflowAutomation - "Last Run" timestamp**: Currently shows static "Never", should show actual timestamp after "Run Now" is clicked
+- **GSTAPIIntegration - GSTIN validate remembers result**: Show last validation result in a history list (last 5)
+- **AI Assistant - suggested questions are clickable chips**: Already exists but verify they submit correctly and scroll to response
 
 ### Modify
-- InvoiceForm: add "Generate IRN" and "Generate e-Way Bill" action buttons next to the IRN/eWayBill fields
-- GSTR-1: add "File GSTR-1" button that tracks filing status per period
-- GSTR-3B: add "Generate & File GSTR-3B" button with status tracking
-- ITC Reconciliation: add GSTR-2B tab with simulated portal data matching
-- Purchases: add OCR upload button for scanning vendor bills
-- AppSidebar: add Chart of Accounts under Accounting, add Inventory ERP as a top-level section
-- App.tsx: wire new page routes
-- gst.ts types: add new AppPage values
+- **InvoiceForm print button**: Ensure print triggers a proper invoice print (currently `window.print()` prints the whole page not just invoice); implement a `invoice-print-area` div that isolates the invoice for printing; CSS already has `.invoice-print-area` class
+- **Dashboard Recent Invoices table**: Add "Type" column badge so user sees what kind of invoice (sales/service/etc)
+- **Parties page - Active/Inactive toggle**: Add toggle in edit form for isActive field (currently the badge shows status but form has no toggle)
+- **Items page - stock level badge**: Verify the color-coded stock badge exists and is wired to openingStock correctly
+- **Tax Rates page**: Ensure all 5 standard GST rates (0%, 5%, 12%, 18%, 28%) + Cess configuration are displayed and that custom rates can be added/deleted
+- **GSTR-3B Row component**: The `grid-cols-5` row layout doesn't scroll on mobile; wrap in overflow-x-auto
+- **Journal Entries form**: Ensure it supports adding multiple debit/credit lines (compound journal entry) with validation that debits = credits
+- **Bank Reconciliation**: Ensure "Auto Match" button works and shows matched/unmatched count summary cards at top
+- **CashBook page**: Verify transaction list shows running balance column
 
 ### Remove
 - Nothing removed
 
 ## Implementation Plan
-1. Add new AppPage types in gst.ts
-2. Create ChartOfAccounts page component
-3. Create InventoryERP page component
-4. Enhance InvoiceForm with IRN/eWayBill generation buttons
-5. Enhance GSTR1 with auto-filing workflow
-6. Enhance GSTR3B with submit workflow
-7. Enhance ITCReconciliation with GSTR-2B tab
-8. Add OCR upload to Purchases
-9. Add WorkflowNotifications bell panel to Header
-10. Wire sidebar and App.tsx for new pages
-11. Validate and deploy
+
+1. **InvoiceForm**: Fix print to use isolated invoice-print-area; ensure print button only prints the invoice card section
+2. **InvoiceForm line items**: Verify Cess % column is visible and wired; add item-level HSN code auto-fill from item master
+3. **Purchases form**: Verify ITC Eligible checkbox is functional; verify RCM checkbox triggers correct tax accounting
+4. **Parties form**: Add isActive toggle in the edit dialog
+5. **Tax Rates page**: Audit current implementation; ensure all 5 standard rates shown, custom rate add/delete works
+6. **RCM Tracker**: Add "Mark Tax Paid" button per row; track paid status in localStorage
+7. **Chart of Accounts**: Add inline edit for account name and type
+8. **Audit Trail**: Add action-type filter (All / Create / Update / Delete)
+9. **WorkflowAutomation**: Store "last run" timestamp in localStorage; display it per workflow
+10. **GSTAPIIntegration**: Add GSTIN validation history (last 5 results) stored in localStorage
+11. **GSTR-1**: Add CSV export button alongside existing JSON export
+12. **GSTR-3B**: Add CSV export button; wrap GSTR-3B summary table in overflow-x-auto for mobile
+13. **Dashboard**: Add tooltip on compliance % card; verify Recent Invoices table shows Type badge
+14. **CashBook**: Verify/add running balance column to transaction list
+15. **Bank Reconciliation**: Verify summary cards (matched/unmatched) at top; ensure Auto Match works correctly
+16. **Journal Entries**: Verify debit=credit validation before save; ensure compound entries work
+17. **AI Assistant**: Verify suggested question chips click and submit correctly
+18. **Validate**: Run typecheck, lint, build -- fix all errors

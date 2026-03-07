@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +25,24 @@ import {
   useInvoices,
 } from "@/hooks/useGSTStore";
 import { formatDate, formatINR, getCurrentMonth } from "@/utils/formatting";
-import { AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  Zap,
+} from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+interface MatchResult {
+  transactionId: string;
+  transactionDesc: string;
+  transactionAmount: number;
+  matchedInvoiceNumber: string | null;
+  matchedInvoiceAmount: number | null;
+  confidence: number;
+}
 
 export function BankReconciliation() {
   const { accounts } = useBankAccounts();
@@ -36,6 +53,10 @@ export function BankReconciliation() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
   const [fromDate, setFromDate] = useState(defaultStart);
   const [toDate, setToDate] = useState(defaultEnd);
+  const [autoMatchResults, setAutoMatchResults] = useState<
+    MatchResult[] | null
+  >(null);
+  const [isAutoMatching, setIsAutoMatching] = useState(false);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -70,6 +91,49 @@ export function BankReconciliation() {
 
   const isReconciled = variance < 1;
 
+  const handleAutoMatch = () => {
+    setIsAutoMatching(true);
+    setTimeout(() => {
+      const results: MatchResult[] = filteredTransactions.map((txn) => {
+        const txnAmount = txn.credit > 0 ? txn.credit : txn.debit;
+        // Find best matching invoice
+        let bestMatch: (typeof filteredInvoices)[0] | null = null;
+        let bestDiff = Number.POSITIVE_INFINITY;
+        for (const inv of filteredInvoices) {
+          const diff = Math.abs(inv.grandTotal - txnAmount);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestMatch = inv;
+          }
+        }
+        let confidence = 0;
+        if (bestMatch && txnAmount > 0) {
+          const pctDiff = bestDiff / txnAmount;
+          if (pctDiff === 0) confidence = 100;
+          else if (pctDiff <= 0.05) confidence = 90;
+          else if (pctDiff <= 0.1) confidence = 75;
+          else confidence = 0;
+        }
+        return {
+          transactionId: txn.id,
+          transactionDesc: txn.description,
+          transactionAmount: txnAmount,
+          matchedInvoiceNumber:
+            confidence > 0 ? (bestMatch?.invoiceNumber ?? null) : null,
+          matchedInvoiceAmount:
+            confidence > 0 ? (bestMatch?.grandTotal ?? null) : null,
+          confidence,
+        };
+      });
+      setAutoMatchResults(results);
+      setIsAutoMatching(false);
+      const matchedCount = results.filter((r) => r.confidence > 0).length;
+      toast.success(
+        `Auto-match complete: ${matchedCount} transaction${matchedCount !== 1 ? "s" : ""} matched`,
+      );
+    }, 1500);
+  };
+
   return (
     <div className="space-y-4" data-ocid="reconciliation.section">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -77,6 +141,70 @@ export function BankReconciliation() {
           <RefreshCw className="w-5 h-5 text-primary" />
           Bank Reconciliation
         </h1>
+        <Button
+          onClick={handleAutoMatch}
+          disabled={isAutoMatching || filteredTransactions.length === 0}
+          className="gap-2"
+          data-ocid="reconciliation.auto_match.primary_button"
+        >
+          {isAutoMatching ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Zap className="w-4 h-4" />
+          )}
+          Auto-Match
+        </Button>
+      </div>
+
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="bg-card border-border/70">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Matched Transactions
+            </p>
+            <p className="text-xl font-cabinet font-bold text-chart-2 font-numeric">
+              {autoMatchResults
+                ? autoMatchResults.filter((r) => r.confidence > 0).length
+                : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {autoMatchResults ? "Auto-matched" : "Run auto-match to see"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border/70">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Unmatched
+            </p>
+            <p className="text-xl font-cabinet font-bold text-chart-4 font-numeric">
+              {autoMatchResults
+                ? autoMatchResults.filter((r) => r.confidence === 0).length
+                : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Need manual review
+            </p>
+          </CardContent>
+        </Card>
+        <Card
+          className={`border-border/70 ${isReconciled ? "bg-chart-2/5" : "bg-card"}`}
+        >
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Reconciliation
+            </p>
+            <p
+              className={`text-xl font-cabinet font-bold font-numeric ${isReconciled ? "text-chart-2" : "text-chart-3"}`}
+            >
+              {isReconciled ? "Reconciled" : formatINR(variance)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isReconciled ? "No variance detected" : "Variance detected"}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -128,6 +256,97 @@ export function BankReconciliation() {
         </CardContent>
       </Card>
 
+      {/* Auto-Match Results */}
+      {autoMatchResults && (
+        <Card
+          className="bg-card border-border/70"
+          data-ocid="reconciliation.automatch.card"
+        >
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Zap className="w-4 h-4 text-primary" />
+              Auto-Match Results
+            </CardTitle>
+            <div className="flex gap-2 items-center">
+              <Badge variant="default" className="text-xs">
+                {autoMatchResults.filter((r) => r.confidence > 0).length}{" "}
+                Matched
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                {autoMatchResults.filter((r) => r.confidence === 0).length}{" "}
+                Unmatched
+              </Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setAutoMatchResults(null)}
+              >
+                Clear
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Bank Transaction</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Matched Invoice</TableHead>
+                    <TableHead className="text-right">Invoice Amount</TableHead>
+                    <TableHead className="text-right pr-4">
+                      Confidence
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {autoMatchResults.map((r, idx) => (
+                    <TableRow
+                      key={r.transactionId}
+                      data-ocid={`reconciliation.match.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 text-sm">
+                        {r.transactionDesc}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm">
+                        {formatINR(r.transactionAmount)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-primary">
+                        {r.matchedInvoiceNumber ?? (
+                          <span className="text-muted-foreground">
+                            No match
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric text-sm">
+                        {r.matchedInvoiceAmount != null
+                          ? formatINR(r.matchedInvoiceAmount)
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <Badge
+                          variant={
+                            r.confidence === 100
+                              ? "default"
+                              : r.confidence >= 75
+                                ? "secondary"
+                                : "destructive"
+                          }
+                          className="text-xs"
+                        >
+                          {r.confidence}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs */}
       <Tabs defaultValue="bank">
         <TabsList className="mb-4">
@@ -160,45 +379,49 @@ export function BankReconciliation() {
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-4">Date</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
-                      <TableHead className="text-right pr-4">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTransactions.map((txn, idx) => (
-                      <TableRow
-                        key={txn.id}
-                        data-ocid={`reconciliation.bank.item.${idx + 1}`}
-                      >
-                        <TableCell className="pl-4 text-xs text-muted-foreground">
-                          {formatDate(txn.date)}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {txn.description}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {txn.reference || "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-numeric text-sm text-chart-4">
-                          {txn.debit > 0 ? formatINR(txn.debit) : "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-numeric text-sm text-chart-2">
-                          {txn.credit > 0 ? formatINR(txn.credit) : "-"}
-                        </TableCell>
-                        <TableCell className="text-right pr-4 font-numeric font-medium">
-                          {formatINR(txn.balance)}
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">Date</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead className="text-right">Debit</TableHead>
+                        <TableHead className="text-right">Credit</TableHead>
+                        <TableHead className="text-right pr-4">
+                          Balance
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTransactions.map((txn, idx) => (
+                        <TableRow
+                          key={txn.id}
+                          data-ocid={`reconciliation.bank.item.${idx + 1}`}
+                        >
+                          <TableCell className="pl-4 text-xs text-muted-foreground">
+                            {formatDate(txn.date)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {txn.description}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {txn.reference || "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm text-chart-4">
+                            {txn.debit > 0 ? formatINR(txn.debit) : "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm text-chart-2">
+                            {txn.credit > 0 ? formatINR(txn.credit) : "-"}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 font-numeric font-medium">
+                            {formatINR(txn.balance)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -224,56 +447,58 @@ export function BankReconciliation() {
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-4">Invoice #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">CGST</TableHead>
-                      <TableHead className="text-right">SGST/IGST</TableHead>
-                      <TableHead className="text-right pr-4">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredInvoices.map((inv, idx) => (
-                      <TableRow
-                        key={inv.id}
-                        data-ocid={`reconciliation.invoice.item.${idx + 1}`}
-                      >
-                        <TableCell className="pl-4 font-mono text-xs text-primary">
-                          {inv.invoiceNumber}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(inv.date)}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {inv.partyName}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className="text-xs capitalize"
-                          >
-                            {inv.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-numeric text-sm">
-                          {formatINR(inv.totalCgst)}
-                        </TableCell>
-                        <TableCell className="text-right font-numeric text-sm">
-                          {inv.totalIgst > 0
-                            ? formatINR(inv.totalIgst)
-                            : formatINR(inv.totalSgst)}
-                        </TableCell>
-                        <TableCell className="text-right pr-4 font-numeric font-medium">
-                          {formatINR(inv.grandTotal)}
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">Invoice #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Party</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST/IGST</TableHead>
+                        <TableHead className="text-right pr-4">Total</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInvoices.map((inv, idx) => (
+                        <TableRow
+                          key={inv.id}
+                          data-ocid={`reconciliation.invoice.item.${idx + 1}`}
+                        >
+                          <TableCell className="pl-4 font-mono text-xs text-primary">
+                            {inv.invoiceNumber}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(inv.date)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {inv.partyName}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className="text-xs capitalize"
+                            >
+                              {inv.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {formatINR(inv.totalCgst)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {inv.totalIgst > 0
+                              ? formatINR(inv.totalIgst)
+                              : formatINR(inv.totalSgst)}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 font-numeric font-medium">
+                            {formatINR(inv.grandTotal)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>

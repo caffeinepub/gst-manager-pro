@@ -37,7 +37,7 @@ import {
   useTaxRates,
   useUpdateTaxRate,
 } from "@/hooks/useQueries";
-import { Edit, Loader2, Plus, ReceiptText, Trash2 } from "lucide-react";
+import { Edit, Loader2, Lock, Plus, ReceiptText, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -116,15 +116,81 @@ export function TaxRates() {
     );
   }
 
+  const standardRates = [
+    { rate: "0%", description: "Exempted / Nil rated goods and services" },
+    {
+      rate: "5%",
+      description:
+        "Essential goods: food items, fertilizers, medicines (basic)",
+    },
+    {
+      rate: "12%",
+      description: "Processed food, computers, business class air travel",
+    },
+    {
+      rate: "18%",
+      description:
+        "Most goods & services: AC restaurants, telecom, IT services",
+    },
+    {
+      rate: "28%",
+      description: "Luxury goods: automobiles, tobacco, aerated drinks + Cess",
+    },
+  ];
+
   return (
     <div className="space-y-4" data-ocid="taxrate.section">
+      {/* Standard GST Rates Reference */}
+      <Card className="bg-card border-border/70">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ReceiptText className="w-4 h-4 text-primary" />
+            Standard GST Rates (Reference)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-4">GST Rate</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="pr-4 text-right">Type</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {standardRates.map((r) => (
+                  <TableRow key={r.rate}>
+                    <TableCell className="pl-4 font-bold text-primary font-numeric">
+                      {r.rate}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.description}
+                    </TableCell>
+                    <TableCell className="text-right pr-4">
+                      <Badge
+                        variant="secondary"
+                        className="text-xs flex items-center gap-1 w-fit ml-auto"
+                      >
+                        <Lock className="w-2.5 h-2.5" />
+                        System
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end">
         <Button
           onClick={openAdd}
           data-ocid="taxrate.add_button"
           className="gap-2"
         >
-          <Plus className="w-4 h-4" /> Add Tax Rate
+          <Plus className="w-4 h-4" /> Add Custom Tax Rate
         </Button>
       </div>
 
@@ -152,78 +218,82 @@ export function TaxRates() {
               </Button>
             </div>
           ) : (
-            <Table data-ocid="taxrate.list.table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Name</TableHead>
-                  <TableHead>GST Rate</TableHead>
-                  <TableHead>Cess</TableHead>
-                  <TableHead>Exempt</TableHead>
-                  <TableHead>RCM</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right pr-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {taxRates.map((rate, idx) => (
-                  <TableRow
-                    key={String(rate.id)}
-                    data-ocid={`taxrate.item.${idx + 1}`}
-                  >
-                    <TableCell className="pl-4 font-medium">
-                      {rate.name}
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {String(rate.gstRatePercent)}%
-                    </TableCell>
-                    <TableCell className="font-numeric text-sm">
-                      {String(rate.cessPercent)}%
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={rate.isExempt ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {rate.isExempt ? "Yes" : "No"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={rate.isRcmApplicable ? "outline" : "secondary"}
-                        className="text-xs"
-                      >
-                        {rate.isRcmApplicable ? "Yes" : "No"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-48 truncate">
-                      {rate.description}
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => openEdit(rate)}
-                          data-ocid={`taxrate.edit_button.${idx + 1}`}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(rate.id)}
-                          data-ocid={`taxrate.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table data-ocid="taxrate.list.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Name</TableHead>
+                    <TableHead>GST Rate</TableHead>
+                    <TableHead>Cess</TableHead>
+                    <TableHead>Exempt</TableHead>
+                    <TableHead>RCM</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {taxRates.map((rate, idx) => (
+                    <TableRow
+                      key={String(rate.id)}
+                      data-ocid={`taxrate.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-medium">
+                        {rate.name}
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {String(rate.gstRatePercent)}%
+                      </TableCell>
+                      <TableCell className="font-numeric text-sm">
+                        {String(rate.cessPercent)}%
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={rate.isExempt ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {rate.isExempt ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            rate.isRcmApplicable ? "outline" : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {rate.isRcmApplicable ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-48 truncate">
+                        {rate.description}
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(rate)}
+                            data-ocid={`taxrate.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(rate.id)}
+                            data-ocid={`taxrate.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -150,96 +150,102 @@ export function Reports({ page }: ReportsProps) {
                 No sales found
               </div>
             ) : (
-              <Table data-ocid="report.sales.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Invoice #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Party</TableHead>
-                    <TableHead>Taxable</TableHead>
-                    <TableHead>CGST</TableHead>
-                    <TableHead>SGST</TableHead>
-                    <TableHead>IGST</TableHead>
-                    <TableHead className="text-right">Grand Total</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((inv, idx) => (
-                    <TableRow
-                      key={inv.id}
-                      data-ocid={`report.sales.item.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4 font-mono text-xs text-primary">
-                        {inv.invoiceNumber}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(inv.date)}
-                      </TableCell>
-                      <TableCell className="text-sm">{inv.partyName}</TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(inv.subtotal - inv.totalDiscount)}
-                      </TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(inv.totalCgst)}
-                      </TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(inv.totalSgst)}
-                      </TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(inv.totalIgst)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric font-bold">
-                        {formatINR(inv.grandTotal)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            inv.status === "confirmed" ? "default" : "secondary"
-                          }
-                          className="text-xs capitalize"
-                        >
-                          {inv.status}
-                        </Badge>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table data-ocid="report.sales.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Invoice #</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Taxable</TableHead>
+                      <TableHead>CGST</TableHead>
+                      <TableHead>SGST</TableHead>
+                      <TableHead>IGST</TableHead>
+                      <TableHead className="text-right">Grand Total</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                  <TableRow className="font-bold border-t-2 bg-muted/30">
-                    <TableCell className="pl-4" colSpan={3}>
-                      Total ({filtered.length} invoices)
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(
-                        filtered.reduce(
-                          (s, inv) => s + (inv.subtotal - inv.totalDiscount),
-                          0,
-                        ),
-                      )}
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(
-                        filtered.reduce((s, inv) => s + inv.totalCgst, 0),
-                      )}
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(
-                        filtered.reduce((s, inv) => s + inv.totalSgst, 0),
-                      )}
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(
-                        filtered.reduce((s, inv) => s + inv.totalIgst, 0),
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric">
-                      {formatINR(
-                        filtered.reduce((s, inv) => s + inv.grandTotal, 0),
-                      )}
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((inv, idx) => (
+                      <TableRow
+                        key={inv.id}
+                        data-ocid={`report.sales.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 font-mono text-xs text-primary">
+                          {inv.invoiceNumber}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(inv.date)}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {inv.partyName}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(inv.subtotal - inv.totalDiscount)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(inv.totalCgst)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(inv.totalSgst)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(inv.totalIgst)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric font-bold">
+                          {formatINR(inv.grandTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              inv.status === "confirmed"
+                                ? "default"
+                                : "secondary"
+                            }
+                            className="text-xs capitalize"
+                          >
+                            {inv.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-bold border-t-2 bg-muted/30">
+                      <TableCell className="pl-4" colSpan={3}>
+                        Total ({filtered.length} invoices)
+                      </TableCell>
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce(
+                            (s, inv) => s + (inv.subtotal - inv.totalDiscount),
+                            0,
+                          ),
+                        )}
+                      </TableCell>
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, inv) => s + inv.totalCgst, 0),
+                        )}
+                      </TableCell>
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, inv) => s + inv.totalSgst, 0),
+                        )}
+                      </TableCell>
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, inv) => s + inv.totalIgst, 0),
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, inv) => s + inv.grandTotal, 0),
+                        )}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -311,81 +317,89 @@ export function Reports({ page }: ReportsProps) {
                 No purchases found
               </div>
             ) : (
-              <Table data-ocid="report.purchase.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Bill #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Taxable</TableHead>
-                    <TableHead>CGST</TableHead>
-                    <TableHead>SGST</TableHead>
-                    <TableHead>RCM</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((p, idx) => (
-                    <TableRow
-                      key={p.id}
-                      data-ocid={`report.purchase.item.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4 font-mono text-xs text-primary">
-                        {p.billNumber}
+              <div className="overflow-x-auto">
+                <Table data-ocid="report.purchase.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Bill #</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Taxable</TableHead>
+                      <TableHead>CGST</TableHead>
+                      <TableHead>SGST</TableHead>
+                      <TableHead>RCM</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((p, idx) => (
+                      <TableRow
+                        key={p.id}
+                        data-ocid={`report.purchase.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 font-mono text-xs text-primary">
+                          {p.billNumber}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(p.billDate)}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.vendorName}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(p.subtotal - p.totalDiscount)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(p.totalCgst)}
+                        </TableCell>
+                        <TableCell className="font-numeric text-sm">
+                          {formatINR(p.totalSgst)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={p.isRcm ? "outline" : "secondary"}
+                            className="text-xs"
+                          >
+                            {p.isRcm ? "Yes" : "No"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-numeric font-bold">
+                          {formatINR(p.grandTotal)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-bold border-t-2 bg-muted/30">
+                      <TableCell className="pl-4" colSpan={3}>
+                        Total ({filtered.length} bills)
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(p.billDate)}
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce(
+                            (s, p) => s + (p.subtotal - p.totalDiscount),
+                            0,
+                          ),
+                        )}
                       </TableCell>
-                      <TableCell className="text-sm">{p.vendorName}</TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(p.subtotal - p.totalDiscount)}
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, p) => s + p.totalCgst, 0),
+                        )}
                       </TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(p.totalCgst)}
+                      <TableCell className="font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, p) => s + p.totalSgst, 0),
+                        )}
                       </TableCell>
-                      <TableCell className="font-numeric text-sm">
-                        {formatINR(p.totalSgst)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={p.isRcm ? "outline" : "secondary"}
-                          className="text-xs"
-                        >
-                          {p.isRcm ? "Yes" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-numeric font-bold">
-                        {formatINR(p.grandTotal)}
+                      <TableCell />
+                      <TableCell className="text-right font-numeric">
+                        {formatINR(
+                          filtered.reduce((s, p) => s + p.grandTotal, 0),
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
-                  <TableRow className="font-bold border-t-2 bg-muted/30">
-                    <TableCell className="pl-4" colSpan={3}>
-                      Total ({filtered.length} bills)
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(
-                        filtered.reduce(
-                          (s, p) => s + (p.subtotal - p.totalDiscount),
-                          0,
-                        ),
-                      )}
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(filtered.reduce((s, p) => s + p.totalCgst, 0))}
-                    </TableCell>
-                    <TableCell className="font-numeric">
-                      {formatINR(filtered.reduce((s, p) => s + p.totalSgst, 0))}
-                    </TableCell>
-                    <TableCell />
-                    <TableCell className="text-right font-numeric">
-                      {formatINR(
-                        filtered.reduce((s, p) => s + p.grandTotal, 0),
-                      )}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -426,45 +440,47 @@ export function Reports({ page }: ReportsProps) {
                 No data
               </div>
             ) : (
-              <Table data-ocid="report.gst.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Month</TableHead>
-                    <TableHead className="text-right">Total Sales</TableHead>
-                    <TableHead className="text-right">CGST</TableHead>
-                    <TableHead className="text-right">SGST</TableHead>
-                    <TableHead className="text-right">IGST</TableHead>
-                    <TableHead className="text-right">Cess</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(([month, d], idx) => (
-                    <TableRow
-                      key={month}
-                      data-ocid={`report.gst.item.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4 font-medium">
-                        {month}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric">
-                        {formatINR(d.sales)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric text-primary">
-                        {formatINR(d.cgst)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric text-primary">
-                        {formatINR(d.sgst)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric text-chart-2">
-                        {formatINR(d.igst)}
-                      </TableCell>
-                      <TableCell className="text-right font-numeric">
-                        {formatINR(d.cess)}
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table data-ocid="report.gst.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Month</TableHead>
+                      <TableHead className="text-right">Total Sales</TableHead>
+                      <TableHead className="text-right">CGST</TableHead>
+                      <TableHead className="text-right">SGST</TableHead>
+                      <TableHead className="text-right">IGST</TableHead>
+                      <TableHead className="text-right">Cess</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(([month, d], idx) => (
+                      <TableRow
+                        key={month}
+                        data-ocid={`report.gst.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 font-medium">
+                          {month}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric">
+                          {formatINR(d.sales)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric text-primary">
+                          {formatINR(d.cgst)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric text-primary">
+                          {formatINR(d.sgst)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric text-chart-2">
+                          {formatINR(d.igst)}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric">
+                          {formatINR(d.cess)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -529,63 +545,65 @@ export function Reports({ page }: ReportsProps) {
                 No data
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Reference #</TableHead>
-                    <TableHead>Party</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Days Overdue</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {list.map((item, idx) => {
-                    const dueDate = item.dueDate;
-                    const diff = Math.ceil(
-                      (now.getTime() - new Date(dueDate).getTime()) /
-                        (1000 * 60 * 60 * 24),
-                    );
-                    const ref =
-                      "invoiceNumber" in item
-                        ? item.invoiceNumber
-                        : item.billNumber;
-                    const party =
-                      "partyName" in item ? item.partyName : item.vendorName;
-                    return (
-                      <TableRow
-                        key={item.id}
-                        data-ocid={`report.${isAR ? "ar" : "ap"}.item.${idx + 1}`}
-                      >
-                        <TableCell className="pl-4 font-mono text-xs text-primary">
-                          {ref}
-                        </TableCell>
-                        <TableCell className="text-sm">{party}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(dueDate)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              diff > 90
-                                ? "destructive"
-                                : diff > 30
-                                  ? "outline"
-                                  : "secondary"
-                            }
-                            className="text-xs"
-                          >
-                            {diff > 0 ? `${diff} days` : "Not due"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-numeric font-bold">
-                          {formatINR(item.grandTotal)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Reference #</TableHead>
+                      <TableHead>Party</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Days Overdue</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {list.map((item, idx) => {
+                      const dueDate = item.dueDate;
+                      const diff = Math.ceil(
+                        (now.getTime() - new Date(dueDate).getTime()) /
+                          (1000 * 60 * 60 * 24),
+                      );
+                      const ref =
+                        "invoiceNumber" in item
+                          ? item.invoiceNumber
+                          : item.billNumber;
+                      const party =
+                        "partyName" in item ? item.partyName : item.vendorName;
+                      return (
+                        <TableRow
+                          key={item.id}
+                          data-ocid={`report.${isAR ? "ar" : "ap"}.item.${idx + 1}`}
+                        >
+                          <TableCell className="pl-4 font-mono text-xs text-primary">
+                            {ref}
+                          </TableCell>
+                          <TableCell className="text-sm">{party}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(dueDate)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                diff > 90
+                                  ? "destructive"
+                                  : diff > 30
+                                    ? "outline"
+                                    : "secondary"
+                              }
+                              className="text-xs"
+                            >
+                              {diff > 0 ? `${diff} days` : "Not due"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-numeric font-bold">
+                            {formatINR(item.grandTotal)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -632,46 +650,48 @@ export function Reports({ page }: ReportsProps) {
                 No journal entries found
               </div>
             ) : (
-              <Table data-ocid="report.trial.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-4">Account Code</TableHead>
-                    <TableHead>Account Name</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(([code, v], idx) => (
-                    <TableRow
-                      key={code}
-                      data-ocid={`report.trial.item.${idx + 1}`}
-                    >
-                      <TableCell className="pl-4 font-mono text-xs text-primary">
-                        {code}
+              <div className="overflow-x-auto">
+                <Table data-ocid="report.trial.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-4">Account Code</TableHead>
+                      <TableHead>Account Name</TableHead>
+                      <TableHead className="text-right">Debit</TableHead>
+                      <TableHead className="text-right">Credit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(([code, v], idx) => (
+                      <TableRow
+                        key={code}
+                        data-ocid={`report.trial.item.${idx + 1}`}
+                      >
+                        <TableCell className="pl-4 font-mono text-xs text-primary">
+                          {code}
+                        </TableCell>
+                        <TableCell className="text-sm">{v.name}</TableCell>
+                        <TableCell className="text-right font-numeric">
+                          {v.debit > 0 ? formatINR(v.debit) : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-numeric">
+                          {v.credit > 0 ? formatINR(v.credit) : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-bold border-t-2">
+                      <TableCell className="pl-4" colSpan={2}>
+                        Total
                       </TableCell>
-                      <TableCell className="text-sm">{v.name}</TableCell>
                       <TableCell className="text-right font-numeric">
-                        {v.debit > 0 ? formatINR(v.debit) : "-"}
+                        {formatINR(totalDr)}
                       </TableCell>
                       <TableCell className="text-right font-numeric">
-                        {v.credit > 0 ? formatINR(v.credit) : "-"}
+                        {formatINR(totalCr)}
                       </TableCell>
                     </TableRow>
-                  ))}
-                  <TableRow className="font-bold border-t-2">
-                    <TableCell className="pl-4" colSpan={2}>
-                      Total
-                    </TableCell>
-                    <TableCell className="text-right font-numeric">
-                      {formatINR(totalDr)}
-                    </TableCell>
-                    <TableCell className="text-right font-numeric">
-                      {formatINR(totalCr)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>

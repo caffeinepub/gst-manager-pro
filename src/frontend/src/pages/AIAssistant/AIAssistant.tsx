@@ -590,6 +590,99 @@ IGST = (Assessable Value + BCD + SWS) × IGST Rate
 • GSTR-3B, GSTR-1
 • Shipping bills / Bank realization certificate`,
     },
+    {
+      keywords: ["anomaly", "check errors", "detect errors", "invoice errors"],
+      question: "How does AI Anomaly Detection work?",
+      answer: `**AI Anomaly Detection** on the Dashboard automatically scans your invoices and purchases for 5 types of issues:
+
+1. **Duplicate invoice numbers** — same invoice number used more than once
+2. **High-value invoices without GSTIN** — invoices > ₹50,000 with no party GSTIN (B2B compliance risk)
+3. **Zero GST on high-value invoices** — sales/service invoices > ₹10,000 with all items at 0% GST (potential misclassification)
+4. **RCM purchases without notes** — RCM entries with no justification text
+5. **Credit/Debit notes without linked invoices** — notes not linked to original invoice (violates GST rules)
+
+**To view anomalies:** Go to **Dashboard → AI Anomaly Detection** panel.
+
+Each anomaly is tagged as **Warning** or **Error** based on compliance severity.`,
+    },
+    {
+      keywords: [
+        "cash flow forecast",
+        "predict cash flow",
+        "future cash flow",
+        "projection",
+      ],
+      question: "How does the Predictive Cash Flow forecast work?",
+      answer: `**Predictive Cash Flow** uses a simple 3-month rolling average model:
+
+**Methodology:**
+1. Calculates average monthly sales from the last 3 months of confirmed invoices
+2. Calculates average monthly purchases from the last 3 months
+3. Projects these averages forward for the next 3 months
+4. Shows Net Cash Flow = Projected Sales – Projected Purchases
+
+**Where to see it:**
+• **Dashboard → Predictive Cash Flow (3-Month Forecast)** panel
+• **Reports → Cash Flow → Forecast tab** for detailed 5-column view with cumulative balance
+
+**Limitations:** This is a simple trend model. It does not account for seasonality, one-time events, or future commitments. Always use in conjunction with your CA's projections.`,
+    },
+    {
+      keywords: ["workflow automation", "auto reminder", "automated alerts"],
+      question: "What automated workflows are available?",
+      answer: `**8 Automated Workflows** are available in GST Compliance → Workflow Automation:
+
+1. **GSTR-1 Filing Reminder** — 5 days before 11th each month
+2. **GSTR-3B Filing Reminder** — 5 days before 20th each month
+3. **Overdue Invoice Alerts** — daily scan for unpaid invoices past due date
+4. **Low Stock Notifications** — when closing stock ≤ 5 units for any item
+5. **RCM Payment Reminders** — 25th of each month
+6. **ITC Reconciliation Reminder** — 14th of each month (GSTR-2B publish date)
+7. **Bank Reconciliation Reminder** — last working day of month
+8. **GSTR-9 Annual Return Reminder** — 1st November each year
+
+Each workflow can be individually **enabled/disabled** and manually triggered with "Run Now". Status and last-run time are persisted locally.`,
+    },
+    {
+      keywords: [
+        "gstin validate",
+        "validate gstin",
+        "gstin lookup",
+        "pan validate",
+      ],
+      question: "How do I validate a GSTIN or PAN?",
+      answer: `**GSTIN Validation** is available in two places:
+
+**1. Masters → Parties (inline validation):**
+• When adding/editing a party, click the **"Validate"** button next to the GSTIN field
+• Shows: Legal Name | Status: Active | Type: Regular
+• Validates the 15-character format (2 state digits + 5 alpha + 4 digits + 1 alpha + 1 alpha + Z + 1 alphanumeric)
+
+**2. GST Compliance → API Integration:**
+• Full GSTIN validation card with endpoint URL
+• PAN Validation card — validates 10-char PAN format and returns taxpayer name + type (Individual/Company)
+• Banking Sync, e-Invoice IRN, and e-Way Bill test cards
+
+**Note:** These are simulated API calls. In production, they connect to the official GSTN and NSDL APIs with your API credentials.`,
+    },
+    {
+      keywords: ["voice invoice", "speak invoice", "voice entry"],
+      question: "How does Voice Invoice work?",
+      answer: `**Voice Invoice (Beta)** is available in **Sales Invoice** and **Service Invoice** forms.
+
+**How to use:**
+1. Open a Sales or Service invoice form
+2. Click the **"Voice"** button (microphone icon) in the header
+3. A dialog appears with an animated mic icon and "Listening..." status
+4. After 2 seconds, the system auto-fills:
+   • Party: first available party in your masters
+   • Line Item: "Voice Captured Item" | Qty: 1 | Price: ₹5,000 | GST: 18%
+5. Review and edit the pre-filled details as needed
+
+**Current status:** Beta simulation — actual speech recognition requires microphone permission and will be connected to Web Speech API in the production release.
+
+**Tip:** After voice capture, always verify party, HSN code, and price before confirming the invoice.`,
+    },
   ];
 
 const SUGGESTED_QUESTIONS = [
@@ -684,13 +777,12 @@ export function AIAssistant() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional scroll side-effect on messages
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = (text: string) => {
@@ -742,10 +834,7 @@ export function AIAssistant() {
             </CardTitle>
           </CardHeader>
 
-          <ScrollArea
-            className="flex-1 p-4"
-            ref={scrollRef as React.RefObject<HTMLDivElement>}
-          >
+          <ScrollArea className="flex-1 p-4" ref={scrollRef}>
             <div className="space-y-4">
               {messages.map((msg) => (
                 <div
@@ -780,6 +869,7 @@ export function AIAssistant() {
                   )}
                 </div>
               ))}
+              <div ref={bottomRef} />
               {isTyping && (
                 <div
                   className="flex gap-3 justify-start"

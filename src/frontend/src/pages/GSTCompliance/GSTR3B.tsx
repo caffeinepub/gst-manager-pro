@@ -8,7 +8,7 @@ import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
-import { CheckCircle2, ClipboardList, Download } from "lucide-react";
+import { CheckCircle2, ClipboardList, Download, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -109,7 +109,7 @@ export function GSTR3B() {
     bold?: boolean;
   }) => (
     <div
-      className={`grid grid-cols-5 gap-2 py-2 text-sm ${bold ? "font-bold border-t border-border" : ""}`}
+      className={`grid grid-cols-5 gap-2 py-2 text-sm min-w-[480px] ${bold ? "font-bold border-t border-border" : ""}`}
     >
       <span className={`${bold ? "" : "text-muted-foreground"}`}>{label}</span>
       <span className="font-numeric text-right">{formatINR(cgst)}</span>
@@ -237,6 +237,54 @@ export function GSTR3B() {
             >
               <Download className="w-4 h-4" /> Export JSON
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const rows = [
+                  ["Description", "CGST", "SGST", "IGST", "Cess"],
+                  [
+                    "Taxable Outward Supplies",
+                    data.outSum.cgst.toFixed(2),
+                    data.outSum.sgst.toFixed(2),
+                    data.outSum.igst.toFixed(2),
+                    data.outSum.cess.toFixed(2),
+                  ],
+                  [
+                    "RCM Liability",
+                    data.rcmSum.cgst.toFixed(2),
+                    data.rcmSum.sgst.toFixed(2),
+                    "0.00",
+                    "0.00",
+                  ],
+                  [
+                    "Eligible ITC",
+                    data.itcSum.cgst.toFixed(2),
+                    data.itcSum.sgst.toFixed(2),
+                    data.itcSum.igst.toFixed(2),
+                    data.itcSum.cess.toFixed(2),
+                  ],
+                  [
+                    "Net Tax Payable",
+                    data.netPayable.cgst.toFixed(2),
+                    data.netPayable.sgst.toFixed(2),
+                    data.netPayable.igst.toFixed(2),
+                    data.netPayable.cess.toFixed(2),
+                  ],
+                ];
+                const csv = rows.map((r) => r.join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `GSTR3B_${dateFrom}_${dateTo}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              data-ocid="gstr3b.export_csv.button"
+              className="gap-2"
+            >
+              <Table2 className="w-4 h-4" /> Export CSV
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -249,61 +297,63 @@ export function GSTR3B() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Column Headers */}
-          <div className="grid grid-cols-5 gap-2 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border mb-2">
-            <span>Description</span>
-            <span className="text-right">CGST</span>
-            <span className="text-right">SGST</span>
-            <span className="text-right">IGST</span>
-            <span className="text-right">Cess</span>
-          </div>
+          <div className="overflow-x-auto">
+            {/* Column Headers */}
+            <div className="grid grid-cols-5 gap-2 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border mb-2 min-w-[480px]">
+              <span>Description</span>
+              <span className="text-right">CGST</span>
+              <span className="text-right">SGST</span>
+              <span className="text-right">IGST</span>
+              <span className="text-right">Cess</span>
+            </div>
 
-          <div className="space-y-0">
-            <p className="text-xs font-semibold text-muted-foreground mt-3 mb-1 uppercase tracking-wide">
-              3.1 - Outward Supplies
-            </p>
-            <Row label="Taxable outward supplies (A)" {...data.outSum} />
-            <Row
-              label="Zero rated supplies"
-              cgst={0}
-              sgst={0}
-              igst={0}
-              cess={0}
-            />
-            <Row
-              label="Nil rated / Exempted"
-              cgst={0}
-              sgst={0}
-              igst={0}
-              cess={0}
-            />
+            <div className="space-y-0">
+              <p className="text-xs font-semibold text-muted-foreground mt-3 mb-1 uppercase tracking-wide">
+                3.1 - Outward Supplies
+              </p>
+              <Row label="Taxable outward supplies (A)" {...data.outSum} />
+              <Row
+                label="Zero rated supplies"
+                cgst={0}
+                sgst={0}
+                igst={0}
+                cess={0}
+              />
+              <Row
+                label="Nil rated / Exempted"
+                cgst={0}
+                sgst={0}
+                igst={0}
+                cess={0}
+              />
 
-            <Separator className="my-3" />
-            <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-              3.2 - RCM Liability
-            </p>
-            <Row
-              label="Inward supplies (RCM)"
-              cgst={data.rcmSum.cgst}
-              sgst={data.rcmSum.sgst}
-              igst={0}
-              cess={0}
-            />
+              <Separator className="my-3" />
+              <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                3.2 - RCM Liability
+              </p>
+              <Row
+                label="Inward supplies (RCM)"
+                cgst={data.rcmSum.cgst}
+                sgst={data.rcmSum.sgst}
+                igst={0}
+                cess={0}
+              />
 
-            <Separator className="my-3" />
-            <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-              4 - Eligible ITC
-            </p>
-            <Row
-              label="ITC Available (B)"
-              cgst={data.itcSum.cgst}
-              sgst={data.itcSum.sgst}
-              igst={data.itcSum.igst}
-              cess={data.itcSum.cess}
-            />
+              <Separator className="my-3" />
+              <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                4 - Eligible ITC
+              </p>
+              <Row
+                label="ITC Available (B)"
+                cgst={data.itcSum.cgst}
+                sgst={data.itcSum.sgst}
+                igst={data.itcSum.igst}
+                cess={data.itcSum.cess}
+              />
 
-            <Separator className="my-3" />
-            <Row label="Net Tax Payable (A - B)" {...data.netPayable} bold />
+              <Separator className="my-3" />
+              <Row label="Net Tax Payable (A - B)" {...data.netPayable} bold />
+            </div>
           </div>
         </CardContent>
       </Card>

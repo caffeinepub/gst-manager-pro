@@ -279,4 +279,6 @@ export type AppPage =
   | "accounting-reconciliation"
   | "accounting-chart-of-accounts"
   | "inventory-erp"
-  | "ai-assistant";
+  | "ai-assistant"
+  | "gst-api-integration"
+  | "workflow-automation";

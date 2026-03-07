@@ -262,7 +262,19 @@ export function useCustomAccounts() {
     [setCustomAccounts],
   );
 
-  return { customAccounts, addAccount, deleteAccount };
+  const updateAccount = useCallback(
+    (
+      id: string,
+      updates: Partial<Omit<CustomAccount, "id" | "isCustom" | "createdAt">>,
+    ) => {
+      setCustomAccounts((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+      );
+    },
+    [setCustomAccounts],
+  );
+
+  return { customAccounts, addAccount, updateAccount, deleteAccount };
 }
 
 export interface StockMovement {
