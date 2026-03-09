@@ -54,6 +54,7 @@ export interface Invoice {
   eWayBillNumber: string;
   notes: string;
   termsConditions: string;
+  declaration?: string;
   status: InvoiceStatus;
   linkedInvoiceId?: string; // for credit/debit notes
   createdAt: string;
@@ -144,7 +145,15 @@ export interface BankTransaction {
 
 export interface AuditLog {
   id: string;
-  action: "create" | "update" | "delete";
+  action:
+    | "create"
+    | "update"
+    | "delete"
+    | "view"
+    | "export"
+    | "file"
+    | "cancel"
+    | "approve";
   entity: string;
   entityId: string;
   description: string;

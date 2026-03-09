@@ -9,10 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useInvoiceDefaults } from "@/hooks/useGSTStore";
 import { RegistrationType } from "@/hooks/useQueries";
 import { useBusinessProfile, useSetBusinessProfile } from "@/hooks/useQueries";
 import { INDIAN_STATES } from "@/types/gst";
-import { Building2, Loader2, Save } from "lucide-react";
+import { Building2, FileText, Loader2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,6 +23,18 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 export function BusinessProfile() {
   const { data: profile, isLoading } = useBusinessProfile();
   const { mutate: saveProfile, isPending } = useSetBusinessProfile();
+  const { defaults: invoiceDefaults, saveDefaults } = useInvoiceDefaults();
+
+  const [defaultsForm, setDefaultsForm] = useState({
+    declaration: invoiceDefaults.declaration,
+    termsConditions: invoiceDefaults.termsConditions,
+  });
+
+  const handleSaveDefaults = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveDefaults(defaultsForm);
+    toast.success("Invoice defaults saved");
+  };
 
   const [form, setForm] = useState({
     businessName: "",
@@ -208,6 +222,71 @@ export function BusinessProfile() {
                   <Save className="w-4 h-4 mr-2" />
                 )}
                 Save Profile
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Invoice Defaults: Declaration & Terms */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="w-5 h-5 text-primary" />
+            Invoice Defaults
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            These texts appear on all new invoices by default. You can still
+            edit them per invoice.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveDefaults} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="declaration">Declaration</Label>
+              <Textarea
+                id="declaration"
+                value={defaultsForm.declaration}
+                onChange={(e) =>
+                  setDefaultsForm((p) => ({
+                    ...p,
+                    declaration: e.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="Declaration text..."
+                data-ocid="profile.declaration.textarea"
+                className="text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Printed on every invoice below the totals.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="termsConditions">Terms &amp; Conditions</Label>
+              <Textarea
+                id="termsConditions"
+                value={defaultsForm.termsConditions}
+                onChange={(e) =>
+                  setDefaultsForm((p) => ({
+                    ...p,
+                    termsConditions: e.target.value,
+                  }))
+                }
+                rows={8}
+                placeholder="Terms and conditions..."
+                data-ocid="profile.terms.textarea"
+                className="text-sm font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Replace "BUSINESS NAME" with your actual business name and
+                "STATE" with your state.
+              </p>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button type="submit" data-ocid="profile.defaults.save_button">
+                <Save className="w-4 h-4 mr-2" />
+                Save Defaults
               </Button>
             </div>
           </form>

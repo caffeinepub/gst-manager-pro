@@ -47,6 +47,7 @@ import {
 import { addDays, formatDate, formatINR, today } from "@/utils/formatting";
 import {
   Edit,
+  Eye,
   Loader2,
   Package,
   Plus,
@@ -106,12 +107,14 @@ export function Purchases() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [viewingPurchase, setViewingPurchase] = useState<Purchase | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const viewOnly = viewingPurchase !== null;
 
   const [form, setForm] = useState({
     billNumber: "",
@@ -131,6 +134,7 @@ export function Purchases() {
 
   const openCreate = () => {
     setEditingPurchase(null);
+    setViewingPurchase(null);
     setForm({
       billNumber: getNextNumber("purchase", "BILL"),
       billDate: today(),
@@ -141,6 +145,23 @@ export function Purchases() {
       notes: "",
       lines: [emptyLine()],
       status: "confirmed" as "draft" | "confirmed",
+    });
+    setShowForm(true);
+  };
+
+  const openView = (p: Purchase) => {
+    setViewingPurchase(p);
+    setEditingPurchase(null);
+    setForm({
+      billNumber: p.billNumber,
+      billDate: p.billDate,
+      dueDate: p.dueDate,
+      vendorId: p.vendorId,
+      isRcm: p.isRcm,
+      itcEligible: p.itcEligible,
+      notes: p.notes,
+      lines: p.lineItems,
+      status: p.status === "cancelled" ? "confirmed" : p.status,
     });
     setShowForm(true);
   };
@@ -178,6 +199,7 @@ export function Purchases() {
 
   const openEdit = (p: Purchase) => {
     setEditingPurchase(p);
+    setViewingPurchase(null);
     setForm({
       billNumber: p.billNumber,
       billDate: p.billDate,
@@ -281,15 +303,49 @@ export function Purchases() {
     return (
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-cabinet font-bold">
-            {editingPurchase ? "Edit Purchase" : "Record Purchase"}
-          </h2>
-          <Button variant="outline" onClick={() => setShowForm(false)}>
-            Back
-          </Button>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-cabinet font-bold">
+              {viewOnly
+                ? "View Purchase"
+                : editingPurchase
+                  ? "Edit Purchase"
+                  : "Record Purchase"}
+            </h2>
+            {viewOnly && (
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-medium">
+                Read Only
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {viewOnly && viewingPurchase && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewingPurchase(null);
+                  openEdit(viewingPurchase);
+                }}
+                data-ocid="purchase.edit_from_view.button"
+              >
+                <Edit className="w-4 h-4 mr-1.5" /> Edit
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowForm(false);
+                setViewingPurchase(null);
+              }}
+            >
+              {viewOnly ? "Close" : "Back"}
+            </Button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={viewOnly ? (e) => e.preventDefault() : handleSubmit}
+          className="space-y-4"
+        >
           <Card className="bg-card border-border/70">
             <CardContent className="pt-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -302,6 +358,7 @@ export function Purchases() {
                     }
                     className="font-mono"
                     data-ocid="purchase.billnumber.input"
+                    disabled={viewOnly}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -313,6 +370,7 @@ export function Purchases() {
                       setForm((p) => ({ ...p, billDate: e.target.value }))
                     }
                     data-ocid="purchase.date.input"
+                    disabled={viewOnly}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -324,15 +382,19 @@ export function Purchases() {
                       setForm((p) => ({ ...p, dueDate: e.target.value }))
                     }
                     data-ocid="purchase.duedate.input"
+                    disabled={viewOnly}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Vendor *</Label>
                   <Select
                     value={form.vendorId}
-                    onValueChange={(v) =>
-                      setForm((p) => ({ ...p, vendorId: v }))
+                    onValueChange={
+                      viewOnly
+                        ? undefined
+                        : (v) => setForm((p) => ({ ...p, vendorId: v }))
                     }
+                    disabled={viewOnly}
                   >
                     <SelectTrigger data-ocid="purchase.vendor.select">
                       <SelectValue placeholder="Select vendor..." />
@@ -349,20 +411,26 @@ export function Purchases() {
                 <div className="flex items-center gap-2">
                   <Checkbox
                     checked={form.isRcm}
-                    onCheckedChange={(v) =>
-                      setForm((p) => ({ ...p, isRcm: !!v }))
+                    onCheckedChange={
+                      viewOnly
+                        ? undefined
+                        : (v) => setForm((p) => ({ ...p, isRcm: !!v }))
                     }
                     data-ocid="purchase.rcm.checkbox"
+                    disabled={viewOnly}
                   />
                   <Label>RCM Applicable</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     checked={form.itcEligible}
-                    onCheckedChange={(v) =>
-                      setForm((p) => ({ ...p, itcEligible: !!v }))
+                    onCheckedChange={
+                      viewOnly
+                        ? undefined
+                        : (v) => setForm((p) => ({ ...p, itcEligible: !!v }))
                     }
                     data-ocid="purchase.itc.checkbox"
+                    disabled={viewOnly}
                   />
                   <Label>ITC Eligible</Label>
                 </div>
@@ -370,12 +438,16 @@ export function Purchases() {
                   <Label>Status</Label>
                   <Select
                     value={form.status}
-                    onValueChange={(v) =>
-                      setForm((p) => ({
-                        ...p,
-                        status: v as "draft" | "confirmed",
-                      }))
+                    onValueChange={
+                      viewOnly
+                        ? undefined
+                        : (v) =>
+                            setForm((p) => ({
+                              ...p,
+                              status: v as "draft" | "confirmed",
+                            }))
                     }
+                    disabled={viewOnly}
                   >
                     <SelectTrigger data-ocid="purchase.status.select">
                       <SelectValue />
@@ -394,17 +466,19 @@ export function Purchases() {
           <Card className="bg-card border-border/70">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Items</CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }))
-                }
-                data-ocid="purchase.add_line.button"
-              >
-                <Plus className="w-3 h-3 mr-1" /> Add Line
-              </Button>
+              {!viewOnly && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setForm((p) => ({ ...p, lines: [...p.lines, emptyLine()] }))
+                  }
+                  data-ocid="purchase.add_line.button"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Line
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -529,21 +603,25 @@ export function Purchases() {
                           {formatINR(line.lineTotal)}
                         </TableCell>
                         <TableCell className="pr-4">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() =>
-                              setForm((p) => ({
-                                ...p,
-                                lines: p.lines.filter((l) => l.id !== line.id),
-                              }))
-                            }
-                            data-ocid={`purchase.remove_line.delete_button.${idx + 1}`}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {!viewOnly && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() =>
+                                setForm((p) => ({
+                                  ...p,
+                                  lines: p.lines.filter(
+                                    (l) => l.id !== line.id,
+                                  ),
+                                }))
+                              }
+                              data-ocid={`purchase.remove_line.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -585,19 +663,24 @@ export function Purchases() {
             </Card>
           </div>
 
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowForm(false)}
-              data-ocid="purchase.cancel_button"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" data-ocid="purchase.submit_button">
-              {editingPurchase ? "Update Purchase" : "Record Purchase"}
-            </Button>
-          </div>
+          {!viewOnly && (
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowForm(false);
+                  setViewingPurchase(null);
+                }}
+                data-ocid="purchase.cancel_button"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" data-ocid="purchase.submit_button">
+                {editingPurchase ? "Update Purchase" : "Record Purchase"}
+              </Button>
+            </div>
+          )}
         </form>
       </div>
     );
@@ -792,6 +875,15 @@ export function Purchases() {
                       </TableCell>
                       <TableCell className="text-right pr-4">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground"
+                            onClick={() => openView(p)}
+                            data-ocid={`purchase.view_button.${idx + 1}`}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

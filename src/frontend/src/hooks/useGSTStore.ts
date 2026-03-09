@@ -313,20 +313,49 @@ export function useStockMovements() {
   return { movements, addMovement, deleteMovement };
 }
 
+const DEFAULT_DECLARATION =
+  "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. This is a GST compliant tax invoice.";
+
+const DEFAULT_TERMS = `1. Payment is due within 10 days from the date of invoice.\n2. Please make all cheques payable to "BUSINESS NAME".\n3. Interest @18% p.a. will be charged on delayed payments beyond due date.\n4. Goods once sold will not be taken back or exchanged.\n5. Subject to "STATE" jurisdiction only.\n6. This is a computer-generated invoice and does not require a physical signature.`;
+
+export interface InvoiceDefaults {
+  declaration: string;
+  termsConditions: string;
+}
+
+export function useInvoiceDefaults() {
+  const [defaults, setDefaults] = useLocalStorage<InvoiceDefaults>(
+    "gst_invoice_defaults",
+    { declaration: DEFAULT_DECLARATION, termsConditions: DEFAULT_TERMS },
+  );
+
+  const saveDefaults = useCallback(
+    (updates: Partial<InvoiceDefaults>) => {
+      setDefaults((prev) => ({ ...prev, ...updates }));
+    },
+    [setDefaults],
+  );
+
+  return { defaults, saveDefaults };
+}
+
 export function useInvoiceCounter() {
-  const [counters, setCounters] = useLocalStorage<Record<string, number>>(
+  const [, setCounters] = useLocalStorage<Record<string, number>>(
     "gst_invoice_counters",
     {},
   );
 
+  // Read directly from localStorage to avoid stale closure double-increment
   const getNextNumber = useCallback(
     (type: string, prefix: string) => {
+      const stored = localStorage.getItem("gst_invoice_counters");
+      const counters: Record<string, number> = stored ? JSON.parse(stored) : {};
       const current = counters[type] || 0;
       const next = current + 1;
       setCounters((prev) => ({ ...prev, [type]: next }));
       return `${prefix}${String(next).padStart(4, "0")}`;
     },
-    [counters, setCounters],
+    [setCounters],
   );
 
   return { getNextNumber };

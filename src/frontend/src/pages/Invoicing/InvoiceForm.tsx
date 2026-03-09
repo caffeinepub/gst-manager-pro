@@ -32,7 +32,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useInvoiceCounter, useInvoices } from "@/hooks/useGSTStore";
+import {
+  useInvoiceCounter,
+  useInvoiceDefaults,
+  useInvoices,
+} from "@/hooks/useGSTStore";
 import { useBusinessProfile, useItems, useParties } from "@/hooks/useQueries";
 import {
   GST_RATES,
@@ -119,6 +123,7 @@ export function InvoiceForm({
   const { data: businessProfile } = useBusinessProfile();
   const { addInvoice, updateInvoice } = useInvoices();
   const { getNextNumber } = useInvoiceCounter();
+  const { defaults: invoiceDefaults } = useInvoiceDefaults();
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(today());
@@ -130,7 +135,10 @@ export function InvoiceForm({
   const [eWayBillNumber, setEWayBillNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [termsConditions, setTermsConditions] = useState(
-    "Payment due within 30 days. Goods once sold will not be taken back.",
+    () => invoiceDefaults.termsConditions,
+  );
+  const [declaration, setDeclaration] = useState(
+    () => invoiceDefaults.declaration,
   );
   const [status, setStatus] = useState<InvoiceStatus>("draft");
   const [linkedInvoiceId, setLinkedInvoiceId] = useState("");
@@ -154,6 +162,10 @@ export function InvoiceForm({
       setEWayBillNumber(editingInvoice.eWayBillNumber);
       setNotes(editingInvoice.notes);
       setTermsConditions(editingInvoice.termsConditions);
+      setDeclaration(
+        editingInvoice.declaration ||
+          "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. This is a GST compliant tax invoice.",
+      );
       setStatus(editingInvoice.status);
       setLinkedInvoiceId(editingInvoice.linkedInvoiceId || "");
     } else {
@@ -271,6 +283,7 @@ export function InvoiceForm({
       eWayBillNumber,
       notes,
       termsConditions,
+      declaration,
       status: newStatus,
       linkedInvoiceId,
     };
@@ -880,7 +893,12 @@ export function InvoiceForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-3">
             <Card className="bg-card border-border/70">
-              <CardContent className="pt-4 space-y-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">
+                  Notes, Declaration & Terms
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
                 <div className="space-y-1.5">
                   <Label>Notes</Label>
                   <Textarea
@@ -893,14 +911,27 @@ export function InvoiceForm({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Terms & Conditions</Label>
+                  <Label>Declaration</Label>
+                  <Textarea
+                    value={declaration}
+                    onChange={(e) => setDeclaration(e.target.value)}
+                    placeholder="Declaration..."
+                    rows={2}
+                    data-ocid="invoice.declaration.textarea"
+                    disabled={viewOnly}
+                    className="text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Terms &amp; Conditions</Label>
                   <Textarea
                     value={termsConditions}
                     onChange={(e) => setTermsConditions(e.target.value)}
                     placeholder="Payment terms..."
-                    rows={3}
+                    rows={6}
                     data-ocid="invoice.terms.textarea"
                     disabled={viewOnly}
+                    className="text-xs"
                   />
                 </div>
               </CardContent>
@@ -1121,7 +1152,7 @@ export function InvoiceForm({
               </p>
             </div>
           </div>
-          {/* Notes & Terms */}
+          {/* Notes, Declaration & Terms */}
           {notes && (
             <div className="mb-2">
               <p className="text-xs font-semibold uppercase text-gray-500">
@@ -1130,12 +1161,22 @@ export function InvoiceForm({
               <p className="text-sm text-gray-700">{notes}</p>
             </div>
           )}
-          {termsConditions && (
-            <div>
-              <p className="text-xs font-semibold uppercase text-gray-500">
-                Terms & Conditions
+          {declaration && (
+            <div className="mb-2 p-2 border border-gray-200 rounded bg-gray-50">
+              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                Declaration
               </p>
-              <p className="text-sm text-gray-700">{termsConditions}</p>
+              <p className="text-sm text-gray-700 italic">{declaration}</p>
+            </div>
+          )}
+          {termsConditions && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                Terms &amp; Conditions
+              </p>
+              <div className="text-sm text-gray-700 whitespace-pre-line">
+                {termsConditions}
+              </div>
             </div>
           )}
         </div>
