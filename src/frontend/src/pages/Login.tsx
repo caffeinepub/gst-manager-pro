@@ -1,3 +1,4 @@
+import { BusinessHeader } from "@/components/BusinessHeader/BusinessHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
@@ -20,40 +21,27 @@ export function Login() {
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5"
-          style={{ background: "oklch(0.72 0.17 162)" }}
+          style={{ background: "oklch(0.55 0.18 255)" }}
         />
         <div
           className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5"
-          style={{ background: "oklch(0.65 0.18 250)" }}
+          style={{ background: "oklch(0.78 0.14 80)" }}
         />
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02]"
-          style={{ background: "oklch(0.72 0.17 162)" }}
+          style={{ background: "oklch(0.55 0.18 255)" }}
         />
       </div>
 
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center mx-4 md:mx-auto">
         {/* Left: Branding */}
         <div className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-cabinet font-extrabold tracking-tight">
-                  GST Manager
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Enterprise Compliance Suite
-                </p>
-              </div>
-            </div>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              Complete GST compliance and accounting solution for Indian
-              businesses. Automate invoicing, filing, and reporting.
-            </p>
-          </div>
+          <BusinessHeader variant="login" />
+
+          <p className="text-muted-foreground text-base leading-relaxed">
+            Complete GST compliance and accounting solution for Indian
+            businesses. Automate invoicing, filing, and reporting.
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -103,7 +91,14 @@ export function Login() {
               <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
                 <ShieldCheck className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="text-xl font-cabinet font-bold">Welcome Back</h2>
+              <h2
+                className="text-xl font-bold"
+                style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                }}
+              >
+                Welcome Back
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Sign in to access your GST management dashboard
               </p>

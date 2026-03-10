@@ -29,60 +29,73 @@
   font-display: swap;
 }
 
+/* Playfair Display - Brand/Huxley Titling substitute */
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/assets/fonts/PlayfairDisplay-Variable.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --radius: 0.5rem;
 
-    /* Enterprise Dark Theme - Slate + Emerald */
-    --background: 0.13 0.008 250;
-    --foreground: 0.94 0.01 255;
-    --card: 0.17 0.01 255;
-    --card-foreground: 0.94 0.01 255;
-    --popover: 0.19 0.012 255;
-    --popover-foreground: 0.94 0.01 255;
-    
-    /* Emerald Green as primary */
-    --primary: 0.72 0.17 162;
-    --primary-foreground: 0.1 0.02 160;
-    
-    --secondary: 0.22 0.015 255;
-    --secondary-foreground: 0.85 0.01 255;
-    
-    --muted: 0.22 0.015 255;
-    --muted-foreground: 0.56 0.02 255;
-    
-    --accent: 0.25 0.02 255;
-    --accent-foreground: 0.94 0.01 255;
-    
+    /* Enterprise Dark Theme - Deep Navy + Gold */
+    --background: 0.13 0.014 260;
+    --foreground: 0.94 0.008 255;
+    --card: 0.17 0.012 260;
+    --card-foreground: 0.94 0.008 255;
+    --popover: 0.19 0.014 260;
+    --popover-foreground: 0.94 0.008 255;
+
+    /* Deep Navy as primary */
+    --primary: 0.55 0.18 255;
+    --primary-foreground: 0.98 0.004 255;
+
+    /* Gold accent for GST highlights */
+    --gold: 0.78 0.14 80;
+    --gold-foreground: 0.18 0.04 75;
+
+    --secondary: 0.22 0.012 260;
+    --secondary-foreground: 0.85 0.008 255;
+
+    --muted: 0.22 0.012 260;
+    --muted-foreground: 0.56 0.016 255;
+
+    --accent: 0.25 0.016 260;
+    --accent-foreground: 0.94 0.008 255;
+
     --destructive: 0.62 0.22 25;
     --destructive-foreground: 0.98 0 0;
-    
-    --success: 0.72 0.17 162;
+
+    --success: 0.68 0.16 162;
     --success-foreground: 0.1 0.02 160;
-    
+
     --warning: 0.78 0.18 85;
     --warning-foreground: 0.15 0.03 80;
-    
-    --border: 0.28 0.015 255;
-    --input: 0.24 0.015 255;
-    --ring: 0.72 0.17 162;
-    
+
+    --border: 0.28 0.012 260;
+    --input: 0.24 0.012 260;
+    --ring: 0.55 0.18 255;
+
     /* Charts */
-    --chart-1: 0.72 0.17 162;
-    --chart-2: 0.65 0.18 250;
-    --chart-3: 0.78 0.18 85;
+    --chart-1: 0.55 0.18 255;
+    --chart-2: 0.78 0.14 80;
+    --chart-3: 0.68 0.16 162;
     --chart-4: 0.62 0.22 25;
     --chart-5: 0.68 0.16 200;
-    
+
     /* Sidebar */
-    --sidebar: 0.11 0.01 255;
-    --sidebar-foreground: 0.90 0.01 255;
-    --sidebar-primary: 0.72 0.17 162;
-    --sidebar-primary-foreground: 0.1 0.02 160;
-    --sidebar-accent: 0.20 0.015 255;
-    --sidebar-accent-foreground: 0.94 0.01 255;
-    --sidebar-border: 0.22 0.015 255;
-    --sidebar-ring: 0.72 0.17 162;
+    --sidebar: 0.10 0.016 265;
+    --sidebar-foreground: 0.90 0.008 255;
+    --sidebar-primary: 0.55 0.18 255;
+    --sidebar-primary-foreground: 0.98 0.004 255;
+    --sidebar-accent: 0.20 0.014 260;
+    --sidebar-accent-foreground: 0.94 0.008 255;
+    --sidebar-border: 0.22 0.012 260;
+    --sidebar-ring: 0.55 0.18 255;
   }
 
   * {
@@ -98,12 +111,23 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-cabinet;
   }
 }
 
 @layer components {
+  /* Brand font — Playfair Display (Huxley Titling substitute) */
+  .font-brand {
+    font-family: "Playfair Display", "Georgia", "Times New Roman", serif;
+    letter-spacing: 0.02em;
+  }
+
   /* Number formatting */
   .font-numeric {
     @apply font-mono tabular-nums;
@@ -116,63 +140,105 @@
   .data-table tbody tr {
     @apply border-b border-border/50 hover:bg-accent/30 transition-colors;
   }
-  
+
   /* GST Amount Colors */
   .amount-positive {
-    @apply text-emerald font-numeric;
+    @apply text-[oklch(0.68_0.16_162)] font-numeric;
   }
   .amount-negative {
     @apply text-destructive font-numeric;
   }
-  
+
   /* Status badges */
   .badge-draft {
     @apply bg-muted text-muted-foreground;
   }
   .badge-confirmed {
-    @apply bg-emerald/20 text-emerald;
+    @apply bg-[oklch(0.68_0.16_162)]/20 text-[oklch(0.68_0.16_162)];
   }
   .badge-cancelled {
     @apply bg-destructive/20 text-destructive;
   }
   .badge-paid {
-    @apply bg-emerald/20 text-emerald;
+    @apply bg-[oklch(0.68_0.16_162)]/20 text-[oklch(0.68_0.16_162)];
   }
   .badge-pending {
-    @apply bg-warning/20 text-warning-fg;
+    @apply bg-warning/20 text-[oklch(0.78_0.18_85)];
   }
 
   /* Print styles */
-  .print-only { display: none; }
+  .print-only {
+    display: none;
+  }
 
   @media print {
-    .no-print { display: none !important; }
-    .print-only { display: block !important; }
-    nav, aside, header, .sidebar { display: none !important; }
-    body { background: white !important; color: black !important; }
-    .invoice-print-area { 
-      display: block;
-      background: white !important; 
-      color: black !important; 
-      max-width: 100% !important;
-      page-break-inside: avoid;
+    .no-print {
+      display: none !important;
+    }
+    .print-only {
+      display: block !important;
+    }
+    body {
+      background: white !important;
+      color: black !important;
+      font-size: 11pt;
+    }
+    .print-page {
+      padding: 0.5in;
+    }
+    .print-invoice-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #1e3a5f;
+      padding-bottom: 12px;
+    }
+    .print-invoice-header .business-name {
+      font-family: "Playfair Display", "Georgia", serif;
+      font-size: 22pt;
+      font-weight: 700;
+      color: #1e3a5f;
+      letter-spacing: 0.02em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      font-size: 9pt;
+    }
+    th {
+      background: #1e3a5f !important;
+      color: white !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
   }
-  
-  /* Scrollbar */
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+
+  /* Shadow card */
+  .shadow-card {
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.3),
+      0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
-  /* Safe area support for mobile */
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+  /* Animate fade */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
   }
 }

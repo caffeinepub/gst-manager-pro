@@ -35,11 +35,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { InvoiceForm } from "./InvoiceForm";
 
-const TYPE_LABELS: Record<InvoiceType, string> = {
+const TYPE_LABELS: Record<InvoiceType | "all", string> = {
+  all: "All Invoices",
   sales: "Sales Invoice",
   service: "Service Invoice",
+  einvoice: "e-Invoice",
   quotation: "Quotation",
   proforma: "Proforma Invoice",
+  eway_bill: "e-Way Bill",
   credit_note: "Credit Note",
   debit_note: "Debit Note",
   bill_of_supply: "Bill of Supply",
@@ -47,7 +50,7 @@ const TYPE_LABELS: Record<InvoiceType, string> = {
 };
 
 interface InvoiceListProps {
-  type: InvoiceType;
+  type: InvoiceType | "all";
 }
 
 export function InvoiceList({ type }: InvoiceListProps) {
@@ -63,7 +66,8 @@ export function InvoiceList({ type }: InvoiceListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const typeInvoices = invoices.filter((inv) => inv.type === type);
+  const typeInvoices =
+    type === "all" ? invoices : invoices.filter((inv) => inv.type === type);
   const filtered = typeInvoices.filter((inv) => {
     const matchSearch =
       inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -93,7 +97,7 @@ export function InvoiceList({ type }: InvoiceListProps) {
   if (showForm) {
     return (
       <InvoiceForm
-        type={type}
+        type={type === "all" ? "sales" : type}
         editingInvoice={viewingInvoice ?? editingInvoice}
         onClose={() => {
           setShowForm(false);

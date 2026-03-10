@@ -1,65 +1,99 @@
-# GST Manager Pro - Full Functionality Audit & Enhancement
+# GST Manager Pro
 
 ## Current State
 
-Full GST compliance & accounting application with:
-- Dashboard with KPI cards, workflow alerts, anomaly detection, predictive cash flow
-- Masters: Business Profile, Parties (with GSTIN validation), Items & Services, Tax Rates
-- Invoicing: 8 invoice types (sales, service, quotation, proforma, credit/debit notes, bill of supply, delivery challan), Payments
-- Accounting: Purchases (with OCR scan), Journal Entries, Bank Accounts, Cash Book, Chart of Accounts, Bank Reconciliation
-- GST Compliance: GSTR-1 (with auto-filing), GSTR-3B (with auto-generation), ITC Reconciliation, RCM Tracker, Audit Trail, API Integration, Workflow Automation
-- Reports: Sales/Purchase Register, GST Summary, AR/AP Ageing, Trial Balance, P&L, Balance Sheet, Stock Summary, Cash Flow
-- AI Tax Assistant (26 Q&A + free-form chat)
-- Mobile responsive with bottom nav bar, overflow-x-auto on tables
+The project has a substantial frontend-only React/TypeScript application with the following modules already built:
+- Masters: BusinessProfile, Parties (Customer/Vendor), Items, TaxRates
+- Invoicing: InvoiceForm (9 types), InvoiceList, Payments
+- Accounting: Purchases, JournalEntries, BankAccounts, CashBook, BankReconciliation, ChartOfAccounts
+- GST Compliance: GSTR1, GSTR3B, ITCReconciliation, RCMTracker, AuditTrail, GSTAPIIntegration, WorkflowAutomation
+- Reports: Reports (Balance Sheet, P&L, Trial Balance), CashFlow, StockSummary
+- Inventory: InventoryERP
+- AI: AIAssistant
+- Settings: BackupRestore
+- Dashboard
+
+Data persistence: useGSTStore (localStorage via useLocalStorage). Backend exists with basic cloud backup via blob-storage.
+
+Issues identified:
+- Business Profile save may fail with strict GSTIN validation
+- API integrations are simulated, no real API key management UI
+- PDF export not implemented (only print dialog)
+- Excel export not implemented (only CSV)
+- Cloud backup is partial; no full restore flow
+- Several modules missing complete CRUD (view/edit/delete)
+- No real API settings page for GSTN, PAN/GSTIN, Banking, Email/SMS keys
+- Mobile responsiveness gaps in complex tables
+- Invoice form missing some invoice types' specific fields
+- GST auto-calculation rules engine needs verification
+- Audit trail not logging all actions
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Invoice print view**: Full-featured print layout for Sales & Service invoices with business header, GSTIN, party details, line items table, tax summary, amount-in-words, terms & IRN/QR placeholder
-- **Payments page - Link Payment to Invoice**: Currently payments are stored but not visually linked; add "Link to Invoice" dropdown in payment form
-- **GSTR-1 Summary export to CSV** (in addition to existing JSON export)
-- **GSTR-3B Summary export to CSV**
-- **RCM Tracker - Mark as Paid feature**: Currently shows RCM purchases but no way to mark tax as paid; add "Mark Paid" toggle per RCM entry
-- **Items page - HSN/SAC code lookup hint**: Show common HSN codes in a tooltip near the field
-- **Purchases page - ITC Eligible checkbox**: Verify it exists and works (currently in schema but confirm UI has it)
-- **Chart of Accounts - edit existing accounts**: Currently can add/delete but not edit account name or type
-- **Audit Trail - filter by action type**: Add filter dropdown (Create/Update/Delete) on Audit Trail page
-- **Dashboard - compliance health tooltip**: Explain what the % means on hover
-- **WorkflowAutomation - "Last Run" timestamp**: Currently shows static "Never", should show actual timestamp after "Run Now" is clicked
-- **GSTAPIIntegration - GSTIN validate remembers result**: Show last validation result in a history list (last 5)
-- **AI Assistant - suggested questions are clickable chips**: Already exists but verify they submit correctly and scroll to response
+- Real API Settings page: GSTN API, PAN/GSTIN Validation, Banking API, Email/SMS Gateway (store keys in localStorage + backend)
+- PDF download for all invoices and financial reports (using browser print-to-PDF + jsPDF approach)
+- Excel export (XLSX) for all reports and data grids alongside existing CSV/JSON
+- Complete CRUD (Add/View/Edit/Delete/Print) for ALL modules
+- Full cloud backup/restore: serialize all localStorage stores to JSON, upload to backend blob storage, list and restore snapshots
+- Delivery Challan invoice type with full form fields
+- Payment Tracking improvements: link payments to multiple invoices, aging view
+- GSTR-1 full B2B/B2C/CDNR/HSN/DOC summary sections
+- GSTR-3B complete table 3.1 to 5 with auto-population from invoice data
+- ITC Reconciliation: GSTR-2B mock data import + match/mismatch display
+- Inventory ERP: stock adjustments, purchase order integration
+- Workflow Automation: all 8 workflows with toggle, run, and last-run timestamp
+- Voice-assisted invoicing (Web Speech API)
+- Multi-language EN/HI toggle persisted in settings
+- AI Tax Assistant with 30+ Q&A and free-text search
+- OCR invoice capture UI (file upload + field extraction simulation)
+- Predictive cash flow chart (6-month forecast)
+- Anomaly detection alerts on dashboard
+- Compliance health score on dashboard
+- Auto-reminders panel for GST filing due dates
+- Mobile bottom navigation for key sections
+- Proper data-ocid markers on all interactive elements
 
 ### Modify
-- **InvoiceForm print button**: Ensure print triggers a proper invoice print (currently `window.print()` prints the whole page not just invoice); implement a `invoice-print-area` div that isolates the invoice for printing; CSS already has `.invoice-print-area` class
-- **Dashboard Recent Invoices table**: Add "Type" column badge so user sees what kind of invoice (sales/service/etc)
-- **Parties page - Active/Inactive toggle**: Add toggle in edit form for isActive field (currently the badge shows status but form has no toggle)
-- **Items page - stock level badge**: Verify the color-coded stock badge exists and is wired to openingStock correctly
-- **Tax Rates page**: Ensure all 5 standard GST rates (0%, 5%, 12%, 18%, 28%) + Cess configuration are displayed and that custom rates can be added/deleted
-- **GSTR-3B Row component**: The `grid-cols-5` row layout doesn't scroll on mobile; wrap in overflow-x-auto
-- **Journal Entries form**: Ensure it supports adding multiple debit/credit lines (compound journal entry) with validation that debits = credits
-- **Bank Reconciliation**: Ensure "Auto Match" button works and shows matched/unmatched count summary cards at top
-- **CashBook page**: Verify transaction list shows running balance column
+- BusinessProfile: relax GSTIN validation (only name required), persist all fields including digital signature upload
+- InvoiceForm: fix GST auto-calculation (CGST+SGST for intra-state, IGST for inter-state), ensure all 9 types render correct fields, fix double-increment bug, add PDF print layout
+- useGSTStore: ensure all entities (invoices, parties, items, purchases, journals, bank txns, payments) persist and load correctly from localStorage
+- AuditTrail: log every create/update/delete action across all modules with timestamp, user, module, action, entity ID
+- Reports: fix Balance Sheet bank balance; add PDF and Excel export to all reports
+- BackupRestore: full implementation -- serialize all store data, upload to backend, list snapshots with dates, restore selected snapshot
+- AppSidebar: fix mobile collapse behavior, ensure all new pages are linked
+- Dashboard: real KPIs from store data (not hardcoded), GST due dates, compliance health, anomaly alerts
+- GSTAPIIntegration: replace simulated calls with real HTTP fetch using user-configured API keys from Settings
 
 ### Remove
-- Nothing removed
+- Hardcoded/mock data from dashboard KPI cards (replace with live store data)
+- Duplicate sidebar menu items if any
 
 ## Implementation Plan
 
-1. **InvoiceForm**: Fix print to use isolated invoice-print-area; ensure print button only prints the invoice card section
-2. **InvoiceForm line items**: Verify Cess % column is visible and wired; add item-level HSN code auto-fill from item master
-3. **Purchases form**: Verify ITC Eligible checkbox is functional; verify RCM checkbox triggers correct tax accounting
-4. **Parties form**: Add isActive toggle in the edit dialog
-5. **Tax Rates page**: Audit current implementation; ensure all 5 standard rates shown, custom rate add/delete works
-6. **RCM Tracker**: Add "Mark Tax Paid" button per row; track paid status in localStorage
-7. **Chart of Accounts**: Add inline edit for account name and type
-8. **Audit Trail**: Add action-type filter (All / Create / Update / Delete)
-9. **WorkflowAutomation**: Store "last run" timestamp in localStorage; display it per workflow
-10. **GSTAPIIntegration**: Add GSTIN validation history (last 5 results) stored in localStorage
-11. **GSTR-1**: Add CSV export button alongside existing JSON export
-12. **GSTR-3B**: Add CSV export button; wrap GSTR-3B summary table in overflow-x-auto for mobile
-13. **Dashboard**: Add tooltip on compliance % card; verify Recent Invoices table shows Type badge
-14. **CashBook**: Verify/add running balance column to transaction list
-15. **Bank Reconciliation**: Verify summary cards (matched/unmatched) at top; ensure Auto Match works correctly
-16. **Journal Entries**: Verify debit=credit validation before save; ensure compound entries work
-17. **AI Assistant**: Verify suggested question chips click and submit correctly
-18. **Validate**: Run typecheck, lint, build -- fix all errors
+1. **useGSTStore audit**: verify all entities have full CRUD actions, localStorage keys are consistent, no data loss on refresh
+2. **types/gst.ts audit**: ensure all entity types are complete and consistent across modules
+3. **BusinessProfile fix**: relax validation, add digital signature upload field, persist cleanly
+4. **InvoiceForm audit**: verify all 9 invoice types, fix GST calculation engine, add PDF export, fix counter bug
+5. **Parties/Items/TaxRates**: ensure Add/Edit/Delete/View all work with store
+6. **Purchases**: full CRUD + RCM flag + PDF
+7. **JournalEntries**: debit=credit enforcement, Add/View/Edit/Delete
+8. **Banking/CashBook/BankReconciliation**: full CRUD, running balance, auto-match
+9. **ChartOfAccounts**: 27 Indian GAAP accounts, editable, add/delete custom accounts
+10. **GSTR1**: auto-populate from invoice store, B2B/B2C/CDNR/HSN sections, JSON/CSV/Excel export
+11. **GSTR3B**: auto-populate liabilities and ITC from store, all 5 tables, export
+12. **ITCReconciliation**: GSTR-2B import, match/mismatch logic
+13. **RCMTracker**: filter RCM purchases, payment tracking
+14. **AuditTrail**: hook into all store mutations
+15. **Reports**: fix all calculations, add PDF+Excel export
+16. **Dashboard**: live KPIs, compliance score, anomaly alerts, due dates
+17. **InventoryERP**: stock levels, adjustments, low-stock alerts
+18. **AI Assistant**: 30+ Q&A, free-text search
+19. **WorkflowAutomation**: 8 workflows with real toggle/run
+20. **GSTAPIIntegration + API Settings page**: real API key config, HTTP outcall integration
+21. **BackupRestore**: full cloud snapshot upload/restore via backend
+22. **OCR page**: file upload, field extraction simulation
+23. **PDF export utility**: shared jsPDF/html2canvas utility
+24. **Excel export utility**: shared xlsx utility
+25. **Mobile responsiveness**: bottom nav, responsive tables, collapsible sidebar
+26. **data-ocid markers**: all interactive elements

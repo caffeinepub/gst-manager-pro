@@ -4,8 +4,10 @@ export type InvoiceStatus = "draft" | "confirmed" | "cancelled";
 export type InvoiceType =
   | "sales"
   | "service"
+  | "einvoice"
   | "quotation"
   | "proforma"
+  | "eway_bill"
   | "credit_note"
   | "debit_note"
   | "bill_of_supply"
@@ -40,7 +42,7 @@ export interface Invoice {
   partyId: string;
   partyName: string;
   partyGstin: string;
-  placeOfSupply: string; // state code
+  placeOfSupply: string;
   placeOfSupplyName: string;
   lineItems: InvoiceLineItem[];
   subtotal: number;
@@ -52,11 +54,20 @@ export interface Invoice {
   grandTotal: number;
   irnNumber: string;
   eWayBillNumber: string;
+  vehicleNumber?: string;
+  transporter?: string;
+  distanceKm?: number;
+  linkedInvoiceId?: string;
+  linkedInvoiceNumber?: string;
+  creditDebitReason?: string;
+  challanPurpose?: string;
+  driverName?: string;
+  validityDate?: string;
+  quotationTerms?: string;
   notes: string;
   termsConditions: string;
   declaration?: string;
   status: InvoiceStatus;
-  linkedInvoiceId?: string; // for credit/debit notes
   createdAt: string;
   updatedAt: string;
 }
@@ -94,6 +105,7 @@ export interface Purchase {
   isRcm: boolean;
   itcEligible: boolean;
   status: InvoiceStatus;
+  expenseCategory?: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -140,6 +152,18 @@ export interface BankTransaction {
   credit: number;
   balance: number;
   reference: string;
+  reconciled?: boolean;
+  createdAt: string;
+}
+
+export interface CashTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: "receipt" | "payment";
+  balance: number;
+  reference: string;
   createdAt: string;
 }
 
@@ -158,6 +182,25 @@ export interface AuditLog {
   entityId: string;
   description: string;
   timestamp: string;
+}
+
+export interface ApiSettings {
+  gstn: {
+    key: string;
+    url: string;
+    clientId: string;
+    clientSecret: string;
+    enabled: boolean;
+  };
+  pan: { key: string; url: string; enabled: boolean };
+  banking: {
+    key: string;
+    url: string;
+    bankName: string;
+    accountId: string;
+    enabled: boolean;
+  };
+  sms: { provider: string; key: string; senderId: string; enabled: boolean };
 }
 
 // Indian States with GST codes
@@ -202,7 +245,9 @@ export const INDIAN_STATES: { code: string; name: string }[] = [
   { code: "38", name: "Ladakh" },
 ];
 
-export const GST_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28];
+export const GST_RATES = [
+  0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 9, 12, 14, 18, 28,
+];
 
 export const UNITS = [
   "Nos",
@@ -251,6 +296,19 @@ export const CHART_OF_ACCOUNTS = [
   { code: "5204", name: "Miscellaneous Expenses", type: "expense" },
 ];
 
+export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
+  sales: "Sales Invoice",
+  service: "Service Invoice",
+  einvoice: "e-Invoice",
+  quotation: "Quotation",
+  proforma: "Proforma Invoice",
+  eway_bill: "e-Way Bill",
+  credit_note: "Credit Note",
+  debit_note: "Debit Note",
+  bill_of_supply: "Bill of Supply",
+  delivery_challan: "Delivery Challan",
+};
+
 export type AppPage =
   | "dashboard"
   | "masters-profile"
@@ -259,12 +317,15 @@ export type AppPage =
   | "masters-taxrates"
   | "invoicing-sales"
   | "invoicing-service"
+  | "invoicing-einvoice"
   | "invoicing-quotations"
   | "invoicing-proforma"
+  | "invoicing-eway-bill"
   | "invoicing-credit-notes"
   | "invoicing-debit-notes"
   | "invoicing-bill-of-supply"
   | "invoicing-delivery-challans"
+  | "invoicing-all"
   | "invoicing-payments"
   | "accounting-purchases"
   | "accounting-journal"
@@ -290,4 +351,8 @@ export type AppPage =
   | "inventory-erp"
   | "ai-assistant"
   | "gst-api-integration"
-  | "workflow-automation";
+  | "workflow-automation"
+  | "backup-restore"
+  | "settings-api-config"
+  | "settings-ocr"
+  | "settings-preferences";

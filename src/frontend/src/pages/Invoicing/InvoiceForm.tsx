@@ -68,8 +68,10 @@ function genId() {
 const TYPE_PREFIXES: Record<InvoiceType, string> = {
   sales: "INV",
   service: "SRV",
+  einvoice: "EIN",
   quotation: "QUO",
   proforma: "PRO",
+  eway_bill: "EWB",
   credit_note: "CN",
   debit_note: "DN",
   bill_of_supply: "BOS",
@@ -79,8 +81,10 @@ const TYPE_PREFIXES: Record<InvoiceType, string> = {
 const TYPE_LABELS: Record<InvoiceType, string> = {
   sales: "Tax Invoice",
   service: "Service Invoice",
+  einvoice: "e-Invoice",
   quotation: "Quotation",
   proforma: "Proforma Invoice",
+  eway_bill: "e-Way Bill",
   credit_note: "Credit Note",
   debit_note: "Debit Note",
   bill_of_supply: "Bill of Supply",

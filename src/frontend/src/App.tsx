@@ -28,6 +28,10 @@ import { TaxRates } from "@/pages/Masters/TaxRates";
 import { CashFlow } from "@/pages/Reports/CashFlow";
 import { Reports } from "@/pages/Reports/Reports";
 import { StockSummary } from "@/pages/Reports/StockSummary";
+import { APIConfig } from "@/pages/Settings/APIConfig";
+import { BackupRestore } from "@/pages/Settings/BackupRestore";
+import { OCRCapture } from "@/pages/Settings/OCRCapture";
+import { Preferences } from "@/pages/Settings/Preferences";
 import type { AppPage } from "@/types/gst";
 import { seedInitialData } from "@/utils/seedData";
 import { useEffect, useState } from "react";
@@ -51,10 +55,14 @@ function PageContent({
       return <InvoiceList type="sales" />;
     case "invoicing-service":
       return <InvoiceList type="service" />;
+    case "invoicing-einvoice":
+      return <InvoiceList type="einvoice" />;
     case "invoicing-quotations":
       return <InvoiceList type="quotation" />;
     case "invoicing-proforma":
       return <InvoiceList type="proforma" />;
+    case "invoicing-eway-bill":
+      return <InvoiceList type="eway_bill" />;
     case "invoicing-credit-notes":
       return <InvoiceList type="credit_note" />;
     case "invoicing-debit-notes":
@@ -63,6 +71,8 @@ function PageContent({
       return <InvoiceList type="bill_of_supply" />;
     case "invoicing-delivery-challans":
       return <InvoiceList type="delivery_challan" />;
+    case "invoicing-all":
+      return <InvoiceList type="all" />;
     case "invoicing-payments":
       return <Payments />;
     case "accounting-purchases":
@@ -108,6 +118,14 @@ function PageContent({
       return <GSTAPIIntegration />;
     case "workflow-automation":
       return <WorkflowAutomation />;
+    case "backup-restore":
+      return <BackupRestore />;
+    case "settings-api-config":
+      return <APIConfig />;
+    case "settings-ocr":
+      return <OCRCapture />;
+    case "settings-preferences":
+      return <Preferences />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }
@@ -117,12 +135,10 @@ export default function App() {
   const { identity, isInitializing } = useInternetIdentity();
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
 
-  // Seed initial data on first load
   useEffect(() => {
     seedInitialData();
   }, []);
 
-  // Show loading during initialization
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -137,7 +153,6 @@ export default function App() {
     );
   }
 
-  // Show login if not authenticated
   if (!identity) {
     return (
       <LanguageProvider>

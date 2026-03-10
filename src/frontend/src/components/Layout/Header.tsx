@@ -7,8 +7,10 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useBusinessLogo } from "@/hooks/useBusinessLogo";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useBusinessProfile } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
 import {
   AlertCircle,
@@ -18,6 +20,7 @@ import {
   FileText,
   Languages,
   Plus,
+  ShieldCheck,
   ShoppingCart,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -30,18 +33,22 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "masters-taxrates": "Tax Rates",
   "invoicing-sales": "Sales Invoices",
   "invoicing-service": "Service Invoices",
+  "invoicing-einvoice": "e-Invoice",
   "invoicing-quotations": "Quotations",
   "invoicing-proforma": "Proforma Invoices",
+  "invoicing-eway-bill": "e-Way Bill",
   "invoicing-credit-notes": "Credit Notes",
   "invoicing-debit-notes": "Debit Notes",
   "invoicing-bill-of-supply": "Bill of Supply",
   "invoicing-delivery-challans": "Delivery Challans",
+  "invoicing-all": "All Invoices",
   "invoicing-payments": "Payments",
   "accounting-purchases": "Purchases",
   "accounting-journal": "Journal Entries",
   "accounting-bank": "Bank Accounts",
-  "accounting-cashbook": "Cash Book / Transactions",
+  "accounting-cashbook": "Cash Book",
   "accounting-chart-of-accounts": "Chart of Accounts",
+  "accounting-reconciliation": "Bank Reconciliation",
   "gst-gstr1": "GSTR-1 Report",
   "gst-gstr3b": "GSTR-3B Return",
   "gst-itc": "ITC Reconciliation",
@@ -57,11 +64,14 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "reports-balance-sheet": "Balance Sheet",
   "reports-stock": "Stock Summary",
   "reports-cashflow": "Cash Flow Statement",
-  "accounting-reconciliation": "Bank Reconciliation",
   "inventory-erp": "Inventory ERP",
   "ai-assistant": "AI Tax Assistant",
   "gst-api-integration": "GST API Integration",
   "workflow-automation": "Workflow Automation",
+  "backup-restore": "Backup & Restore",
+  "settings-api-config": "API Configuration",
+  "settings-ocr": "OCR / Document Capture",
+  "settings-preferences": "Preferences",
 };
 
 const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
@@ -71,18 +81,22 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "masters-taxrates": ["Masters", "Tax Rates"],
   "invoicing-sales": ["Invoicing", "Sales Invoices"],
   "invoicing-service": ["Invoicing", "Service Invoices"],
+  "invoicing-einvoice": ["Invoicing", "e-Invoice"],
   "invoicing-quotations": ["Invoicing", "Quotations"],
   "invoicing-proforma": ["Invoicing", "Proforma Invoices"],
+  "invoicing-eway-bill": ["Invoicing", "e-Way Bill"],
   "invoicing-credit-notes": ["Invoicing", "Credit Notes"],
   "invoicing-debit-notes": ["Invoicing", "Debit Notes"],
   "invoicing-bill-of-supply": ["Invoicing", "Bill of Supply"],
   "invoicing-delivery-challans": ["Invoicing", "Delivery Challans"],
+  "invoicing-all": ["Invoicing", "All Invoices"],
   "invoicing-payments": ["Invoicing", "Payments"],
   "accounting-purchases": ["Accounting", "Purchases"],
   "accounting-journal": ["Accounting", "Journal Entries"],
   "accounting-bank": ["Accounting", "Bank Accounts"],
   "accounting-cashbook": ["Accounting", "Cash Book"],
   "accounting-chart-of-accounts": ["Accounting", "Chart of Accounts"],
+  "accounting-reconciliation": ["Accounting", "Bank Reconciliation"],
   "gst-gstr1": ["GST Compliance", "GSTR-1"],
   "gst-gstr3b": ["GST Compliance", "GSTR-3B"],
   "gst-itc": ["GST Compliance", "ITC Reconciliation"],
@@ -98,10 +112,13 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "reports-balance-sheet": ["Reports", "Balance Sheet"],
   "reports-stock": ["Reports", "Stock Summary"],
   "reports-cashflow": ["Reports", "Cash Flow"],
-  "accounting-reconciliation": ["Accounting", "Bank Reconciliation"],
   "inventory-erp": ["Inventory", "Inventory ERP"],
   "gst-api-integration": ["GST Compliance", "API Integration"],
-  "workflow-automation": ["GST Compliance", "Workflow Automation"],
+  "workflow-automation": ["Settings", "Workflow Automation"],
+  "backup-restore": ["Settings", "Backup & Restore"],
+  "settings-api-config": ["Settings", "API Configuration"],
+  "settings-ocr": ["Settings", "OCR Capture"],
+  "settings-preferences": ["Settings", "Preferences"],
 };
 
 interface Notification {
@@ -120,14 +137,11 @@ function useNotifications() {
     const today = new Date();
     const notifications: Notification[] = [];
 
-    // Overdue invoices
     const overdueInvoices = invoices.filter((inv) => {
       if (inv.status !== "confirmed") return false;
       if (!["sales", "service"].includes(inv.type)) return false;
-      const dueDate = new Date(inv.dueDate);
-      return dueDate < today;
+      return new Date(inv.dueDate) < today;
     });
-
     if (overdueInvoices.length > 0) {
       notifications.push({
         id: "overdue",
@@ -138,7 +152,6 @@ function useNotifications() {
       });
     }
 
-    // Upcoming invoices (due within 7 days)
     const upcomingInvoices = invoices.filter((inv) => {
       if (inv.status !== "confirmed") return false;
       if (!["sales", "service"].includes(inv.type)) return false;
@@ -148,7 +161,6 @@ function useNotifications() {
       );
       return diffDays >= 0 && diffDays <= 7;
     });
-
     if (upcomingInvoices.length > 0) {
       notifications.push({
         id: "upcoming",
@@ -159,37 +171,34 @@ function useNotifications() {
       });
     }
 
-    // GSTR-1 due (11th of next month)
     const gstr1Due = new Date(today.getFullYear(), today.getMonth() + 1, 11);
-    const gstr1DiffDays = Math.ceil(
+    const gstr1Diff = Math.ceil(
       (gstr1Due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
     );
-    if (gstr1DiffDays >= 0 && gstr1DiffDays <= 7) {
+    if (gstr1Diff >= 0 && gstr1Diff <= 7) {
       notifications.push({
         id: "gstr1-due",
         icon: <Calendar className="w-4 h-4 text-orange-500" />,
-        message: `GSTR-1 filing due in ${gstr1DiffDays} day${gstr1DiffDays !== 1 ? "s" : ""}`,
-        timeAgo: `${gstr1DiffDays}d`,
+        message: `GSTR-1 filing due in ${gstr1Diff} day${gstr1Diff !== 1 ? "s" : ""}`,
+        timeAgo: `${gstr1Diff}d`,
         type: "warning",
       });
     }
 
-    // GSTR-3B due (20th of next month)
     const gstr3bDue = new Date(today.getFullYear(), today.getMonth() + 1, 20);
-    const gstr3bDiffDays = Math.ceil(
+    const gstr3bDiff = Math.ceil(
       (gstr3bDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
     );
-    if (gstr3bDiffDays >= 0 && gstr3bDiffDays <= 7) {
+    if (gstr3bDiff >= 0 && gstr3bDiff <= 7) {
       notifications.push({
         id: "gstr3b-due",
         icon: <Calendar className="w-4 h-4 text-orange-500" />,
-        message: `GSTR-3B filing due in ${gstr3bDiffDays} day${gstr3bDiffDays !== 1 ? "s" : ""}`,
-        timeAgo: `${gstr3bDiffDays}d`,
+        message: `GSTR-3B filing due in ${gstr3bDiff} day${gstr3bDiff !== 1 ? "s" : ""}`,
+        timeAgo: `${gstr3bDiff}d`,
         type: "warning",
       });
     }
 
-    // RCM purchases unpaid
     const rcmUnpaid = purchases.filter(
       (p) => p.isRcm && p.status === "confirmed",
     );
@@ -197,7 +206,7 @@ function useNotifications() {
       notifications.push({
         id: "rcm",
         icon: <ShoppingCart className="w-4 h-4 text-blue-500" />,
-        message: `${rcmUnpaid.length} RCM purchase${rcmUnpaid.length > 1 ? "s" : ""} pending tax payment`,
+        message: `${rcmUnpaid.length} RCM purchase${rcmUnpaid.length > 1 ? "s" : ""} pending`,
         timeAgo: "Pending",
         type: "info",
       });
@@ -217,6 +226,8 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
   const notifications = useNotifications();
   const [readAll, setReadAll] = useState(false);
   const { lang, setLang } = useLanguage();
+  const { logo } = useBusinessLogo();
+  const { data: profile } = useBusinessProfile();
 
   const unreadCount = readAll ? 0 : notifications.length;
 
@@ -224,6 +235,29 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
     <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border/80 bg-background/95 backdrop-blur px-4 no-print">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
+
+      {/* Business Logo + Name in header */}
+      <div className="flex items-center gap-2 mr-2">
+        {logo ? (
+          <img
+            src={logo}
+            alt="Logo"
+            className="w-7 h-7 object-contain rounded"
+          />
+        ) : (
+          <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center">
+            <ShieldCheck className="w-4 h-4 text-primary" />
+          </div>
+        )}
+        {profile?.businessName && (
+          <span
+            className="hidden lg:block text-sm font-semibold text-foreground"
+            style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
+          >
+            {profile.businessName}
+          </span>
+        )}
+      </div>
 
       <div className="flex-1">
         {breadcrumbs ? (
@@ -256,7 +290,6 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
           className="h-8 text-xs font-medium gap-1.5"
           onClick={() => setLang(lang === "en" ? "hi" : "en")}
           data-ocid="header.language.toggle"
-          title="Toggle language"
         >
           <Languages className="w-3.5 h-3.5" />
           <span className="hidden sm:flex items-center gap-1">
@@ -305,18 +338,6 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
             </Button>
           </>
         )}
-        {(currentPage.startsWith("invoicing") ||
-          currentPage.startsWith("accounting")) &&
-          currentPage !== "invoicing-payments" && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.print()}
-              className="text-xs no-print"
-            >
-              Print
-            </Button>
-          )}
 
         {/* Notifications Bell */}
         <Popover>
@@ -329,9 +350,9 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold">
+                <Badge className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-destructive text-[9px] font-bold p-0">
                   {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
+                </Badge>
               )}
             </Button>
           </PopoverTrigger>

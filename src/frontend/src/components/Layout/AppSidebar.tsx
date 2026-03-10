@@ -1,3 +1,4 @@
+import { BusinessHeader } from "@/components/BusinessHeader/BusinessHeader";
 import {
   Collapsible,
   CollapsibleContent,
@@ -30,6 +31,7 @@ import {
   ChevronDown,
   ClipboardList,
   CreditCard,
+  Database,
   FileMinus,
   FilePlus,
   FileSpreadsheet,
@@ -44,9 +46,12 @@ import {
   ReceiptText,
   RefreshCw,
   Scale,
+  ScanLine,
   Settings,
+  Settings2,
   Shield,
   ShieldCheck,
+  Sliders,
   TrendingUp,
   Truck,
   Users,
@@ -71,11 +76,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  {
-    label: "Dashboard",
-    page: "dashboard",
-    icon: LayoutDashboard,
-  },
+  { label: "Dashboard", page: "dashboard", icon: LayoutDashboard },
   {
     label: "Masters",
     icon: Settings,
@@ -96,11 +97,18 @@ const navItems: NavItem[] = [
         page: "invoicing-service",
         icon: BookMarked,
       },
+      { label: "e-Invoice", page: "invoicing-einvoice", icon: FileSpreadsheet },
       { label: "Quotations", page: "invoicing-quotations", icon: FileText },
       {
         label: "Proforma Invoices",
         page: "invoicing-proforma",
         icon: FileSpreadsheet,
+      },
+      { label: "e-Way Bill", page: "invoicing-eway-bill", icon: Truck },
+      {
+        label: "Bill of Supply",
+        page: "invoicing-bill-of-supply",
+        icon: FileText,
       },
       {
         label: "Credit Notes",
@@ -109,15 +117,11 @@ const navItems: NavItem[] = [
       },
       { label: "Debit Notes", page: "invoicing-debit-notes", icon: FilePlus },
       {
-        label: "Bill of Supply",
-        page: "invoicing-bill-of-supply",
-        icon: FileText,
-      },
-      {
         label: "Delivery Challans",
         page: "invoicing-delivery-challans",
         icon: Truck,
       },
+      { label: "All Invoices", page: "invoicing-all", icon: ClipboardList },
       { label: "Payments", page: "invoicing-payments", icon: CreditCard },
     ],
   },
@@ -125,27 +129,19 @@ const navItems: NavItem[] = [
     label: "Accounting",
     icon: BookOpen,
     children: [
-      {
-        label: "Purchases",
-        page: "accounting-purchases",
-        icon: ShoppingCartIcon,
-      },
+      { label: "Purchases", page: "accounting-purchases", icon: Package },
       { label: "Journal Entries", page: "accounting-journal", icon: BookOpen },
       { label: "Bank Accounts", page: "accounting-bank", icon: Landmark },
+      { label: "Cash Book", page: "accounting-cashbook", icon: Banknote },
       {
-        label: "Cash Book / Transactions",
-        page: "accounting-cashbook",
-        icon: Banknote,
+        label: "Bank Reconciliation",
+        page: "accounting-reconciliation",
+        icon: RefreshCw,
       },
       {
         label: "Chart of Accounts",
-        page: "accounting-chart-of-accounts" as AppPage,
+        page: "accounting-chart-of-accounts",
         icon: BookMarked,
-      },
-      {
-        label: "Bank Reconciliation",
-        page: "accounting-reconciliation" as AppPage,
-        icon: RefreshCw,
       },
     ],
   },
@@ -153,11 +149,7 @@ const navItems: NavItem[] = [
     label: "Inventory",
     icon: Package,
     children: [
-      {
-        label: "Inventory ERP",
-        page: "inventory-erp" as AppPage,
-        icon: BarChart3,
-      },
+      { label: "Inventory ERP", page: "inventory-erp", icon: BarChart3 },
     ],
   },
   {
@@ -169,16 +161,6 @@ const navItems: NavItem[] = [
       { label: "ITC Reconciliation", page: "gst-itc", icon: RefreshCw },
       { label: "RCM Tracker", page: "gst-rcm", icon: PiggyBank },
       { label: "Audit Trail", page: "gst-audit", icon: History },
-      {
-        label: "API Integration",
-        page: "gst-api-integration" as AppPage,
-        icon: Shield,
-      },
-      {
-        label: "Workflow Automation",
-        page: "workflow-automation" as AppPage,
-        icon: Zap,
-      },
     ],
   },
   {
@@ -186,39 +168,30 @@ const navItems: NavItem[] = [
     icon: BarChart3,
     children: [
       { label: "Sales Register", page: "reports-sales", icon: TrendingUp },
-      {
-        label: "Purchase Register",
-        page: "reports-purchase",
-        icon: ShoppingCartIcon,
-      },
+      { label: "Purchase Register", page: "reports-purchase", icon: Package },
       { label: "GST Summary", page: "reports-gst-summary", icon: ReceiptText },
       { label: "AR Ageing", page: "reports-ar-ageing", icon: Users },
       { label: "AP Ageing", page: "reports-ap-ageing", icon: Building2 },
       { label: "Trial Balance", page: "reports-trial-balance", icon: Scale },
       { label: "P&L Statement", page: "reports-pl", icon: BarChart3 },
       { label: "Balance Sheet", page: "reports-balance-sheet", icon: Landmark },
-      {
-        label: "Stock Summary",
-        page: "reports-stock" as AppPage,
-        icon: Package,
-      },
-      {
-        label: "Cash Flow",
-        page: "reports-cashflow" as AppPage,
-        icon: TrendingUp,
-      },
+      { label: "Stock Summary", page: "reports-stock", icon: Package },
+      { label: "Cash Flow", page: "reports-cashflow", icon: TrendingUp },
     ],
   },
+  { label: "AI Tax Assistant", page: "ai-assistant", icon: MessageSquare },
   {
-    label: "AI Tax Assistant",
-    page: "ai-assistant",
-    icon: MessageSquare,
+    label: "Settings",
+    icon: Settings2,
+    children: [
+      { label: "API Configuration", page: "settings-api-config", icon: Shield },
+      { label: "Workflow Automation", page: "workflow-automation", icon: Zap },
+      { label: "OCR Capture", page: "settings-ocr", icon: ScanLine },
+      { label: "Backup & Restore", page: "backup-restore", icon: Database },
+      { label: "Preferences", page: "settings-preferences", icon: Sliders },
+    ],
   },
 ];
-
-function ShoppingCartIcon({ className }: { className?: string }) {
-  return <Package className={className} />;
-}
 
 export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   const { clear, identity } = useInternetIdentity();
@@ -242,19 +215,7 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <ShieldCheck className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <div className="overflow-hidden">
-            <p className="font-cabinet font-bold text-sm text-sidebar-foreground truncate">
-              GST Manager
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              Enterprise Suite
-            </p>
-          </div>
-        </div>
+        <BusinessHeader variant="sidebar" />
       </SidebarHeader>
 
       <SidebarContent className="overflow-y-auto">
