@@ -11,10 +11,47 @@ export function useBusinessProfile() {
   return useQuery<BusinessProfile | null>({
     queryKey: ["businessProfile"],
     queryFn: async () => {
-      if (!actor) return null;
-      return actor.getBusinessProfile();
+      if (!actor) {
+        // Fall back to localStorage when actor is not available
+        const stored = localStorage.getItem("gst_business_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            ...parsed,
+            stateCode: BigInt(parsed.stateCode ?? 27),
+          } as BusinessProfile;
+        }
+        return null;
+      }
+      try {
+        const result = await actor.getBusinessProfile();
+        if (result !== null && result !== undefined) {
+          return result;
+        }
+        // Actor returned null — fall back to localStorage
+        const stored = localStorage.getItem("gst_business_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            ...parsed,
+            stateCode: BigInt(parsed.stateCode ?? 27),
+          } as BusinessProfile;
+        }
+        return null;
+      } catch {
+        // Actor call failed — fall back to localStorage
+        const stored = localStorage.getItem("gst_business_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            ...parsed,
+            stateCode: BigInt(parsed.stateCode ?? 27),
+          } as BusinessProfile;
+        }
+        return null;
+      }
     },
-    enabled: !!actor && !isFetching,
+    enabled: !isFetching,
   });
 }
 

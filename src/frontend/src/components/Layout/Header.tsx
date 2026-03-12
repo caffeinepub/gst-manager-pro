@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useBusinessLogo } from "@/hooks/useBusinessLogo";
+import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBusinessProfile } from "@/hooks/useQueries";
@@ -227,6 +227,7 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
   const [readAll, setReadAll] = useState(false);
   const { lang, setLang } = useLanguage();
   const { logo } = useBusinessLogo();
+  const { localName } = useLocalBusinessName();
   const { data: profile } = useBusinessProfile();
 
   const unreadCount = readAll ? 0 : notifications.length;
@@ -249,12 +250,14 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
             <ShieldCheck className="w-4 h-4 text-primary" />
           </div>
         )}
-        {profile?.businessName && (
+        {(profile?.businessName || localName) && (
           <span
             className="hidden lg:block text-sm font-semibold text-foreground"
-            style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
+            style={{
+              fontFamily: '"Cinzel", "Playfair Display", Georgia, serif',
+            }}
           >
-            {profile.businessName}
+            {profile?.businessName || localName}
           </span>
         )}
       </div>

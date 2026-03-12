@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useInvoices } from "@/hooks/useGSTStore";
+import { useSwipeToDelete } from "@/hooks/useSwipeToDelete";
 import type { Invoice, InvoiceType } from "@/types/gst";
 import { formatDate, formatINR } from "@/utils/formatting";
 import { Edit, Eye, FileText, Plus, Search, Trash2 } from "lucide-react";
@@ -51,6 +52,112 @@ const TYPE_LABELS: Record<InvoiceType | "all", string> = {
 
 interface InvoiceListProps {
   type: InvoiceType | "all";
+}
+
+// Swipeable card component for mobile invoice rows
+function SwipeableInvoiceCard({
+  inv,
+  idx,
+  onView,
+  onEdit,
+  onDelete,
+  statusVariant,
+}: {
+  inv: Invoice;
+  idx: number;
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  statusVariant: (
+    s: string,
+  ) => "default" | "secondary" | "destructive" | "outline";
+}) {
+  const { swipeX, onTouchStart, onTouchMove, onTouchEnd } =
+    useSwipeToDelete(onDelete);
+  const isRevealed = swipeX < -40;
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Delete background */}
+      <div
+        className="absolute inset-y-0 right-0 flex items-center justify-end bg-destructive px-4 transition-opacity"
+        style={{ opacity: isRevealed ? 1 : 0 }}
+        aria-hidden="true"
+      >
+        <Trash2 className="w-5 h-5 text-destructive-foreground" />
+        <span className="text-destructive-foreground text-xs ml-1 font-medium">
+          Delete
+        </span>
+      </div>
+      {/* Card content */}
+      <div
+        className="px-4 py-3 space-y-2 bg-card relative z-10 transition-transform touch-pan-y"
+        style={{ transform: `translateX(${swipeX}px)` }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        data-ocid={`invoice.item.${idx + 1}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-xs text-primary font-medium">
+                {inv.invoiceNumber}
+              </span>
+              <Badge variant="outline" className="text-[10px] capitalize">
+                {inv.type.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <p className="text-sm truncate mt-0.5">{inv.partyName}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatDate(inv.date)}
+              {inv.dueDate && ` · Due ${formatDate(inv.dueDate)}`}
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="font-numeric font-bold text-sm">
+              {formatINR(inv.grandTotal)}
+            </p>
+            <Badge
+              variant={statusVariant(inv.status)}
+              className="text-[10px] capitalize mt-0.5"
+            >
+              {inv.status}
+            </Badge>
+          </div>
+        </div>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 text-muted-foreground"
+            onClick={onView}
+            data-ocid={`invoice.view_button.${idx + 1}`}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={onEdit}
+            data-ocid={`invoice.edit_button.${idx + 1}`}
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 text-destructive hover:text-destructive"
+            onClick={onDelete}
+            data-ocid={`invoice.delete_button.${idx + 1}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function InvoiceList({ type }: InvoiceListProps) {
@@ -266,77 +373,18 @@ export function InvoiceList({ type }: InvoiceListProps) {
                   </TableBody>
                 </Table>
               </div>
-              {/* Mobile card list */}
+              {/* Mobile card list - swipe left to delete */}
               <div className="md:hidden divide-y divide-border">
                 {filtered.map((inv, idx) => (
-                  <div
+                  <SwipeableInvoiceCard
                     key={inv.id}
-                    className="px-4 py-3 space-y-2"
-                    data-ocid={`invoice.item.${idx + 1}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs text-primary font-medium">
-                            {inv.invoiceNumber}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] capitalize"
-                          >
-                            {inv.type.replace(/_/g, " ")}
-                          </Badge>
-                        </div>
-                        <p className="text-sm truncate mt-0.5">
-                          {inv.partyName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(inv.date)}
-                          {inv.dueDate && ` · Due ${formatDate(inv.dueDate)}`}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-numeric font-bold text-sm">
-                          {formatINR(inv.grandTotal)}
-                        </p>
-                        <Badge
-                          variant={statusVariant(inv.status)}
-                          className="text-[10px] capitalize mt-0.5"
-                        >
-                          {inv.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground"
-                        onClick={() => openView(inv)}
-                        data-ocid={`invoice.view_button.${idx + 1}`}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEdit(inv)}
-                        data-ocid={`invoice.edit_button.${idx + 1}`}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(inv.id)}
-                        data-ocid={`invoice.delete_button.${idx + 1}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    inv={inv}
+                    idx={idx}
+                    onView={() => openView(inv)}
+                    onEdit={() => openEdit(inv)}
+                    onDelete={() => setDeleteId(inv.id)}
+                    statusVariant={statusVariant}
+                  />
                 ))}
               </div>
             </>

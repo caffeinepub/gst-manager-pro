@@ -1,5 +1,3 @@
-import type { jsPDF as JsPDFType } from "jspdf";
-
 // ──────────────────────────────────────────────
 // CSV Export
 // ──────────────────────────────────────────────
@@ -39,7 +37,8 @@ export async function exportToExcel(
   sheetName = "Sheet1",
 ): Promise<void> {
   try {
-    const XLSX = await import("xlsx");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const XLSX = (await import("xlsx" as any)) as any;
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -69,24 +68,21 @@ export async function exportToPDF(
   filename: string,
 ): Promise<void> {
   try {
-    const [html2canvas, { jsPDF }] = await Promise.all([
-      import("html2canvas") as Promise<{
-        default: typeof import("html2canvas")["default"];
-      }>,
-      import("jspdf") as Promise<{
-        jsPDF: new (
-          orientation?: string,
-          unit?: string,
-          format?: string,
-        ) => JsPDFType;
-      }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [h2cMod, jspdfMod] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      import("html2canvas" as any) as Promise<any>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      import("jspdf" as any) as Promise<any>,
     ]);
+    const html2canvas = h2cMod.default ?? h2cMod;
+    const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default?.jsPDF ?? jspdfMod.default;
     const element = document.getElementById(elementId);
     if (!element) {
       console.warn(`[exportToPDF] Element #${elementId} not found`);
       return;
     }
-    const canvas = await html2canvas.default(element, {
+    const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       logging: false,

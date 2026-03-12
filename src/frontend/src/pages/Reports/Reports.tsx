@@ -11,15 +11,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
 import {
   useBankAccounts,
   useInvoices,
   useJournalEntries,
   usePurchases,
 } from "@/hooks/useGSTStore";
+import { useBusinessProfile } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
 import { formatDate, formatINR, getCurrentMonth } from "@/utils/formatting";
-import { Download } from "lucide-react";
+import { downloadReportPDF } from "@/utils/pdfExport";
+import { Download, FileText } from "lucide-react";
 import { useState } from "react";
 
 function downloadCSV(filename: string, rows: string[][]) {

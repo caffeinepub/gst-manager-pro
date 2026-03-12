@@ -1,6 +1,8 @@
-import { useBusinessLogo } from "@/hooks/useBusinessLogo";
+import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
 import { useBusinessProfile } from "@/hooks/useQueries";
 import { ShieldCheck } from "lucide-react";
+
+const HUXLEY_FONT = '"Cinzel", "Playfair Display", Georgia, serif';
 
 interface BusinessHeaderProps {
   /** print: full-width print layout; sidebar: compact 32x32 logo+name; page: medium header */
@@ -14,7 +16,8 @@ export function BusinessHeader({
 }: BusinessHeaderProps) {
   const { logo } = useBusinessLogo();
   const { data: profile } = useBusinessProfile();
-  const businessName = profile?.businessName || "GST Manager Pro";
+  const { localName } = useLocalBusinessName();
+  const businessName = profile?.businessName || localName || "GST Manager Pro";
 
   if (variant === "print") {
     return (
@@ -38,11 +41,11 @@ export function BusinessHeader({
             <div
               className="business-name"
               style={{
-                fontFamily: '"Playfair Display", Georgia, serif',
+                fontFamily: HUXLEY_FONT,
                 fontSize: "20pt",
                 fontWeight: 700,
                 color: "#1e3a5f",
-                letterSpacing: "0.02em",
+                letterSpacing: "0.04em",
               }}
             >
               {businessName}
@@ -86,8 +89,8 @@ export function BusinessHeader({
           <p
             className="text-sm font-bold truncate text-sidebar-foreground leading-tight"
             style={{
-              fontFamily: '"Playfair Display", Georgia, serif',
-              letterSpacing: "0.01em",
+              fontFamily: HUXLEY_FONT,
+              letterSpacing: "0.03em",
             }}
           >
             {businessName}
@@ -116,8 +119,8 @@ export function BusinessHeader({
           <h1
             className="text-3xl font-bold text-foreground"
             style={{
-              fontFamily: '"Playfair Display", Georgia, serif',
-              letterSpacing: "0.02em",
+              fontFamily: HUXLEY_FONT,
+              letterSpacing: "0.04em",
             }}
           >
             {businessName}
@@ -148,8 +151,8 @@ export function BusinessHeader({
         <h1
           className="text-lg font-bold text-foreground leading-tight"
           style={{
-            fontFamily: '"Playfair Display", Georgia, serif',
-            letterSpacing: "0.02em",
+            fontFamily: HUXLEY_FONT,
+            letterSpacing: "0.04em",
           }}
         >
           {businessName}

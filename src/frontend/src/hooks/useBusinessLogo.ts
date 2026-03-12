@@ -3,6 +3,7 @@ import { useLocalStorage } from "./useLocalStorage";
 
 const LOGO_KEY = "gst_business_logo";
 const EXTENDED_PROFILE_KEY = "gst_extended_profile";
+const LOCAL_BUSINESS_NAME_KEY = "gst_local_business_name";
 
 export interface ExtendedBusinessProfile {
   tradeName: string;
@@ -71,4 +72,21 @@ export function useExtendedProfile() {
   );
 
   return { profile, saveProfile };
+}
+
+/** Cached business name in localStorage so it shows immediately without waiting for the canister */
+export function useLocalBusinessName() {
+  const [localName, setLocalName] = useLocalStorage<string>(
+    LOCAL_BUSINESS_NAME_KEY,
+    "",
+  );
+
+  const saveLocalBusinessName = useCallback(
+    (name: string) => {
+      setLocalName(name);
+    },
+    [setLocalName],
+  );
+
+  return { localName, saveLocalBusinessName };
 }

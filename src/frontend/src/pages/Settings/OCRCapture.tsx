@@ -11,18 +11,37 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
+  AlertTriangle,
   CheckCircle2,
   FileImage,
   FileText,
   Loader2,
+  RefreshCw,
   ScanLine,
   Upload,
   X,
+  XCircle,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { createWorker } from "tesseract.js";
+
+interface OcrField {
+  value: string;
+  confidence: number; // 0-100
+}
 
 interface OcrResult {
+  vendorName: OcrField;
+  invoiceNo: OcrField;
+  date: OcrField;
+  amount: OcrField;
+  gstin: OcrField;
+  hsnCodes: OcrField;
+  taxAmount: OcrField;
+}
+
+interface EditableResult {
   vendorName: string;
   invoiceNo: string;
   date: string;
@@ -32,44 +51,186 @@ interface OcrResult {
   taxAmount: string;
 }
 
-function simulateOcr(filename: string): OcrResult {
-  // Simulate realistic OCR extraction based on filename seed
-  const seed = filename.length % 5;
-  const vendors = [
-    "Infosys Limited",
-    "TCS Mumbai",
-    "Wipro Technologies",
-    "HCL Systems",
-    "Tech Mahindra",
+// ─── Text parsers ────────────────────────────────────────────────────────────
+
+function parseGSTIN(text: string): OcrField {
+  const match = text.match(
+    /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/i,
+  );
+  return match
+    ? { value: match[1].toUpperCase(), confidence: 92 }
+    : { value: "", confidence: 0 };
+}
+
+function parseInvoiceNo(text: string): OcrField {
+  const patterns = [
+    /(?:invoice\s*(?:no\.?|number|#)|inv\s*(?:no\.?|#)|bill\s*(?:no\.?|number|#)|tax\s*invoice\s*(?:no\.?|#))\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:^|\s)((?:[A-Z]{2,}-)?\d{4,}(?:\/\d+)?)(?:\s|$)/m,
   ];
-  const gstins = [
-    "29AABCI1234R1Z5",
-    "27AACT27271Z3",
-    "29AAACI1234J1Z5",
-    "27AABCU9603R1ZX",
-    "36AABCM1234N1Z1",
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m?.[1]) return { value: m[1].trim(), confidence: 80 };
+  }
+  return { value: "", confidence: 0 };
+}
+
+function parseDate(text: string): OcrField {
+  // dd/mm/yyyy or dd-mm-yyyy
+  const dmy = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return { value: iso, confidence: 88 };
+  }
+  // yyyy-mm-dd
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return { value: iso[0], confidence: 88 };
+  return { value: new Date().toISOString().split("T")[0], confidence: 30 };
+}
+
+function parseAmount(text: string): OcrField {
+  // Look for grand total / total amount
+  const patterns = [
+    /(?:grand\s*total|total\s*amount|net\s*payable|amount\s*payable|total\s*due|total\s*invoice)[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
   ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m?.[1]) {
+      const val = m[1].replace(/,/g, "");
+      return { value: val, confidence: 75 };
+    }
+  }
+  // Fallback: largest number in text
+  const numbers = [...text.matchAll(/[\d,]{4,}(?:\.\d{1,2})?/g)]
+    .map((x) => Number.parseFloat(x[0].replace(/,/g, "")))
+    .filter((n) => n > 0);
+  if (numbers.length) {
+    const max = Math.max(...numbers);
+    return { value: String(max), confidence: 40 };
+  }
+  return { value: "", confidence: 0 };
+}
+
+function parseTaxAmount(text: string): OcrField {
+  const patterns = [
+    /(?:total\s*(?:gst|tax)|cgst\s*\+\s*sgst|igst|total\s*cgst|total\s*sgst)[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:cgst|sgst|igst)[\s:\-]*(?:@\d+%)?[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m?.[1]) return { value: m[1].replace(/,/g, ""), confidence: 72 };
+  }
+  return { value: "", confidence: 0 };
+}
+
+function parseHSN(text: string): OcrField {
+  const hsnMatches = [
+    ...text.matchAll(/(?:hsn|sac|hsn\/sac)[\s:\.\-]*([0-9]{4,8})/gi),
+  ];
+  const codes = [...new Set(hsnMatches.map((m) => m[1]))];
+  if (codes.length) return { value: codes.join(", "), confidence: 85 };
+  // Fallback: standalone 4-8 digit numbers that look like HSN
+  const standalone = [...text.matchAll(/\b([0-9]{4,8})\b/g)]
+    .map((x) => x[1])
+    .filter((n) => !/^(20\d{2}|19\d{2})$/.test(n)) // exclude years
+    .slice(0, 3);
+  if (standalone.length)
+    return { value: standalone.join(", "), confidence: 40 };
+  return { value: "", confidence: 0 };
+}
+
+function parseVendorName(text: string): OcrField {
+  // Look for "From", "Supplier", "Seller", "Vendor" labels
+  const labeled = text.match(
+    /(?:from|supplier|seller|vendor|billed\s*by|sold\s*by)[\s:\-]+([A-Z][A-Za-z0-9\s\.&,'-]{3,60}?)(?:\n|\r|,|GSTIN|GST)/i,
+  );
+  if (labeled?.[1]) return { value: labeled[1].trim(), confidence: 78 };
+
+  // Use first non-empty line that looks like a company name (has caps, 3+ chars)
+  const lines = text
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  for (const line of lines.slice(0, 8)) {
+    if (
+      line.length >= 3 &&
+      line.length <= 80 &&
+      /[A-Z]/.test(line) &&
+      !/^(invoice|bill|tax|gst|date|no\.|from|to)/i.test(line)
+    ) {
+      return { value: line, confidence: 55 };
+    }
+  }
+  return { value: "", confidence: 0 };
+}
+
+function parseText(rawText: string): OcrResult {
+  const text = rawText;
   return {
-    vendorName: vendors[seed] || vendors[0],
-    invoiceNo: `INV-${Math.floor(Math.random() * 9000) + 1000}`,
-    date: new Date().toISOString().split("T")[0],
-    amount: String(Math.floor(Math.random() * 90000) + 10000),
-    gstin: gstins[seed] || gstins[0],
-    hsnCodes: "9983, 8471",
-    taxAmount: String(Math.floor(Math.random() * 9000) + 1000),
+    vendorName: parseVendorName(text),
+    invoiceNo: parseInvoiceNo(text),
+    date: parseDate(text),
+    amount: parseAmount(text),
+    gstin: parseGSTIN(text),
+    hsnCodes: parseHSN(text),
+    taxAmount: parseTaxAmount(text),
   };
 }
+
+// ─── PDF → canvas ─────────────────────────────────────────────────────────────
+
+async function pdfToCanvas(
+  file: File,
+  onProgress?: (page: number, total: number) => void,
+): Promise<HTMLCanvasElement> {
+  const pdfjsLib = await import("pdfjs-dist");
+  // Use CDN worker to avoid broken ?url import pattern
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const totalPages = pdf.numPages;
+
+  // Use first page for OCR (most invoice data is on page 1)
+  const pageNum = 1;
+  onProgress?.(pageNum, totalPages);
+
+  const page = await pdf.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 2.5 }); // higher scale = better OCR
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d")!;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  // Apply grayscale pre-processing to improve OCR accuracy
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    data[i] = data[i + 1] = data[i + 2] = gray;
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  return canvas;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function OCRCapture() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [progress, setProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<OcrResult | null>(null);
-  const [editedResult, setEditedResult] = useState<OcrResult | null>(null);
+  const [editedResult, setEditedResult] = useState<EditableResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
     if (!allowed.includes(file.type)) {
       toast.error("Please upload PDF, PNG, or JPG files only");
@@ -77,25 +238,68 @@ export function OCRCapture() {
     }
     setSelectedFile(file);
     setProcessing(true);
-    setProgress(0);
+    setProgress(5);
     setResult(null);
+    setErrorMessage(null);
+    setStatusText("Loading document...");
 
-    // Simulate OCR processing with progress
-    const intervals = [20, 45, 70, 90, 100];
-    let i = 0;
-    const tick = () => {
-      if (i < intervals.length) {
-        setProgress(intervals[i++]);
-        setTimeout(tick, 280);
-      } else {
-        const ocr = simulateOcr(file.name);
-        setResult(ocr);
-        setEditedResult({ ...ocr });
-        setProcessing(false);
-        toast.success("Document scanned successfully");
+    try {
+      let imageSource: File | HTMLCanvasElement = file;
+
+      if (file.type === "application/pdf") {
+        setStatusText("Rendering PDF page...");
+        setProgress(15);
+        imageSource = await pdfToCanvas(file, (page, total) => {
+          setStatusText(`Processing page ${page} of ${total}...`);
+          setProgress(15 + Math.round((page / total) * 15));
+        });
+        setProgress(30);
       }
-    };
-    tick();
+
+      setStatusText("Starting OCR engine...");
+      setProgress(35);
+
+      const worker = await createWorker("eng");
+
+      setStatusText("Recognizing text...");
+
+      // Progress polling since v5 createWorker API doesn't expose logger in same way
+      let pollInterval: ReturnType<typeof setInterval> | null = null;
+      let fakeProgress = 35;
+      pollInterval = setInterval(() => {
+        fakeProgress = Math.min(fakeProgress + 3, 90);
+        setProgress(fakeProgress);
+        setStatusText(`Reading text... ${fakeProgress}%`);
+      }, 400);
+
+      const { data } = await worker.recognize(imageSource);
+
+      if (pollInterval) clearInterval(pollInterval);
+      await worker.terminate();
+
+      setProgress(97);
+      setStatusText("Parsing fields...");
+      const parsed = parseText(data.text);
+      setResult(parsed);
+      setEditedResult({
+        vendorName: parsed.vendorName.value,
+        invoiceNo: parsed.invoiceNo.value,
+        date: parsed.date.value,
+        amount: parsed.amount.value,
+        gstin: parsed.gstin.value,
+        hsnCodes: parsed.hsnCodes.value,
+        taxAmount: parsed.taxAmount.value,
+      });
+      setProgress(100);
+      setProcessing(false);
+      toast.success("Document scanned successfully");
+    } catch (err) {
+      console.error("OCR error:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      setErrorMessage(message);
+      setProcessing(false);
+      toast.error("OCR failed. See error details below.");
+    }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,9 +314,14 @@ export function OCRCapture() {
     if (file) processFile(file);
   };
 
+  const handleRetry = () => {
+    if (selectedFile) {
+      processFile(selectedFile);
+    }
+  };
+
   const handleCreatePurchase = () => {
     if (!editedResult) return;
-    // Store pre-fill data in sessionStorage for Purchases page to consume
     sessionStorage.setItem(
       "ocr_prefill",
       JSON.stringify({
@@ -132,9 +341,59 @@ export function OCRCapture() {
     setSelectedFile(null);
     setResult(null);
     setEditedResult(null);
+    setErrorMessage(null);
     setProgress(0);
+    setStatusText("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const confidenceColor = (c: number) =>
+    c >= 75 ? "text-green-600" : c >= 50 ? "text-amber-500" : "text-red-500";
+
+  const fields: {
+    key: keyof EditableResult;
+    label: string;
+    ocid: string;
+    resultKey: keyof OcrResult;
+  }[] = [
+    {
+      key: "vendorName",
+      label: "Vendor Name",
+      ocid: "ocr.vendorname.input",
+      resultKey: "vendorName",
+    },
+    {
+      key: "invoiceNo",
+      label: "Invoice No",
+      ocid: "ocr.invoiceno.input",
+      resultKey: "invoiceNo",
+    },
+    { key: "date", label: "Date", ocid: "ocr.date.input", resultKey: "date" },
+    {
+      key: "amount",
+      label: "Total Amount (₹)",
+      ocid: "ocr.amount.input",
+      resultKey: "amount",
+    },
+    {
+      key: "gstin",
+      label: "GSTIN",
+      ocid: "ocr.gstin.input",
+      resultKey: "gstin",
+    },
+    {
+      key: "hsnCodes",
+      label: "HSN / SAC Codes",
+      ocid: "ocr.hsncode.input",
+      resultKey: "hsnCodes",
+    },
+    {
+      key: "taxAmount",
+      label: "Tax Amount (₹)",
+      ocid: "ocr.taxamount.input",
+      resultKey: "taxAmount",
+    },
+  ];
 
   return (
     <div className="max-w-2xl space-y-6" data-ocid="ocr.section">
@@ -142,12 +401,13 @@ export function OCRCapture() {
         <h2 className="text-lg font-semibold">OCR / Document Capture</h2>
         <p className="text-sm text-muted-foreground">
           Upload an invoice image or PDF to automatically extract vendor,
-          invoice number, amount, and GST details.
+          invoice number, amount, and GST details. All fields can be edited
+          before saving.
         </p>
       </div>
 
       {/* Upload Area */}
-      {!result && (
+      {!result && !errorMessage && (
         <Card className="bg-card border-border/70">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -180,8 +440,10 @@ export function OCRCapture() {
               {processing ? (
                 <div className="space-y-4">
                   <Loader2 className="w-10 h-10 mx-auto text-primary animate-spin" />
-                  <p className="text-sm font-medium">Processing document...</p>
-                  <Progress value={progress} className="w-48 mx-auto" />
+                  <p className="text-sm font-medium">
+                    {statusText || "Processing..."}
+                  </p>
+                  <Progress value={progress} className="w-56 mx-auto" />
                   <p className="text-xs text-muted-foreground">{progress}%</p>
                 </div>
               ) : (
@@ -226,13 +488,73 @@ export function OCRCapture() {
         </Card>
       )}
 
+      {/* Error State */}
+      {errorMessage && !result && (
+        <Card
+          className="bg-card border-destructive/40"
+          data-ocid="ocr.error_state"
+        >
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <XCircle className="w-5 h-5" />
+              OCR Failed
+            </CardTitle>
+            <CardDescription>
+              The document could not be processed. See the error details below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-mono text-destructive break-all">
+                {errorMessage}
+              </p>
+            </div>
+
+            {selectedFile && (
+              <p className="text-xs text-muted-foreground">
+                File: <span className="font-medium">{selectedFile.name}</span>
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              {selectedFile && (
+                <Button onClick={handleRetry} data-ocid="ocr.retry.button">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={handleClear}
+                data-ocid="ocr.scan_another.button"
+              >
+                <ScanLine className="w-4 h-4 mr-2" />
+                Try Another File
+              </Button>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">
+                Tips for better results:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Use high-resolution scans (300 DPI or higher)</li>
+                <li>Digital/native PDFs work better than scanned images</li>
+                <li>Ensure the document is not password-protected</li>
+                <li>Try converting images to PNG before uploading</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* OCR Results */}
       {result && editedResult && (
         <Card className="bg-card border-border/70">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
-                <CheckCircle2 className="w-5 h-5 text-success" />
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
                 Extracted Data
                 {selectedFile && (
                   <span className="text-xs font-normal text-muted-foreground ml-2">
@@ -251,63 +573,46 @@ export function OCRCapture() {
               </Button>
             </div>
             <CardDescription>
-              Review and edit the extracted fields before creating a purchase
-              entry
+              Review and correct the extracted fields. Confidence indicators
+              show how reliable each extraction is.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(
-                [
-                  {
-                    key: "vendorName",
-                    label: "Vendor Name",
-                    ocid: "ocr.vendorname.input",
-                  },
-                  {
-                    key: "invoiceNo",
-                    label: "Invoice No",
-                    ocid: "ocr.invoiceno.input",
-                  },
-                  {
-                    key: "date",
-                    label: "Date",
-                    ocid: "ocr.date.input",
-                    type: "date",
-                  },
-                  {
-                    key: "amount",
-                    label: "Total Amount",
-                    ocid: "ocr.amount.input",
-                  },
-                  { key: "gstin", label: "GSTIN", ocid: "ocr.gstin.input" },
-                  {
-                    key: "hsnCodes",
-                    label: "HSN Codes",
-                    ocid: "ocr.hsncode.input",
-                  },
-                  {
-                    key: "taxAmount",
-                    label: "Tax Amount",
-                    ocid: "ocr.taxamount.input",
-                  },
-                ] as const
-              ).map(({ key, label, ocid }) => (
-                <div key={key} className="space-y-1.5">
-                  <Label htmlFor={key}>{label}</Label>
-                  <Input
-                    id={key}
-                    type="text"
-                    value={editedResult[key as keyof OcrResult]}
-                    onChange={(e) =>
-                      setEditedResult((p) =>
-                        p ? { ...p, [key]: e.target.value } : p,
-                      )
-                    }
-                    data-ocid={ocid}
-                  />
-                </div>
-              ))}
+              {fields.map(({ key, label, ocid, resultKey }) => {
+                const conf = result[resultKey].confidence;
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor={key}>{label}</Label>
+                      {conf > 0 && (
+                        <span
+                          className={`text-xs flex items-center gap-0.5 ${confidenceColor(conf)}`}
+                        >
+                          {conf < 70 && <AlertTriangle className="w-3 h-3" />}
+                          {conf}% confidence
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      id={key}
+                      type={key === "date" ? "date" : "text"}
+                      value={editedResult[key]}
+                      onChange={(e) =>
+                        setEditedResult((p) =>
+                          p ? { ...p, [key]: e.target.value } : p,
+                        )
+                      }
+                      className={
+                        conf < 50 && conf > 0
+                          ? "border-amber-400 focus-visible:ring-amber-400"
+                          : ""
+                      }
+                      data-ocid={ocid}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             <Separator />

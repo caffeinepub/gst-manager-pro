@@ -22,6 +22,7 @@ import {
   usePurchases,
   useStockMovements,
 } from "@/hooks/useGSTStore";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { useItems, useParties } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
 import {
@@ -45,7 +46,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 interface DashboardProps {
   onNavigate: (page: AppPage) => void;
@@ -337,6 +338,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   const recentInvoices = invoices.slice(0, 5);
 
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
+  const { containerRef, isPulling, pullDistance, isRefreshing } =
+    usePullToRefresh(handleRefresh);
+
   const statusVariant = (
     status: string,
   ): "default" | "secondary" | "destructive" | "outline" => {
@@ -346,7 +354,27 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   };
 
   return (
-    <div className="space-y-6" data-ocid="dashboard.section">
+    <div
+      ref={containerRef}
+      className="space-y-6 h-full overflow-auto"
+      data-ocid="dashboard.section"
+    >
+      {/* Pull-to-refresh indicator */}
+      {(isPulling || isRefreshing) && (
+        <div
+          className="flex items-center justify-center py-2 text-xs text-muted-foreground transition-all"
+          style={{ height: `${pullDistance * 0.5}px`, overflow: "hidden" }}
+        >
+          <div
+            className={`w-5 h-5 rounded-full border-2 border-primary border-t-transparent ${isRefreshing ? "animate-spin" : ""}`}
+          />
+          <span className="ml-2">
+            {isRefreshing ? "Refreshing..." : "Release to refresh"}
+          </span>
+        </div>
+      )}
+      {/* suppress unused refreshKey warning */}
+      <span key={refreshKey} className="sr-only" />
       {/* KPI Cards - 5 cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <Card className="bg-card border-border/70 shadow-card">

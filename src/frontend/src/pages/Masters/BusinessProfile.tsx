@@ -10,10 +10,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useBusinessLogo, useExtendedProfile } from "@/hooks/useBusinessLogo";
-import { useInvoiceDefaults } from "@/hooks/useGSTStore";
+import {
+  useBusinessLogo,
+  useExtendedProfile,
+  useLocalBusinessName,
+} from "@/hooks/useBusinessLogo";
+import { useBankAccounts, useInvoiceDefaults } from "@/hooks/useGSTStore";
 import { RegistrationType } from "@/hooks/useQueries";
 import { useBusinessProfile, useSetBusinessProfile } from "@/hooks/useQueries";
+import type { BankAccount } from "@/types/gst";
 import { INDIAN_STATES } from "@/types/gst";
 import {
   Building2,
@@ -34,7 +39,9 @@ export function BusinessProfile() {
   const { mutate: saveProfile, isPending } = useSetBusinessProfile();
   const { defaults: invoiceDefaults, saveDefaults } = useInvoiceDefaults();
   const { logo, saveLogo, clearLogo } = useBusinessLogo();
+  const { saveLocalBusinessName } = useLocalBusinessName();
   const { profile: extended, saveProfile: saveExtended } = useExtendedProfile();
+  const { accounts, updateAccount } = useBankAccounts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [defaultsForm, setDefaultsForm] = useState({
@@ -115,6 +122,24 @@ export function BusinessProfile() {
     if (form.gstin.trim() && !GSTIN_REGEX.test(form.gstin.trim())) {
       toast.warning("GSTIN format looks incorrect. Saving anyway.");
     }
+
+    // 1. Save to localStorage immediately — this is the primary store
+    saveLocalBusinessName(form.businessName.trim());
+    saveExtended(extForm);
+    localStorage.setItem(
+      "gst_business_profile",
+      JSON.stringify({
+        businessName: form.businessName.trim(),
+        gstin: form.gstin.trim(),
+        registrationType: form.registrationType,
+        stateCode: form.stateCode,
+        address: form.address,
+        contactDetails: form.contactDetails,
+      }),
+    );
+    toast.success("Business profile saved successfully");
+
+    // 2. Attempt backend sync — non-blocking, soft warning on failure
     saveProfile(
       {
         businessName: form.businessName.trim(),
@@ -125,16 +150,63 @@ export function BusinessProfile() {
         contactDetails: form.contactDetails,
       },
       {
-        onSuccess: () => {
-          saveExtended(extForm);
-          toast.success("Business profile saved successfully");
-        },
-        onError: (err) =>
-          toast.error(
-            `Failed to save: ${(err as Error)?.message || "Please try again"}`,
-          ),
+        onError: () =>
+          toast.warning("Cloud sync unavailable. Your data is saved locally."),
       },
     );
+  };
+
+  const handleSaveBankDetails = () => {
+    // Save to extended profile
+    saveExtended(extForm);
+
+    // Sync to bank accounts store
+    const profileEntry: BankAccount = {
+      id: "profile-primary-bank",
+      bankName: extForm.bankName,
+      accountNumber: extForm.accountNo,
+      ifsc: extForm.ifsc,
+      openingBalance: 0,
+      accountType: "current",
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const existingAccount = accounts.find(
+      (a) => a.id === "profile-primary-bank",
+    );
+    if (existingAccount) {
+      updateAccount("profile-primary-bank", {
+        bankName: extForm.bankName,
+        accountNumber: extForm.accountNo,
+        ifsc: extForm.ifsc,
+      });
+    } else if (extForm.bankName || extForm.accountNo || extForm.ifsc) {
+      // Use direct localStorage write to set a fixed ID
+      const stored = localStorage.getItem("gst_bank_accounts");
+      const existingAccounts: BankAccount[] = stored ? JSON.parse(stored) : [];
+      const idx = existingAccounts.findIndex(
+        (a) => a.id === "profile-primary-bank",
+      );
+      if (idx >= 0) {
+        existingAccounts[idx] = { ...existingAccounts[idx], ...profileEntry };
+      } else {
+        existingAccounts.push(profileEntry);
+      }
+      localStorage.setItem(
+        "gst_bank_accounts",
+        JSON.stringify(existingAccounts),
+      );
+      // Dispatch storage event so useBankAccounts hook re-reads
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "gst_bank_accounts",
+          newValue: JSON.stringify(existingAccounts),
+        }),
+      );
+    }
+
+    toast.success("Bank details saved and synced to Bank Accounts");
   };
 
   const handleSaveDefaults = (e: React.FormEvent) => {
@@ -529,10 +601,7 @@ export function BusinessProfile() {
           <div className="flex justify-end pt-4">
             <Button
               type="button"
-              onClick={() => {
-                saveExtended(extForm);
-                toast.success("Bank details saved");
-              }}
+              onClick={handleSaveBankDetails}
               variant="outline"
               data-ocid="profile.bankdetails.save_button"
             >

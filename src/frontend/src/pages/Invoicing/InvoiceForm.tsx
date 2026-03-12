@@ -32,6 +32,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
 import {
   useInvoiceCounter,
   useInvoiceDefaults,
@@ -48,8 +49,10 @@ import {
   UNITS,
 } from "@/types/gst";
 import { addDays, amountInWords, formatINR, today } from "@/utils/formatting";
+import { downloadInvoicePDF } from "@/utils/pdfExport";
 import {
   CheckCircle,
+  Download,
   Mic,
   Plus,
   Printer,
@@ -60,6 +63,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 function genId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -125,6 +129,10 @@ export function InvoiceForm({
   const { data: parties = [] } = useParties();
   const { data: items = [] } = useItems();
   const { data: businessProfile } = useBusinessProfile();
+  const { logo } = useBusinessLogo();
+  const { localName } = useLocalBusinessName();
+  const resolvedBusinessName =
+    businessProfile?.businessName || localName || "Your Business";
   const { addInvoice, updateInvoice } = useInvoices();
   const { getNextNumber } = useInvoiceCounter();
   const { defaults: invoiceDefaults } = useInvoiceDefaults();
@@ -337,6 +345,52 @@ export function InvoiceForm({
             }}
           >
             <Printer className="w-4 h-4 mr-1.5" /> Print
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const inv =
+                editingInvoice ??
+                ({
+                  id: "preview",
+                  invoiceNumber,
+                  type,
+                  date,
+                  dueDate,
+                  partyId,
+                  lineItems: lines,
+                  subtotal: totals.subtotal,
+                  totalDiscount: totals.totalDiscount,
+                  totalCgst: totals.totalCgst,
+                  totalSgst: totals.totalSgst,
+                  totalIgst: totals.totalIgst,
+                  totalCess: totals.totalCess,
+                  grandTotal: totals.grandTotal,
+                  notes,
+                  declaration,
+                  termsConditions,
+                  status: "draft",
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as import("@/types/gst").Invoice);
+              const party = parties.find((p) => String(p.id) === partyId);
+              downloadInvoicePDF({
+                invoice: inv,
+                businessName: resolvedBusinessName,
+                businessGstin: businessProfile?.gstin,
+                businessAddress: businessProfile?.address,
+                businessContact: businessProfile?.contactDetails,
+                logo: logo || undefined,
+                partyName: party?.name,
+                partyGstin: party?.gstin,
+                partyAddress: party?.billingAddress,
+                declaration,
+                termsConditions,
+              });
+            }}
+            data-ocid="invoice.download_pdf.button"
+          >
+            <Download className="w-4 h-4 mr-1.5" /> PDF
           </Button>
           {!viewOnly && ["sales", "service"].includes(type) && (
             <Button
@@ -775,6 +829,7 @@ export function InvoiceForm({
                             updateLine(line.id, { qty: Number(e.target.value) })
                           }
                           className="h-8 text-xs w-16"
+                          inputMode="decimal"
                           min="0.01"
                           step="0.01"
                           disabled={viewOnly}
@@ -812,6 +867,7 @@ export function InvoiceForm({
                             })
                           }
                           className="h-8 text-xs w-24"
+                          inputMode="decimal"
                           min="0"
                           step="0.01"
                           disabled={viewOnly}
@@ -1014,178 +1070,182 @@ export function InvoiceForm({
       </div>
 
       {/* Dedicated Print-Only Layout */}
-      <div className="print-only invoice-print-area">
-        <div className="p-8 text-black bg-white">
-          {/* Business Header */}
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h1 className="text-xl font-bold text-black">
-                {businessProfile?.businessName || "Your Business Name"}
-              </h1>
-              <p className="text-sm text-gray-600">
-                GSTIN: {businessProfile?.gstin || "—"}
-              </p>
-              <p className="text-sm text-gray-600">
-                {businessProfile?.address || ""}
-              </p>
-            </div>
-            <div className="text-right">
-              <h2 className="text-lg font-bold uppercase tracking-wider text-black">
-                {TYPE_LABELS[type]}
-              </h2>
-              <p className="text-sm text-gray-700">
-                Invoice #: {invoiceNumber}
-              </p>
-              <p className="text-sm text-gray-700">Date: {date}</p>
-              <p className="text-sm text-gray-700">Due Date: {dueDate}</p>
-              {irnNumber && (
-                <p className="text-xs text-gray-500 font-mono mt-1">
-                  IRN: {irnNumber.slice(0, 32)}...
-                </p>
-              )}
-            </div>
-          </div>
-          {/* Bill To */}
-          {selectedParty && (
-            <div className="mb-6 p-3 border border-gray-200 rounded">
-              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
-                Bill To
-              </p>
-              <p className="font-semibold text-black">{selectedParty.name}</p>
-              {selectedParty.gstin && (
-                <p className="text-sm text-gray-600 font-mono">
-                  GSTIN: {selectedParty.gstin}
-                </p>
-              )}
-              {selectedParty.billingAddress && (
+      {createPortal(
+        <div className="print-only invoice-print-area">
+          <div className="p-8 text-black bg-white">
+            {/* Business Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h1 className="text-xl font-bold text-black">
+                  {resolvedBusinessName}
+                </h1>
                 <p className="text-sm text-gray-600">
-                  {selectedParty.billingAddress}
+                  GSTIN: {businessProfile?.gstin || "—"}
                 </p>
-              )}
-            </div>
-          )}
-          {/* Line Items Table */}
-          <table className="w-full border-collapse text-sm mb-4">
-            <thead>
-              <tr className="border-b-2 border-black">
-                <th className="text-left py-2 pr-3">Description</th>
-                <th className="text-left py-2 pr-2">HSN/SAC</th>
-                <th className="text-right py-2 pr-2">Qty</th>
-                <th className="text-left py-2 pr-2">Unit</th>
-                <th className="text-right py-2 pr-2">Price</th>
-                <th className="text-right py-2 pr-2">Disc%</th>
-                <th className="text-right py-2 pr-2">Taxable</th>
-                <th className="text-right py-2 pr-2">GST%</th>
-                <th className="text-right py-2">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines
-                .filter((l) => l.description)
-                .map((line) => (
-                  <tr key={line.id} className="border-b border-gray-200">
-                    <td className="py-1.5 pr-3">{line.description}</td>
-                    <td className="py-1.5 pr-2 font-mono text-xs">
-                      {line.hsnSacCode}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">{line.qty}</td>
-                    <td className="py-1.5 pr-2 text-xs">{line.unit}</td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {formatINR(line.unitPrice)}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {line.discountPercent}%
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {formatINR(
-                        line.qty *
-                          line.unitPrice *
-                          (1 - line.discountPercent / 100),
-                      )}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">{line.gstRate}%</td>
-                    <td className="py-1.5 text-right font-semibold">
-                      {formatINR(line.lineTotal)}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-          {/* Tax Summary */}
-          <div className="flex justify-end mb-4">
-            <div className="w-64 text-sm">
-              <div className="flex justify-between py-1">
-                <span className="text-gray-600">Subtotal</span>
-                <span>{formatINR(totals.subtotal)}</span>
+                <p className="text-sm text-gray-600">
+                  {businessProfile?.address || ""}
+                </p>
               </div>
-              {totals.totalDiscount > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-gray-600">Discount</span>
-                  <span>-{formatINR(totals.totalDiscount)}</span>
-                </div>
-              )}
-              {isInterstate ? (
-                <div className="flex justify-between py-1">
-                  <span className="text-gray-600">IGST</span>
-                  <span>{formatINR(totals.totalIgst)}</span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex justify-between py-1">
-                    <span className="text-gray-600">CGST</span>
-                    <span>{formatINR(totals.totalCgst)}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-gray-600">SGST</span>
-                    <span>{formatINR(totals.totalSgst)}</span>
-                  </div>
-                </>
-              )}
-              {totals.totalCess > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-gray-600">Cess</span>
-                  <span>{formatINR(totals.totalCess)}</span>
-                </div>
-              )}
-              <div className="flex justify-between py-2 border-t-2 border-black font-bold text-base">
-                <span>Grand Total</span>
-                <span>{formatINR(totals.grandTotal)}</span>
+              <div className="text-right">
+                <h2 className="text-lg font-bold uppercase tracking-wider text-black">
+                  {TYPE_LABELS[type]}
+                </h2>
+                <p className="text-sm text-gray-700">
+                  Invoice #: {invoiceNumber}
+                </p>
+                <p className="text-sm text-gray-700">Date: {date}</p>
+                <p className="text-sm text-gray-700">Due Date: {dueDate}</p>
+                {irnNumber && (
+                  <p className="text-xs text-gray-500 font-mono mt-1">
+                    IRN: {irnNumber.slice(0, 32)}...
+                  </p>
+                )}
               </div>
-              <p className="text-xs text-gray-500 italic mt-1">
-                {amountInWords(totals.grandTotal)}
-              </p>
             </div>
+            {/* Bill To */}
+            {selectedParty && (
+              <div className="mb-6 p-3 border border-gray-200 rounded">
+                <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                  Bill To
+                </p>
+                <p className="font-semibold text-black">{selectedParty.name}</p>
+                {selectedParty.gstin && (
+                  <p className="text-sm text-gray-600 font-mono">
+                    GSTIN: {selectedParty.gstin}
+                  </p>
+                )}
+                {selectedParty.billingAddress && (
+                  <p className="text-sm text-gray-600">
+                    {selectedParty.billingAddress}
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Line Items Table */}
+            <table className="w-full border-collapse text-sm mb-4">
+              <thead>
+                <tr className="border-b-2 border-black">
+                  <th className="text-left py-2 pr-3">Description</th>
+                  <th className="text-left py-2 pr-2">HSN/SAC</th>
+                  <th className="text-right py-2 pr-2">Qty</th>
+                  <th className="text-left py-2 pr-2">Unit</th>
+                  <th className="text-right py-2 pr-2">Price</th>
+                  <th className="text-right py-2 pr-2">Disc%</th>
+                  <th className="text-right py-2 pr-2">Taxable</th>
+                  <th className="text-right py-2 pr-2">GST%</th>
+                  <th className="text-right py-2">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines
+                  .filter((l) => l.description)
+                  .map((line) => (
+                    <tr key={line.id} className="border-b border-gray-200">
+                      <td className="py-1.5 pr-3">{line.description}</td>
+                      <td className="py-1.5 pr-2 font-mono text-xs">
+                        {line.hsnSacCode}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">{line.qty}</td>
+                      <td className="py-1.5 pr-2 text-xs">{line.unit}</td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {formatINR(line.unitPrice)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {line.discountPercent}%
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {formatINR(
+                          line.qty *
+                            line.unitPrice *
+                            (1 - line.discountPercent / 100),
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {line.gstRate}%
+                      </td>
+                      <td className="py-1.5 text-right font-semibold">
+                        {formatINR(line.lineTotal)}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            {/* Tax Summary */}
+            <div className="flex justify-end mb-4">
+              <div className="w-64 text-sm">
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span>{formatINR(totals.subtotal)}</span>
+                </div>
+                {totals.totalDiscount > 0 && (
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">Discount</span>
+                    <span>-{formatINR(totals.totalDiscount)}</span>
+                  </div>
+                )}
+                {isInterstate ? (
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">IGST</span>
+                    <span>{formatINR(totals.totalIgst)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">CGST</span>
+                      <span>{formatINR(totals.totalCgst)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">SGST</span>
+                      <span>{formatINR(totals.totalSgst)}</span>
+                    </div>
+                  </>
+                )}
+                {totals.totalCess > 0 && (
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">Cess</span>
+                    <span>{formatINR(totals.totalCess)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-2 border-t-2 border-black font-bold text-base">
+                  <span>Grand Total</span>
+                  <span>{formatINR(totals.grandTotal)}</span>
+                </div>
+                <p className="text-xs text-gray-500 italic mt-1">
+                  {amountInWords(totals.grandTotal)}
+                </p>
+              </div>
+            </div>
+            {/* Notes, Declaration & Terms */}
+            {notes && (
+              <div className="mb-2">
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Notes
+                </p>
+                <p className="text-sm text-gray-700">{notes}</p>
+              </div>
+            )}
+            {declaration && (
+              <div className="mb-2 p-2 border border-gray-200 rounded bg-gray-50">
+                <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                  Declaration
+                </p>
+                <p className="text-sm text-gray-700 italic">{declaration}</p>
+              </div>
+            )}
+            {termsConditions && (
+              <div className="mb-2">
+                <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                  Terms &amp; Conditions
+                </p>
+                <div className="text-sm text-gray-700 whitespace-pre-line">
+                  {termsConditions}
+                </div>
+              </div>
+            )}
           </div>
-          {/* Notes, Declaration & Terms */}
-          {notes && (
-            <div className="mb-2">
-              <p className="text-xs font-semibold uppercase text-gray-500">
-                Notes
-              </p>
-              <p className="text-sm text-gray-700">{notes}</p>
-            </div>
-          )}
-          {declaration && (
-            <div className="mb-2 p-2 border border-gray-200 rounded bg-gray-50">
-              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
-                Declaration
-              </p>
-              <p className="text-sm text-gray-700 italic">{declaration}</p>
-            </div>
-          )}
-          {termsConditions && (
-            <div className="mb-2">
-              <p className="text-xs font-semibold uppercase text-gray-500 mb-1">
-                Terms &amp; Conditions
-              </p>
-              <div className="text-sm text-gray-700 whitespace-pre-line">
-                {termsConditions}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
+        </div>,
+        document.body,
+      )}
       {/* Actions */}
       <div className="flex justify-end gap-3 no-print">
         <Button

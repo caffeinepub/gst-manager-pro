@@ -23,7 +23,10 @@ export function AppLayout({
       <AppSidebar currentPage={currentPage} onNavigate={onNavigate} />
       <SidebarInset>
         <Header currentPage={currentPage} onNavigate={onNavigate} />
-        <main className="flex-1 overflow-auto px-4 py-4 sm:p-6 animate-fade-in pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-6">
+        <main
+          className="flex-1 overflow-auto overscroll-none px-4 py-4 sm:p-6 animate-fade-in pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-6"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        >
           {children}
         </main>
         <BottomNav currentPage={currentPage} onNavigate={onNavigate} />
