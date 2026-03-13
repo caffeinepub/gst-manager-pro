@@ -254,7 +254,8 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
           <span
             className="hidden lg:block text-sm font-semibold text-foreground"
             style={{
-              fontFamily: '"Cinzel", "Playfair Display", Georgia, serif',
+              fontFamily:
+                '"Huxley Titling", "Cinzel", "Playfair Display", Georgia, serif',
             }}
           >
             {profile?.businessName || localName}

@@ -1,9 +1,7 @@
 import type { Invoice } from "@/types/gst";
 import { amountInWords, formatINR } from "@/utils/formatting";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
-const HUXLEY_FONT = "helvetica"; // jsPDF built-in; Cinzel not embeddable but we style the name
+const HUXLEY_FONT = "helvetica";
 const NAVY = [30, 58, 95] as [number, number, number];
 const WHITE = [255, 255, 255] as [number, number, number];
 const GRAY = [100, 100, 100] as [number, number, number];
@@ -28,7 +26,7 @@ export interface PDFExportOptions {
   businessGstin?: string;
   businessAddress?: string;
   businessContact?: string;
-  logo?: string; // base64 data URL
+  logo?: string;
   partyName?: string;
   partyGstin?: string;
   partyAddress?: string;
@@ -36,17 +34,66 @@ export interface PDFExportOptions {
   termsConditions?: string;
 }
 
-export function downloadInvoicePDF(opts: PDFExportOptions) {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+// biome-ignore lint/suspicious/noExplicitAny: jsPDF CDN types
+type JsPDFDoc = any;
+// biome-ignore lint/suspicious/noExplicitAny: jsPDF CDN types
+type AutoTableFn = (doc: JsPDFDoc, opts: any) => void;
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+async function getJsPDF(): Promise<{
+  JsPDF: new (opts: object) => JsPDFDoc;
+  autoTable: AutoTableFn;
+}> {
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global check
+  const w = window as any;
+  if (!w.jspdf) {
+    await loadScript(
+      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+    );
+  }
+  if (!w.jspdf?.jsPDF) throw new Error("jsPDF failed to load from CDN");
+
+  if (!w.jspdf.API?.autoTable) {
+    await loadScript(
+      "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
+    );
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const autoTableFn: AutoTableFn = (doc: JsPDFDoc, opts: any) => {
+    doc.autoTable(opts);
+  };
+
+  return { JsPDF: w.jspdf.jsPDF, autoTable: autoTableFn };
+}
+
+export async function downloadInvoicePDF(opts: PDFExportOptions) {
+  const { JsPDF, autoTable } = await getJsPDF();
+  const doc: JsPDFDoc = new JsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 14;
   let y = 14;
 
-  // ── Header band ──────────────────────────────────────────────
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageW, 32, "F");
 
-  // Logo
   if (opts.logo?.startsWith("data:")) {
     try {
       const format = opts.logo.includes("png") ? "PNG" : "JPEG";
@@ -56,7 +103,6 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     }
   }
 
-  // Business name
   const nameX = opts.logo ? margin + 26 : margin;
   doc.setTextColor(...WHITE);
   doc.setFont(HUXLEY_FONT, "bold");
@@ -73,7 +119,6 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     doc.text(opts.businessAddress, nameX, 26, { maxWidth: 100 });
   }
 
-  // Invoice type label (top right)
   const label =
     TYPE_LABELS[opts.invoice.type] ?? opts.invoice.type.toUpperCase();
   doc.setFont(HUXLEY_FONT, "bold");
@@ -97,7 +142,6 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
 
   y = 38;
 
-  // ── Bill To section ──────────────────────────────────────────
   if (opts.partyName) {
     doc.setFillColor(...LIGHT);
     doc.roundedRect(margin, y, pageW - 2 * margin, 22, 2, 2, "F");
@@ -124,7 +168,6 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     y += 26;
   }
 
-  // ── Line items table ─────────────────────────────────────────
   const rows = opts.invoice.lineItems
     .filter((l) => l.description)
     .map((l) => [
@@ -170,11 +213,8 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     margin: { left: margin, right: margin },
   });
 
-  y =
-    (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-      .finalY + 6;
+  y = doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 6 : y + 40;
 
-  // ── Totals block ─────────────────────────────────────────────
   const inv = opts.invoice;
   const totalsData: [string, string][] = [];
   if (inv.subtotal) totalsData.push(["Subtotal", formatINR(inv.subtotal)]);
@@ -207,14 +247,12 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     y += 7;
   });
 
-  // Amount in words
   doc.setTextColor(...GRAY);
   doc.setFont(HUXLEY_FONT, "italic");
   doc.setFontSize(7.5);
   doc.text(amountInWords(inv.grandTotal), margin, y + 2);
   y += 8;
 
-  // ── Declaration & Terms ──────────────────────────────────────
   if (opts.declaration) {
     doc.setTextColor(60, 60, 60);
     doc.setFont(HUXLEY_FONT, "bold");
@@ -238,7 +276,6 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
     y += 9 + lines.length * 3.5;
   }
 
-  // ── Footer ───────────────────────────────────────────────────
   const pageH = doc.internal.pageSize.getHeight();
   doc.setFillColor(...NAVY);
   doc.rect(0, pageH - 8, pageW, 8, "F");
@@ -252,18 +289,22 @@ export function downloadInvoicePDF(opts: PDFExportOptions) {
   doc.save(`${inv.invoiceNumber}.pdf`);
 }
 
-export function downloadReportPDF(
+export async function downloadReportPDF(
   title: string,
   headers: string[],
   rows: (string | number)[][],
   businessName: string,
   logo?: string,
 ) {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const { JsPDF, autoTable } = await getJsPDF();
+  const doc: JsPDFDoc = new JsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 14;
 
-  // Header band
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageW, 20, "F");
 

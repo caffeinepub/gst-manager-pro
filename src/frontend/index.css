@@ -37,6 +37,15 @@
   font-style: normal;
   font-display: swap;
 }
+/* Huxley Titling - Business name branding (local font) */
+@font-face {
+  font-family: "Huxley Titling";
+  src: url("/assets/Huxley Titling.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 
 @layer base {
   :root {
@@ -122,9 +131,9 @@
 }
 
 @layer components {
-  /* Brand font — Playfair Display (Huxley Titling substitute) */
+  /* Brand font — Huxley Titling (with fallbacks) */
   .font-brand {
-    font-family: "Playfair Display", "Georgia", "Times New Roman", serif;
+    font-family: "Huxley Titling", "Cinzel", "Playfair Display", Georgia, serif;
     letter-spacing: 0.02em;
   }
 
@@ -209,7 +218,7 @@
       padding-bottom: 12px;
     }
     .print-invoice-header .business-name {
-      font-family: "Cinzel", "Playfair Display", "Georgia", serif;
+      font-family: "Huxley Titling", "Cinzel", "Playfair Display", "Georgia", serif;
       font-size: 20pt;
       font-weight: 700;
       color: #1e3a5f;

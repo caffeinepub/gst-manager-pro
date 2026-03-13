@@ -1,3 +1,7 @@
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import * as XLSX from "xlsx";
+
 // ──────────────────────────────────────────────
 // CSV Export
 // ──────────────────────────────────────────────
@@ -31,20 +35,17 @@ export function exportToJSON(data: unknown, filename: string): void {
 // ──────────────────────────────────────────────
 // Excel (XLSX via SheetJS)
 // ──────────────────────────────────────────────
-export async function exportToExcel(
+export function exportToExcel(
   data: Record<string, unknown>[],
   filename: string,
   sheetName = "Sheet1",
-): Promise<void> {
+): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const XLSX = (await import("xlsx" as any)) as any;
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${filename}.xlsx`);
   } catch {
-    // Fallback to HTML-table XLS trick if XLSX fails
     exportToXLS(data, filename);
   }
 }
@@ -68,15 +69,6 @@ export async function exportToPDF(
   filename: string,
 ): Promise<void> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [h2cMod, jspdfMod] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      import("html2canvas" as any) as Promise<any>,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      import("jspdf" as any) as Promise<any>,
-    ]);
-    const html2canvas = h2cMod.default ?? h2cMod;
-    const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default?.jsPDF ?? jspdfMod.default;
     const element = document.getElementById(elementId);
     if (!element) {
       console.warn(`[exportToPDF] Element #${elementId} not found`);
@@ -128,12 +120,15 @@ export function printElement(elementId: string): void {
   }
   win.document.write(`
     <html><head><title>Print</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.cdnfonts.com/css/huxley-titling" rel="stylesheet">
     <style>
       body { font-family: Georgia, serif; font-size: 11pt; color: #000; }
       table { width: 100%; border-collapse: collapse; }
       th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 9pt; }
       th { background: #1e3a5f; color: white; }
-      .business-name { font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 700; color: #1e3a5f; }
+      .business-name { font-family: 'Huxley Titling', 'Cinzel', Georgia, serif; font-size: 20pt; font-weight: 700; color: #1e3a5f; }
       .section-title { font-size: 14pt; font-weight: bold; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; margin: 12px 0 6px; padding-bottom: 4px; }
       @page { margin: 0.5in; size: A4; }
     </style></head><body>
@@ -145,7 +140,7 @@ export function printElement(elementId: string): void {
   setTimeout(() => {
     win.print();
     win.close();
-  }, 500);
+  }, 600);
 }
 
 // ──────────────────────────────────────────────

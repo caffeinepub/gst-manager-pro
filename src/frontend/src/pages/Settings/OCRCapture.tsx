@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { createWorker } from "tesseract.js";
 
 interface OcrField {
   value: string;
@@ -75,21 +74,18 @@ function parseInvoiceNo(text: string): OcrField {
 }
 
 function parseDate(text: string): OcrField {
-  // dd/mm/yyyy or dd-mm-yyyy
   const dmy = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
   if (dmy) {
     const [, d, m, y] = dmy;
     const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
     return { value: iso, confidence: 88 };
   }
-  // yyyy-mm-dd
   const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   if (iso) return { value: iso[0], confidence: 88 };
   return { value: new Date().toISOString().split("T")[0], confidence: 30 };
 }
 
 function parseAmount(text: string): OcrField {
-  // Look for grand total / total amount
   const patterns = [
     /(?:grand\s*total|total\s*amount|net\s*payable|amount\s*payable|total\s*due|total\s*invoice)[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
     /(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
@@ -101,7 +97,6 @@ function parseAmount(text: string): OcrField {
       return { value: val, confidence: 75 };
     }
   }
-  // Fallback: largest number in text
   const numbers = [...text.matchAll(/[\d,]{4,}(?:\.\d{1,2})?/g)]
     .map((x) => Number.parseFloat(x[0].replace(/,/g, "")))
     .filter((n) => n > 0);
@@ -130,10 +125,9 @@ function parseHSN(text: string): OcrField {
   ];
   const codes = [...new Set(hsnMatches.map((m) => m[1]))];
   if (codes.length) return { value: codes.join(", "), confidence: 85 };
-  // Fallback: standalone 4-8 digit numbers that look like HSN
   const standalone = [...text.matchAll(/\b([0-9]{4,8})\b/g)]
     .map((x) => x[1])
-    .filter((n) => !/^(20\d{2}|19\d{2})$/.test(n)) // exclude years
+    .filter((n) => !/^(20\d{2}|19\d{2})$/.test(n))
     .slice(0, 3);
   if (standalone.length)
     return { value: standalone.join(", "), confidence: 40 };
@@ -141,13 +135,11 @@ function parseHSN(text: string): OcrField {
 }
 
 function parseVendorName(text: string): OcrField {
-  // Look for "From", "Supplier", "Seller", "Vendor" labels
   const labeled = text.match(
     /(?:from|supplier|seller|vendor|billed\s*by|sold\s*by)[\s:\-]+([A-Z][A-Za-z0-9\s\.&,'-]{3,60}?)(?:\n|\r|,|GSTIN|GST)/i,
   );
   if (labeled?.[1]) return { value: labeled[1].trim(), confidence: 78 };
 
-  // Use first non-empty line that looks like a company name (has caps, 3+ chars)
   const lines = text
     .split(/\n/)
     .map((l) => l.trim())
@@ -166,16 +158,87 @@ function parseVendorName(text: string): OcrField {
 }
 
 function parseText(rawText: string): OcrResult {
-  const text = rawText;
   return {
-    vendorName: parseVendorName(text),
-    invoiceNo: parseInvoiceNo(text),
-    date: parseDate(text),
-    amount: parseAmount(text),
-    gstin: parseGSTIN(text),
-    hsnCodes: parseHSN(text),
-    taxAmount: parseTaxAmount(text),
+    vendorName: parseVendorName(rawText),
+    invoiceNo: parseInvoiceNo(rawText),
+    date: parseDate(rawText),
+    amount: parseAmount(rawText),
+    gstin: parseGSTIN(rawText),
+    hsnCodes: parseHSN(rawText),
+    taxAmount: parseTaxAmount(rawText),
   };
+}
+
+// ─── CDN dynamic loaders ─────────────────────────────────────────────────────
+
+const PDFJS_VERSION = "3.11.174";
+const TESSERACT_VERSION = "5.0.4";
+
+// biome-ignore lint/suspicious/noExplicitAny: CDN module cache
+let _pdfjsLib: any = null;
+
+// biome-ignore lint/suspicious/noExplicitAny: CDN module cache
+let _tesseract: any = null;
+
+// Load PDF.js via script tag (UMD build exposes window.pdfjsLib)
+// biome-ignore lint/suspicious/noExplicitAny: CDN global
+async function getPdfjsLib(): Promise<any> {
+  if (_pdfjsLib) return _pdfjsLib;
+  try {
+    await loadScript(
+      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`,
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: CDN global
+    const lib = (window as any).pdfjsLib;
+    if (!lib) throw new Error("pdfjsLib not found on window after script load");
+    lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+    _pdfjsLib = lib;
+    return lib;
+  } catch {
+    throw new Error(
+      `Failed to load PDF.js ${PDFJS_VERSION} from CDN. Check your network connection.`,
+    );
+  }
+}
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+async function getTesseract(): Promise<{
+  createWorker: (
+    lang: string,
+    oem?: number,
+    options?: Record<string, string>,
+  ) => Promise<{
+    recognize: (
+      src: HTMLCanvasElement | string,
+    ) => Promise<{ data: { text: string } }>;
+    terminate: () => Promise<void>;
+  }>;
+}> {
+  if (_tesseract) return _tesseract;
+  await loadScript(
+    `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
+  );
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const lib = (window as any).Tesseract;
+  if (!lib)
+    throw new Error(
+      `Tesseract.js ${TESSERACT_VERSION} failed to load from CDN`,
+    );
+  _tesseract = lib;
+  return lib;
 }
 
 // ─── PDF → canvas ─────────────────────────────────────────────────────────────
@@ -184,28 +247,26 @@ async function pdfToCanvas(
   file: File,
   onProgress?: (page: number, total: number) => void,
 ): Promise<HTMLCanvasElement> {
-  const pdfjsLib = await import("pdfjs-dist");
-  // Use CDN worker to avoid broken ?url import pattern
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+  const pdfjsLib = await getPdfjsLib();
 
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  // biome-ignore lint/suspicious/noExplicitAny: pdfjs-dist CDN types
+  const pdf = await (pdfjsLib as any).getDocument({ data: arrayBuffer })
+    .promise;
   const totalPages = pdf.numPages;
 
-  // Use first page for OCR (most invoice data is on page 1)
   const pageNum = 1;
   onProgress?.(pageNum, totalPages);
 
   const page = await pdf.getPage(pageNum);
-  const viewport = page.getViewport({ scale: 2.5 }); // higher scale = better OCR
+  const viewport = page.getViewport({ scale: 2.5 });
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext("2d")!;
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  // Apply grayscale pre-processing to improve OCR accuracy
+  // Grayscale pre-processing for better OCR accuracy
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
@@ -241,29 +302,38 @@ export function OCRCapture() {
     setProgress(5);
     setResult(null);
     setErrorMessage(null);
-    setStatusText("Loading document...");
+    setStatusText("Loading OCR libraries...");
 
     try {
-      let imageSource: File | HTMLCanvasElement = file;
+      let imageSource: HTMLCanvasElement | string;
 
       if (file.type === "application/pdf") {
-        setStatusText("Rendering PDF page...");
-        setProgress(15);
+        setStatusText("Loading PDF renderer...");
+        setProgress(10);
         imageSource = await pdfToCanvas(file, (page, total) => {
           setStatusText(`Processing page ${page} of ${total}...`);
-          setProgress(15 + Math.round((page / total) * 15));
+          setProgress(10 + Math.round((page / total) * 20));
         });
         setProgress(30);
+      } else {
+        // For images, convert File to object URL
+        imageSource = URL.createObjectURL(file);
+        setProgress(20);
       }
 
-      setStatusText("Starting OCR engine...");
+      setStatusText("Loading OCR engine...");
       setProgress(35);
 
-      const worker = await createWorker("eng");
+      const Tesseract = await getTesseract();
+      const worker = await Tesseract.createWorker("eng", 1, {
+        workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+        corePath:
+          "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
+      });
 
       setStatusText("Recognizing text...");
 
-      // Progress polling since v5 createWorker API doesn't expose logger in same way
       let pollInterval: ReturnType<typeof setInterval> | null = null;
       let fakeProgress = 35;
       pollInterval = setInterval(() => {
@@ -276,6 +346,9 @@ export function OCRCapture() {
 
       if (pollInterval) clearInterval(pollInterval);
       await worker.terminate();
+
+      // Clean up object URL if we created one
+      if (typeof imageSource === "string") URL.revokeObjectURL(imageSource);
 
       setProgress(97);
       setStatusText("Parsing fields...");

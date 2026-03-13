@@ -2,7 +2,8 @@ import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
 import { useBusinessProfile } from "@/hooks/useQueries";
 import { ShieldCheck } from "lucide-react";
 
-const HUXLEY_FONT = '"Cinzel", "Playfair Display", Georgia, serif';
+const HUXLEY_FONT =
+  '"Huxley Titling", "Cinzel", "Playfair Display", Georgia, serif';
 
 interface BusinessHeaderProps {
   /** print: full-width print layout; sidebar: compact 32x32 logo+name; page: medium header */
