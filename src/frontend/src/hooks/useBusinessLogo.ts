@@ -5,6 +5,8 @@ const LOGO_KEY = "gst_business_logo";
 const EXTENDED_PROFILE_KEY = "gst_extended_profile";
 const LOCAL_BUSINESS_NAME_KEY = "gst_local_business_name";
 
+const DEFAULT_LOGO = "/assets/uploads/MILITIS-Logo-1M-1-1.JPG";
+
 export interface ExtendedBusinessProfile {
   tradeName: string;
   pan: string;
@@ -55,7 +57,7 @@ export function useBusinessLogo() {
     setLogo("");
   }, [setLogo]);
 
-  return { logo, saveLogo, clearLogo };
+  return { logo: logo || DEFAULT_LOGO, saveLogo, clearLogo };
 }
 
 export function useExtendedProfile() {
