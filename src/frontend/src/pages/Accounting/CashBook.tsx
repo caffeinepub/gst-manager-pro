@@ -35,7 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBankAccounts, useBankTransactions } from "@/hooks/useGSTStore";
+import {
+  useAuditLogs,
+  useBankAccounts,
+  useBankTransactions,
+} from "@/hooks/useGSTStore";
 import type { BankTransaction } from "@/types/gst";
 import { formatDate, formatINR, today } from "@/utils/formatting";
 import { Banknote, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
@@ -46,6 +50,7 @@ export function CashBook() {
   const { accounts } = useBankAccounts();
   const { transactions, addTransaction, deleteTransaction } =
     useBankTransactions();
+  const { addLog } = useAuditLogs();
   const [showDialog, setShowDialog] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [filterAccount, setFilterAccount] = useState("all");
@@ -76,6 +81,12 @@ export function CashBook() {
     }
 
     addTransaction({ ...form, balance: form.credit - form.debit });
+    addLog({
+      action: "create",
+      entity: "CashBook",
+      entityId: "",
+      description: `Cash entry: ${form.description || "Transaction"} (Dr: ${form.debit}, Cr: ${form.credit})`,
+    });
     toast.success("Transaction added");
     setShowDialog(false);
     setForm({

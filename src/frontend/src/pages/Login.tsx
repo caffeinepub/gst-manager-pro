@@ -85,7 +85,10 @@ export function Login() {
         </div>
 
         {/* Right: Login Card */}
-        <Card className="bg-card border-border/70 shadow-card w-full max-w-sm mx-auto md:max-w-none">
+        <Card
+          className="bg-card border-border/70 shadow-card w-full max-w-sm mx-auto md:max-w-none"
+          data-ocid="login.card"
+        >
           <CardContent className="pt-8 pb-8 px-6 sm:px-8 space-y-6">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
@@ -120,7 +123,7 @@ export function Login() {
               onClick={login}
               disabled={isLoggingIn}
               className="w-full h-11 gap-2 text-base font-semibold"
-              data-ocid="login.primary_button"
+              data-ocid="login.submit_button"
             >
               {isLoggingIn ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

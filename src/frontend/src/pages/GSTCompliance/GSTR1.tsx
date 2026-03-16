@@ -207,11 +207,177 @@ export function GSTR1() {
             <Button
               variant="outline"
               onClick={() => {
+                // Build proper GSTN GSTR-1 schema
+                // B2B: grouped by buyer GSTIN
+                const b2bGrouped = b2b.reduce<Record<string, object[]>>(
+                  (acc, inv) => {
+                    const gstin = inv.partyGstin;
+                    if (!acc[gstin]) acc[gstin] = [];
+                    acc[gstin].push({
+                      inum: inv.invoiceNumber,
+                      idt: inv.date,
+                      val: inv.grandTotal,
+                      pos: inv.placeOfSupply,
+                      rchrg: "N",
+                      inv: inv.lineItems.map((li) => ({
+                        num: 1,
+                        itm_det: {
+                          txval:
+                            li.qty *
+                            li.unitPrice *
+                            (1 - li.discountPercent / 100),
+                          rt: li.gstRate,
+                          camt: li.cgst,
+                          samt: li.sgst,
+                          iamt: li.igst,
+                          csamt: li.cess,
+                        },
+                      })),
+                    });
+                    return acc;
+                  },
+                  {},
+                );
+                const b2bSchema = Object.entries(b2bGrouped).map(
+                  ([ctin, inv]) => ({
+                    ctin,
+                    inv,
+                  }),
+                );
+
+                // B2CS: small B2C supplies (no GSTIN, taxable value per inv)
+                const b2csGrouped = b2c.reduce<
+                  Record<
+                    string,
+                    {
+                      txval: number;
+                      rt: number;
+                      iamt: number;
+                      camt: number;
+                      samt: number;
+                      csamt: number;
+                    }
+                  >
+                >((acc, inv) => {
+                  const key = `${inv.placeOfSupply}-${inv.lineItems[0]?.gstRate ?? 0}`;
+                  if (!acc[key])
+                    acc[key] = {
+                      txval: 0,
+                      rt: inv.lineItems[0]?.gstRate ?? 0,
+                      iamt: 0,
+                      camt: 0,
+                      samt: 0,
+                      csamt: 0,
+                    };
+                  acc[key].txval += inv.subtotal - inv.totalDiscount;
+                  acc[key].iamt += inv.totalIgst;
+                  acc[key].camt += inv.totalCgst;
+                  acc[key].samt += inv.totalSgst;
+                  acc[key].csamt += inv.totalCess;
+                  return acc;
+                }, {});
+                const b2csSchema = Object.entries(b2csGrouped).map(
+                  ([key, val]) => ({
+                    sply_ty: "INTRA",
+                    pos: key.split("-")[0],
+                    typ: "OE",
+                    ...val,
+                  }),
+                );
+
+                // HSN Summary: aggregated by HSN code
+                const hsnMap = new Map<
+                  string,
+                  {
+                    hsn_sc: string;
+                    desc: string;
+                    uqc: string;
+                    qty: number;
+                    val: number;
+                    txval: number;
+                    iamt: number;
+                    camt: number;
+                    samt: number;
+                    csamt: number;
+                  }
+                >();
+                for (const inv of [...b2b, ...b2c]) {
+                  for (const li of inv.lineItems) {
+                    const hsn = li.hsnSacCode || "0000";
+                    const existing = hsnMap.get(hsn);
+                    const taxable =
+                      li.qty * li.unitPrice * (1 - li.discountPercent / 100);
+                    if (existing) {
+                      existing.qty += li.qty;
+                      existing.val += li.lineTotal;
+                      existing.txval += taxable;
+                      existing.iamt += li.igst;
+                      existing.camt += li.cgst;
+                      existing.samt += li.sgst;
+                      existing.csamt += li.cess;
+                    } else {
+                      hsnMap.set(hsn, {
+                        hsn_sc: hsn,
+                        desc: li.description || hsn,
+                        uqc: li.unit || "NOS",
+                        qty: li.qty,
+                        val: li.lineTotal,
+                        txval: taxable,
+                        iamt: li.igst,
+                        camt: li.cgst,
+                        samt: li.sgst,
+                        csamt: li.cess,
+                      });
+                    }
+                  }
+                }
+
+                // CDNR: Credit/Debit notes for registered buyers
+                const cdnrSchema = [...creditNotes, ...debitNotes]
+                  .filter((inv) => inv.partyGstin)
+                  .reduce<Record<string, object[]>>((acc, inv) => {
+                    if (!acc[inv.partyGstin]) acc[inv.partyGstin] = [];
+                    acc[inv.partyGstin].push({
+                      ntNum: inv.invoiceNumber,
+                      ntdt: inv.date,
+                      ntty: inv.type === "credit_note" ? "C" : "D",
+                      rsn: inv.creditDebitReason || "01",
+                      val: inv.grandTotal,
+                      nt: inv.lineItems.map((li) => ({
+                        num: 1,
+                        itm_det: {
+                          txval:
+                            li.qty *
+                            li.unitPrice *
+                            (1 - li.discountPercent / 100),
+                          rt: li.gstRate,
+                          camt: li.cgst,
+                          samt: li.sgst,
+                          iamt: li.igst,
+                          csamt: li.cess,
+                        },
+                      })),
+                    });
+                    return acc;
+                  }, {});
+
                 const exportData = {
-                  b2b,
-                  b2c,
-                  cdnr: [...creditNotes, ...debitNotes],
-                  period: `${dateFrom} to ${dateTo}`,
+                  version: "GST3.0.4",
+                  hash: "hash",
+                  gstin: "",
+                  fp: dateFrom.slice(0, 7).replace("-", ""),
+                  gt: [...b2b, ...b2c].reduce((s, i) => s + i.grandTotal, 0),
+                  cur_gt: [...b2b, ...b2c].reduce(
+                    (s, i) => s + i.grandTotal,
+                    0,
+                  ),
+                  b2b: b2bSchema,
+                  b2cs: b2csSchema,
+                  hsn: { data: Array.from(hsnMap.values()) },
+                  cdnr: Object.entries(cdnrSchema).map(([ctin, nt]) => ({
+                    ctin,
+                    nt,
+                  })),
                 };
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], {
                   type: "application/json",

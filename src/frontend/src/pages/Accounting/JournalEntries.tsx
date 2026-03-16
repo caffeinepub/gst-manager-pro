@@ -29,7 +29,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useInvoiceCounter, useJournalEntries } from "@/hooks/useGSTStore";
+import {
+  useAuditLogs,
+  useInvoiceCounter,
+  useJournalEntries,
+} from "@/hooks/useGSTStore";
 import { CHART_OF_ACCOUNTS } from "@/types/gst";
 import type { JournalEntry, JournalLine } from "@/types/gst";
 import { formatDate, formatINR, today } from "@/utils/formatting";
@@ -53,6 +57,7 @@ const emptyLine = (): JournalLine => ({
 export function JournalEntries() {
   const { entries, addEntry, deleteEntry } = useJournalEntries();
   const { getNextNumber } = useInvoiceCounter();
+  const { addLog } = useAuditLogs();
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -111,7 +116,7 @@ export function JournalEntries() {
       return;
     }
 
-    addEntry({
+    const entryId = addEntry({
       entryNumber: form.entryNumber,
       date: form.date,
       reference: form.reference,
@@ -119,6 +124,12 @@ export function JournalEntries() {
       lines: form.lines.filter((l) => l.accountCode && l.amount > 0),
       totalDebit,
       totalCredit,
+    });
+    addLog({
+      entity: "Journal",
+      action: "create",
+      entityId: entryId as string,
+      description: `Created journal entry ${form.entryNumber}`,
     });
     toast.success("Journal entry saved");
     setShowForm(false);
@@ -471,6 +482,12 @@ export function JournalEntries() {
               onClick={() => {
                 if (deleteId) {
                   deleteEntry(deleteId);
+                  addLog({
+                    entity: "Journal",
+                    action: "delete",
+                    entityId: deleteId,
+                    description: `Deleted journal entry ${deleteId}`,
+                  });
                   toast.success("Entry deleted");
                   setDeleteId(null);
                 }

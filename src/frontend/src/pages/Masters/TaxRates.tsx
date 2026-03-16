@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuditLogs } from "@/hooks/useGSTStore";
 import {
   useAddTaxRate,
   useDeleteTaxRate,
@@ -55,6 +56,8 @@ export function TaxRates() {
   const { mutate: addTaxRate, isPending: isAdding } = useAddTaxRate();
   const { mutate: updateTaxRate, isPending: isUpdating } = useUpdateTaxRate();
   const { mutate: deleteTaxRate, isPending: isDeleting } = useDeleteTaxRate();
+
+  const { addLog } = useAuditLogs();
 
   const [showDialog, setShowDialog] = useState(false);
   const [editingRate, setEditingRate] = useState<TaxRate | null>(null);
@@ -86,6 +89,12 @@ export function TaxRates() {
         {
           onSuccess: () => {
             toast.success("Tax rate updated");
+            addLog({
+              action: "update",
+              entity: "TaxRate",
+              entityId: String(editingRate?.id ?? ""),
+              description: `Tax rate "${form.name}" updated`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to update tax rate"),
@@ -97,6 +106,12 @@ export function TaxRates() {
         {
           onSuccess: () => {
             toast.success("Tax rate added");
+            addLog({
+              action: "create",
+              entity: "TaxRate",
+              entityId: "",
+              description: `Tax rate "${form.name}" created`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to add tax rate"),
@@ -431,6 +446,12 @@ export function TaxRates() {
                 if (deleteId !== null) {
                   deleteTaxRate(deleteId, {
                     onSuccess: () => {
+                      addLog({
+                        action: "delete",
+                        entity: "TaxRate",
+                        entityId: String(deleteId ?? ""),
+                        description: "Tax rate deleted",
+                      });
                       toast.success("Tax rate deleted");
                       setDeleteId(null);
                     },

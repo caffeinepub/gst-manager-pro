@@ -30,9 +30,10 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
+  Upload,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface MatchResult {
@@ -46,7 +47,7 @@ interface MatchResult {
 
 export function BankReconciliation() {
   const { accounts } = useBankAccounts();
-  const { transactions } = useBankTransactions();
+  const { transactions, addTransaction } = useBankTransactions();
   const { invoices } = useInvoices();
   const { start: defaultStart, end: defaultEnd } = getCurrentMonth();
 
@@ -57,6 +58,8 @@ export function BankReconciliation() {
     MatchResult[] | null
   >(null);
   const [isAutoMatching, setIsAutoMatching] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -134,6 +137,98 @@ export function BankReconciliation() {
     }, 1500);
   };
 
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const lines = text.split("\n").filter((l) => l.trim());
+        if (lines.length < 2) {
+          toast.error("CSV must have a header row and at least one data row");
+          setIsImporting(false);
+          return;
+        }
+        const headers = lines[0]
+          .split(",")
+          .map((h) => h.trim().toLowerCase().replace(/"/g, ""));
+        const dateIdx = headers.findIndex((h) => h.includes("date"));
+        const descIdx = headers.findIndex(
+          (h) =>
+            h.includes("desc") ||
+            h.includes("narration") ||
+            h.includes("particulars"),
+        );
+        const debitIdx = headers.findIndex(
+          (h) => h.includes("debit") || h.includes("withdrawal"),
+        );
+        const creditIdx = headers.findIndex(
+          (h) => h.includes("credit") || h.includes("deposit"),
+        );
+        const balanceIdx = headers.findIndex((h) => h.includes("balance"));
+        if (dateIdx === -1 || creditIdx === -1) {
+          toast.error("CSV must have Date and Credit columns");
+          setIsImporting(false);
+          return;
+        }
+        let imported = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i]
+            .split(",")
+            .map((c) => c.trim().replace(/"/g, ""));
+          const dateRaw = cols[dateIdx] || "";
+          const desc = cols[descIdx >= 0 ? descIdx : 1] || `Import row ${i}`;
+          const debit =
+            debitIdx >= 0
+              ? Number(cols[debitIdx].replace(/[^0-9.]/g, "")) || 0
+              : 0;
+          const credit =
+            creditIdx >= 0
+              ? Number(cols[creditIdx].replace(/[^0-9.]/g, "")) || 0
+              : 0;
+          const balance =
+            balanceIdx >= 0
+              ? Number(cols[balanceIdx].replace(/[^0-9.]/g, "")) || 0
+              : 0;
+          if (!dateRaw || (debit === 0 && credit === 0)) continue;
+          // Parse date DD/MM/YYYY or MM/DD/YYYY or YYYY-MM-DD
+          let parsedDate = dateRaw;
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateRaw)) {
+            const [d, m, y] = dateRaw.split("/");
+            parsedDate = `${y}-${m}-${d}`;
+          } else if (/^\d{2}-\d{2}-\d{4}$/.test(dateRaw)) {
+            const [d, m, y] = dateRaw.split("-");
+            parsedDate = `${y}-${m}-${d}`;
+          }
+          addTransaction({
+            accountId:
+              selectedAccountId !== "all"
+                ? selectedAccountId
+                : accounts[0]?.id || "",
+            date: parsedDate,
+            description: desc,
+            reference: `CSV-${i}`,
+            debit,
+            credit,
+            balance,
+            reconciled: false,
+          });
+          imported++;
+        }
+        toast.success(
+          `Imported ${imported} transaction${imported !== 1 ? "s" : ""} from CSV`,
+        );
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } catch {
+        toast.error("Failed to parse CSV file. Please check the format.");
+      }
+      setIsImporting(false);
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="space-y-4" data-ocid="reconciliation.section">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -154,6 +249,28 @@ export function BankReconciliation() {
           )}
           Auto-Match
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isImporting}
+          className="gap-2"
+          data-ocid="reconciliation.import.upload_button"
+        >
+          {isImporting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          Import CSV
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleCSVImport}
+          data-ocid="reconciliation.csv.dropzone"
+        />
       </div>
 
       {/* Summary KPI Cards */}

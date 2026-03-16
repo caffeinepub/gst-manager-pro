@@ -37,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuditLogs } from "@/hooks/useGSTStore";
 import {
   PartyType,
   useAddParty,
@@ -78,6 +79,8 @@ export function Parties() {
   const { mutate: addParty, isPending: isAdding } = useAddParty();
   const { mutate: updateParty, isPending: isUpdating } = useUpdateParty();
   const { mutate: deleteParty, isPending: isDeleting } = useDeleteParty();
+
+  const { addLog } = useAuditLogs();
 
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
@@ -159,6 +162,12 @@ export function Parties() {
         {
           onSuccess: () => {
             toast.success("Party updated");
+            addLog({
+              action: "update",
+              entity: "Party",
+              entityId: String(editingParty?.id ?? ""),
+              description: `Party "${form.name}" updated`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to update party"),
@@ -170,6 +179,12 @@ export function Parties() {
         {
           onSuccess: () => {
             toast.success("Party added");
+            addLog({
+              action: "create",
+              entity: "Party",
+              entityId: "",
+              description: `Party "${form.name}" created`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to add party"),
@@ -577,6 +592,12 @@ export function Parties() {
                   deleteParty(deleteId, {
                     onSuccess: () => {
                       toast.success("Party deleted");
+                      addLog({
+                        action: "delete",
+                        entity: "Party",
+                        entityId: String(deleteId ?? ""),
+                        description: "Party deleted",
+                      });
                       setDeleteId(null);
                     },
                     onError: () => toast.error("Failed to delete party"),

@@ -147,7 +147,16 @@ export function useJournalEntries() {
     [setEntries],
   );
 
-  return { entries, addEntry, deleteEntry };
+  const updateEntry = useCallback(
+    (id: string, updates: Partial<JournalEntry>) => {
+      setEntries((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, ...updates } : e)),
+      );
+    },
+    [setEntries],
+  );
+
+  return { entries, addEntry, updateEntry, deleteEntry };
 }
 
 export function useBankAccounts() {
@@ -210,7 +219,16 @@ export function useBankTransactions() {
     [setTransactions],
   );
 
-  return { transactions, addTransaction, deleteTransaction };
+  const updateTransaction = useCallback(
+    (id: string, updates: Partial<BankTransaction>) => {
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+      );
+    },
+    [setTransactions],
+  );
+
+  return { transactions, addTransaction, updateTransaction, deleteTransaction };
 }
 
 export function useAuditLogs() {

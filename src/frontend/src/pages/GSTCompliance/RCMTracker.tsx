@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePurchases } from "@/hooks/useGSTStore";
+import { useAuditLogs, usePurchases } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
 import { CheckCircle2, PiggyBank } from "lucide-react";
@@ -18,6 +18,7 @@ import { useMemo } from "react";
 export function RCMTracker() {
   const { purchases } = usePurchases();
   const [paidRcm, setPaidRcm] = useLocalStorage<string[]>("rcm_paid_ids", []);
+  const { addLog } = useAuditLogs();
 
   const rcmPurchases = useMemo(
     () => purchases.filter((p) => p.isRcm && p.status === "confirmed"),
@@ -38,6 +39,12 @@ export function RCMTracker() {
 
   const markPaid = (id: string) => {
     setPaidRcm((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    addLog({
+      action: "approve",
+      entity: "RCM",
+      entityId: id,
+      description: "RCM tax marked as paid",
+    });
   };
 
   return (

@@ -1,6 +1,57 @@
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import * as XLSX from "xlsx";
+// CDN loaders for optional heavy libraries
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: CDN global
+async function getXLSX(): Promise<any> {
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const w = window as any;
+  if (!w.XLSX) {
+    await loadScript(
+      "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js",
+    );
+  }
+  if (!w.XLSX) throw new Error("SheetJS XLSX failed to load from CDN");
+  return w.XLSX;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: CDN global
+async function getHtml2Canvas(): Promise<any> {
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const w = window as any;
+  if (!w.html2canvas) {
+    await loadScript(
+      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+    );
+  }
+  if (!w.html2canvas) throw new Error("html2canvas failed to load from CDN");
+  return w.html2canvas;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: CDN global
+async function getCDNJsPDF(): Promise<any> {
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const w = window as any;
+  if (!w.jspdf?.jsPDF) {
+    await loadScript(
+      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+    );
+  }
+  if (!w.jspdf?.jsPDF) throw new Error("jsPDF failed to load from CDN");
+  return w.jspdf.jsPDF;
+}
 
 // ──────────────────────────────────────────────
 // CSV Export
@@ -33,14 +84,15 @@ export function exportToJSON(data: unknown, filename: string): void {
 }
 
 // ──────────────────────────────────────────────
-// Excel (XLSX via SheetJS)
+// Excel (XLSX via SheetJS CDN)
 // ──────────────────────────────────────────────
-export function exportToExcel(
+export async function exportToExcel(
   data: Record<string, unknown>[],
   filename: string,
   sheetName = "Sheet1",
-): void {
+): Promise<void> {
   try {
+    const XLSX = await getXLSX();
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -62,7 +114,7 @@ function exportToXLS(data: Record<string, unknown>[], filename: string): void {
 }
 
 // ──────────────────────────────────────────────
-// PDF Export (html2canvas + jsPDF)
+// PDF Export (html2canvas + jsPDF via CDN)
 // ──────────────────────────────────────────────
 export async function exportToPDF(
   elementId: string,
@@ -74,14 +126,19 @@ export async function exportToPDF(
       console.warn(`[exportToPDF] Element #${elementId} not found`);
       return;
     }
-    const canvas = await html2canvas(element, {
+    const [html2canvas, JsPDF] = await Promise.all([
+      getHtml2Canvas(),
+      getCDNJsPDF(),
+    ]);
+    // biome-ignore lint/suspicious/noExplicitAny: CDN types
+    const canvas = await (html2canvas as any)(element, {
       scale: 2,
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
     });
     const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
+    const pdf = new JsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const imgWidth = pageWidth - 20;

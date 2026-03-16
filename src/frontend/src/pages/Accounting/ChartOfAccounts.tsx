@@ -36,7 +36,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type CustomAccount, useCustomAccounts } from "@/hooks/useGSTStore";
+import {
+  type CustomAccount,
+  useAuditLogs,
+  useCustomAccounts,
+} from "@/hooks/useGSTStore";
 import { CHART_OF_ACCOUNTS } from "@/types/gst";
 import { BookMarked, Edit, Lock, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -63,6 +67,7 @@ const emptyForm = {
 };
 
 export function ChartOfAccounts() {
+  const { addLog } = useAuditLogs();
   const { customAccounts, addAccount, updateAccount, deleteAccount } =
     useCustomAccounts();
   const [filter, setFilter] = useState<FilterType>("all");
@@ -112,6 +117,12 @@ export function ChartOfAccounts() {
       code: form.code.trim(),
       name: form.name.trim(),
       type: form.type,
+    });
+    addLog({
+      action: "create",
+      entity: "ChartOfAccount",
+      entityId: form.code,
+      description: `Account ${form.code} - ${form.name} created`,
     });
     toast.success(`Account ${form.code} - ${form.name} created`);
     setForm(emptyForm);
@@ -450,6 +461,12 @@ export function ChartOfAccounts() {
               onClick={() => {
                 if (deleteId) {
                   deleteAccount(deleteId);
+                  addLog({
+                    action: "delete",
+                    entity: "ChartOfAccount",
+                    entityId: String(deleteId),
+                    description: "Account deleted",
+                  });
                   toast.success("Account deleted");
                   setDeleteId(null);
                 }

@@ -10,7 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInvoices } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import {
+  getDaysUntil,
+  getGSTR1DueDate,
+  getGSTR3BDueDate,
+} from "@/utils/formatting";
 import {
   AlertCircle,
   Bell,
@@ -22,7 +28,7 @@ import {
   Settings,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 interface Workflow {
@@ -134,11 +140,53 @@ const categoryColors: Record<string, string> = {
 };
 
 export function WorkflowAutomation() {
+  const { invoices } = useInvoices();
   const [workflowStates, setWorkflowStates] = useLocalStorage<WorkflowStates>(
     "gst_workflow_states",
     defaultStates,
   );
   const [runningId, setRunningId] = useState<string | null>(null);
+
+  // Real-data computed alerts
+  const alerts = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const gstr1Due = getGSTR1DueDate();
+    const gstr3bDue = getGSTR3BDueDate();
+    const daysToGSTR1 = getDaysUntil(gstr1Due);
+    const daysToGSTR3B = getDaysUntil(gstr3bDue);
+
+    const overdueInvoices = invoices.filter(
+      (inv) =>
+        ["sales", "service"].includes(inv.type) &&
+        inv.status === "confirmed" &&
+        inv.dueDate < today,
+    );
+
+    const eWayExpiring = invoices.filter(
+      (inv) =>
+        inv.type === "eway_bill" &&
+        inv.status === "confirmed" &&
+        inv.dueDate <= today,
+    );
+
+    return {
+      gstr1: {
+        daysLeft: daysToGSTR1,
+        dueDate: gstr1Due,
+        urgent: daysToGSTR1 <= 7,
+      },
+      gstr3b: {
+        daysLeft: daysToGSTR3B,
+        dueDate: gstr3bDue,
+        urgent: daysToGSTR3B <= 7,
+      },
+      overdue: {
+        count: overdueInvoices.length,
+        urgent: overdueInvoices.length > 0,
+      },
+      eWay: { count: eWayExpiring.length, urgent: eWayExpiring.length > 0 },
+    };
+  }, [invoices]);
 
   const toggleWorkflow = (id: string) => {
     setWorkflowStates((prev) => ({
@@ -195,6 +243,77 @@ export function WorkflowAutomation() {
         </div>
       </div>
 
+      {/* Real-Time Alerts */}
+      {(alerts.gstr1.urgent ||
+        alerts.gstr3b.urgent ||
+        alerts.overdue.urgent ||
+        alerts.eWay.urgent) && (
+        <Card className="bg-destructive/5 border-destructive/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-4 h-4" />
+              Active Alerts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {alerts.gstr1.urgent && (
+              <div
+                className="flex items-center gap-2 text-sm"
+                data-ocid="workflow.gstr1.alert"
+              >
+                <Badge variant="destructive" className="text-xs shrink-0">
+                  {alerts.gstr1.daysLeft <= 0
+                    ? "Overdue"
+                    : `${alerts.gstr1.daysLeft}d left`}
+                </Badge>
+                <span>
+                  GSTR-1 filing due <strong>{alerts.gstr1.dueDate}</strong>
+                </span>
+              </div>
+            )}
+            {alerts.gstr3b.urgent && (
+              <div
+                className="flex items-center gap-2 text-sm"
+                data-ocid="workflow.gstr3b.alert"
+              >
+                <Badge variant="destructive" className="text-xs shrink-0">
+                  {alerts.gstr3b.daysLeft <= 0
+                    ? "Overdue"
+                    : `${alerts.gstr3b.daysLeft}d left`}
+                </Badge>
+                <span>
+                  GSTR-3B filing due <strong>{alerts.gstr3b.dueDate}</strong>
+                </span>
+              </div>
+            )}
+            {alerts.overdue.urgent && (
+              <div
+                className="flex items-center gap-2 text-sm"
+                data-ocid="workflow.overdue.alert"
+              >
+                <Badge variant="destructive" className="text-xs shrink-0">
+                  {alerts.overdue.count} overdue
+                </Badge>
+                <span>
+                  Confirmed invoices past due date — follow up on payments
+                </span>
+              </div>
+            )}
+            {alerts.eWay.urgent && (
+              <div
+                className="flex items-center gap-2 text-sm"
+                data-ocid="workflow.eway.alert"
+              >
+                <Badge variant="destructive" className="text-xs shrink-0">
+                  {alerts.eWay.count} expiring
+                </Badge>
+                <span>e-Way bills have reached their due date</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Card */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-card border-border/70">
@@ -230,17 +349,27 @@ export function WorkflowAutomation() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-border/70">
+        <Card
+          className={`border-border/70 ${alerts.gstr1.urgent || alerts.gstr3b.urgent ? "bg-destructive/5 border-destructive/20" : "bg-card"}`}
+        >
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-chart-3/10 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-chart-3" />
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center ${alerts.gstr1.urgent ? "bg-destructive/10" : "bg-chart-3/10"}`}
+            >
+              <Bell
+                className={`w-5 h-5 ${alerts.gstr1.urgent ? "text-destructive" : "text-chart-3"}`}
+              />
             </div>
             <div>
               <p className="text-sm font-cabinet font-bold text-foreground leading-snug">
-                11th of Next Month
+                {alerts.gstr1.daysLeft <= 0
+                  ? "GSTR-1 Overdue!"
+                  : alerts.gstr1.daysLeft <= 7
+                    ? `GSTR-1: ${alerts.gstr1.daysLeft}d left`
+                    : `GSTR-1: ${alerts.gstr1.dueDate}`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Next Scheduled Run
+                Next Filing Deadline
               </p>
             </div>
           </CardContent>
@@ -360,7 +489,8 @@ export function WorkflowAutomation() {
             <span className="text-chart-2 font-medium">Note: </span>
             Workflow automation runs are simulated in this environment. In
             production, these would connect to your Email/SMS gateway for actual
-            notifications. All workflow states are persisted locally.
+            notifications. All workflow states are persisted locally. Alerts
+            above are computed from your real invoice and filing data.
           </p>
         </CardContent>
       </Card>

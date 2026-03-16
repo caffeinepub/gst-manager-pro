@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBankAccounts } from "@/hooks/useGSTStore";
+import { useAuditLogs, useBankAccounts } from "@/hooks/useGSTStore";
 import type { BankAccount } from "@/types/gst";
 import { formatINR } from "@/utils/formatting";
 import { Edit, Landmark, Plus, Trash2 } from "lucide-react";
@@ -52,6 +52,7 @@ const emptyAccount: Omit<BankAccount, "id" | "createdAt"> = {
 };
 
 export function BankAccounts() {
+  const { addLog } = useAuditLogs();
   const { accounts, addAccount, updateAccount, deleteAccount } =
     useBankAccounts();
   const [showDialog, setShowDialog] = useState(false);
@@ -82,9 +83,21 @@ export function BankAccounts() {
     }
     if (editingAccount) {
       updateAccount(editingAccount.id, form);
+      addLog({
+        action: "update",
+        entity: "BankAccount",
+        entityId: String(editingAccount?.id ?? ""),
+        description: `Bank account "${form.bankName}" updated`,
+      });
       toast.success("Account updated");
     } else {
       addAccount(form);
+      addLog({
+        action: "create",
+        entity: "BankAccount",
+        entityId: "",
+        description: `Bank account "${form.bankName}" added`,
+      });
       toast.success("Account added");
     }
     setShowDialog(false);
@@ -331,6 +344,12 @@ export function BankAccounts() {
               onClick={() => {
                 if (deleteId) {
                   deleteAccount(deleteId);
+                  addLog({
+                    action: "delete",
+                    entity: "BankAccount",
+                    entityId: String(deleteId),
+                    description: "Bank account deleted",
+                  });
                   toast.success("Account deleted");
                   setDeleteId(null);
                 }

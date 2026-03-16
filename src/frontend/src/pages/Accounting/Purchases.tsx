@@ -36,7 +36,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInvoiceCounter, usePurchases } from "@/hooks/useGSTStore";
+import {
+  useAuditLogs,
+  useInvoiceCounter,
+  usePurchases,
+} from "@/hooks/useGSTStore";
 import { useItems, useParties } from "@/hooks/useQueries";
 import {
   GST_RATES,
@@ -104,6 +108,7 @@ export function Purchases() {
   const { data: parties = [] } = useParties();
   const { data: items = [] } = useItems();
   const { getNextNumber } = useInvoiceCounter();
+  const { addLog } = useAuditLogs();
 
   const [showForm, setShowForm] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
@@ -285,9 +290,21 @@ export function Purchases() {
 
     if (editingPurchase) {
       updatePurchase(editingPurchase.id, data);
+      addLog({
+        entity: "Purchases",
+        action: "update",
+        entityId: editingPurchase.id,
+        description: `Updated purchase ${data.billNumber}`,
+      });
       toast.success("Purchase updated");
     } else {
-      addPurchase(data);
+      const newId = addPurchase(data);
+      addLog({
+        entity: "Purchases",
+        action: "create",
+        entityId: newId as string,
+        description: `Created purchase ${data.billNumber}`,
+      });
       toast.success("Purchase recorded");
     }
     setShowForm(false);
@@ -934,6 +951,12 @@ export function Purchases() {
               onClick={() => {
                 if (deleteId) {
                   deletePurchase(deleteId);
+                  addLog({
+                    entity: "Purchases",
+                    action: "delete",
+                    entityId: deleteId,
+                    description: `Deleted purchase ${deleteId}`,
+                  });
                   toast.success("Purchase deleted");
                   setDeleteId(null);
                 }

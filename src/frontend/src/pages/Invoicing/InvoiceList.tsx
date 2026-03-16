@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInvoices } from "@/hooks/useGSTStore";
+import { useAuditLogs, useInvoices } from "@/hooks/useGSTStore";
 import { useSwipeToDelete } from "@/hooks/useSwipeToDelete";
 import type { Invoice, InvoiceType } from "@/types/gst";
 import { formatDate, formatINR } from "@/utils/formatting";
@@ -162,6 +162,7 @@ function SwipeableInvoiceCard({
 
 export function InvoiceList({ type }: InvoiceListProps) {
   const { invoices, deleteInvoice } = useInvoices();
+  const { addLog } = useAuditLogs();
   const [showForm, setShowForm] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>(
     undefined,
@@ -413,6 +414,12 @@ export function InvoiceList({ type }: InvoiceListProps) {
               onClick={() => {
                 if (deleteId) {
                   deleteInvoice(deleteId);
+                  addLog({
+                    entity: "Invoicing",
+                    action: "delete",
+                    entityId: deleteId,
+                    description: `Deleted invoice ${deleteId}`,
+                  });
                   toast.success("Invoice deleted");
                   setDeleteId(null);
                 }

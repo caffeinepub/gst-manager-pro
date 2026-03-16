@@ -333,6 +333,37 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       });
     }
 
+    // 6. Invalid GSTIN format (15-char: 2 digits + 5 alpha + 4 digits + 1 alpha + 1 alpha + Z + 1 alphanum)
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+    const invalidGstin = invoices.filter(
+      (inv) =>
+        inv.partyGstin &&
+        inv.status !== "cancelled" &&
+        !gstinRegex.test(inv.partyGstin),
+    );
+    for (const inv of invalidGstin) {
+      results.push({
+        severity: "Error",
+        message: `Invoice ${inv.invoiceNumber}: Invalid GSTIN format "${inv.partyGstin}"`,
+      });
+    }
+
+    // 7. GST calculation mismatch: verify tax amounts
+    for (const inv of invoices.filter(
+      (i) => i.status === "confirmed" && i.lineItems.length > 0,
+    )) {
+      const computedTotal = inv.lineItems.reduce(
+        (s, li) => s + li.lineTotal,
+        0,
+      );
+      if (Math.abs(computedTotal - inv.grandTotal) > 1) {
+        results.push({
+          severity: "Error",
+          message: `Invoice ${inv.invoiceNumber}: Grand total mismatch (expected ${formatINR(computedTotal)}, stored ${formatINR(inv.grandTotal)})`,
+        });
+      }
+    }
+
     return results;
   }, [invoices, purchases]);
 

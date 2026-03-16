@@ -37,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuditLogs } from "@/hooks/useGSTStore";
 import { ItemType } from "@/hooks/useQueries";
 import {
   useAddItem,
@@ -69,6 +70,8 @@ export function Items() {
   const { mutate: addItem, isPending: isAdding } = useAddItem();
   const { mutate: updateItem, isPending: isUpdating } = useUpdateItem();
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteItem();
+
+  const { addLog } = useAuditLogs();
 
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
@@ -107,6 +110,12 @@ export function Items() {
         {
           onSuccess: () => {
             toast.success("Item updated");
+            addLog({
+              action: "update",
+              entity: "Item",
+              entityId: String(editingItem?.id ?? ""),
+              description: `Item "${form.name}" updated`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to update item"),
@@ -118,6 +127,12 @@ export function Items() {
         {
           onSuccess: () => {
             toast.success("Item added");
+            addLog({
+              action: "create",
+              entity: "Item",
+              entityId: "",
+              description: `Item "${form.name}" created`,
+            });
             setShowDialog(false);
           },
           onError: () => toast.error("Failed to add item"),
@@ -508,6 +523,12 @@ export function Items() {
                 if (deleteId !== null) {
                   deleteItem(deleteId, {
                     onSuccess: () => {
+                      addLog({
+                        action: "delete",
+                        entity: "Item",
+                        entityId: String(deleteId ?? ""),
+                        description: "Item deleted",
+                      });
                       toast.success("Item deleted");
                       setDeleteId(null);
                     },
