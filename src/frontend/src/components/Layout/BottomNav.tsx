@@ -1,8 +1,10 @@
+import { useSidebar } from "@/components/ui/sidebar";
 import type { AppPage } from "@/types/gst";
 import {
   BarChart3,
   FileText,
   LayoutDashboard,
+  Menu,
   MessageSquare,
   ShieldCheck,
 } from "lucide-react";
@@ -50,13 +52,37 @@ const BOTTOM_NAV_ITEMS: Array<{
   },
 ];
 
+const DIRECT_NAV_PAGES = new Set<AppPage>([
+  "dashboard",
+  "invoicing-sales",
+  "gst-gstr1",
+  "reports-sales",
+  "ai-assistant",
+]);
+
 export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
+  const { setOpenMobile } = useSidebar();
+
+  const isMenuActive =
+    !DIRECT_NAV_PAGES.has(currentPage) &&
+    !currentPage.startsWith("invoicing") &&
+    !currentPage.startsWith("gst") &&
+    !currentPage.startsWith("reports");
+
+  const btnClass = (isActive: boolean) =>
+    `flex flex-shrink-0 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors min-h-[52px] min-w-[64px] touch-manipulation ${
+      isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+    }`;
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-sidebar border-t border-sidebar-border"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex items-stretch">
+      <div
+        className="flex items-stretch overflow-x-auto"
+        style={{ touchAction: "pan-x", scrollbarWidth: "none" }}
+      >
         {BOTTOM_NAV_ITEMS.map((item) => {
           const isActive =
             currentPage === item.page ||
@@ -70,11 +96,7 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
             <button
               key={item.page}
               type="button"
-              className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors min-h-[52px] touch-manipulation ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={btnClass(isActive)}
               onClick={() => onNavigate(item.page)}
               data-ocid={item.ocid}
             >
@@ -83,6 +105,17 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
             </button>
           );
         })}
+
+        {/* Menu button — opens the full sidebar drawer for all other sections */}
+        <button
+          type="button"
+          className={btnClass(isMenuActive)}
+          onClick={() => setOpenMobile(true)}
+          data-ocid="bottom_nav.menu.button"
+        >
+          <Menu className="w-5 h-5" />
+          <span>Menu</span>
+        </button>
       </div>
     </nav>
   );
