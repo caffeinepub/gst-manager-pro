@@ -54,6 +54,7 @@ import {
   Sliders,
   TrendingUp,
   Truck,
+  Upload,
   Users,
   Zap,
 } from "lucide-react";
@@ -187,6 +188,7 @@ const navItems: NavItem[] = [
       { label: "API Configuration", page: "settings-api-config", icon: Shield },
       { label: "Workflow Automation", page: "workflow-automation", icon: Zap },
       { label: "OCR Capture", page: "settings-ocr", icon: ScanLine },
+      { label: "Import Data", page: "settings-import", icon: Upload },
       { label: "Backup & Restore", page: "backup-restore", icon: Database },
       { label: "Preferences", page: "settings-preferences", icon: Sliders },
     ],

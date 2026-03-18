@@ -1,30 +1,51 @@
 # GST Manager Pro
 
 ## Current State
-OCRCapture.tsx dynamically imports `pdfjs-dist` and uses `tesseract.js` for OCR, but neither package is listed in package.json dependencies. The PDF.js worker setup uses a `?url` import that fails at runtime. This causes OCR to fail for all PDFs and images with a generic error message.
+- OCRCapture.tsx uses Tesseract.js 5.0.4 + PDF.js 3.11.174 to extract invoice data from PDFs/images
+- Extracts: vendorName, invoiceNo, date, amount, taxAmount, hsnCodes, gstin — but item descriptions are missing, date/amount/tax patterns are unreliable for Indian invoices
+- After OCR, only one save option: "Create Purchase Entry" via sessionStorage prefill — no Sales Invoice, Proforma, Credit/Debit Note options
+- No Data Import module exists anywhere
 
 ## Requested Changes (Diff)
 
 ### Add
-- `tesseract.js` and `pdfjs-dist` as proper package.json dependencies
-- Real progress bar with page-by-page status during OCR
-- Detailed error surfacing showing actual failure reason
-- Retry button without re-uploading the file
+- Item/service description line extraction in OCR (parse line item rows from PDF text, extract description, HSN, qty, rate, amount)
+- Full editable review form after OCR with all fields: vendor, GSTIN, invoice no, date, line items table (description, HSN, qty, unit, rate, GST rate), tax breakdown, grand total
+- Document type selector in OCR review form: Sales Invoice, Service Invoice, Proforma Invoice, Purchase Entry, Credit Note, Debit Note, Quotation
+- Direct save to the selected module using useGSTStore hooks (addInvoice / addPurchase)
+- New "Import Data" page under Settings (route: settings-import)
+  - Supports Excel (.xlsx), CSV, JSON file uploads
+  - Modules: Parties, Items, Sales Invoices, Purchase Entries, Chart of Accounts, CashBook Transactions
+  - Merge mode: skip duplicates (matched by invoice number / party name / account code)
+  - Show import preview table and summary (imported / skipped / errors) before confirming
+- Add "Import Data" link in Settings sidebar and AppSidebar navigation
 
 ### Modify
-- OCRCapture.tsx: Fix PDF.js worker initialization using CDN URL instead of broken `?url` import
-- OCRCapture.tsx: Improve robustness of PDF-to-canvas pipeline
-- OCRCapture.tsx: Add image pre-processing (grayscale + contrast boost) for better accuracy
-- OCRCapture.tsx: Show actual error reason in UI instead of generic message
-- package.json: Add `tesseract.js` and `pdfjs-dist` dependencies
+- OCR date regex: add support for written dates ("05 Feb 2026", "February 5, 2026", "5th February 2026")
+- OCR amount regex: improve grand total detection ("Amount Payable", "Net Payable", "Total Due", "Invoice Total", "Balance Due", "Total Payable")
+- OCR tax regex: sum CGST + SGST + IGST individually and present as separate fields in review form
+- OCR item extraction: scan PDF text for tabular line item patterns (description followed by HSN, qty, rate, amount on same/adjacent line)
+- Save flow: replace sessionStorage prefill approach with direct in-component save using useGSTStore
+- App.tsx: add route for settings-import
+- AppSidebar.tsx: add "Import Data" menu item under Settings section
 
 ### Remove
-- Broken `pdfjs-dist/build/pdf.worker.mjs?url` import pattern
+- sessionStorage ocr_prefill hack (replaced by direct save)
 
 ## Implementation Plan
-1. Add `tesseract.js@^5.0.0` and `pdfjs-dist@^4.0.0` to package.json
-2. Rewrite pdfToCanvas() using CDN worker URL for PDF.js
-3. Add canvas pre-processing (grayscale) before Tesseract
-4. Add per-page progress tracking for multi-page PDFs
-5. Surface actual error message in UI with retry capability
-6. Add retry state so user can retry without re-uploading
+1. Rewrite OCRCapture.tsx:
+   a. Improved regex extraction (dates, amounts, taxes, item descriptions)
+   b. Line item parser: detect table rows in OCR text, extract description/HSN/qty/rate per row
+   c. Build full editable review form (React state for all fields, line items editable table)
+   d. Document type selector dropdown
+   e. Save handler: construct Invoice or Purchase object and call addInvoice/addPurchase
+2. Create new DataImport.tsx page under src/pages/Settings/:
+   a. File upload with format detection (xlsx/csv/json)
+   b. Module selector (which data type is being imported)
+   c. Template download links (sample CSV/Excel per module)
+   d. Parse uploaded file into preview table
+   e. Duplicate detection logic per module
+   f. Confirm import: write to useGSTStore, show summary
+3. Update App.tsx: add settings-import route
+4. Update AppSidebar.tsx: add Import Data nav item under Settings
+5. Update AppPage type in gst.ts to include 'settings-import'

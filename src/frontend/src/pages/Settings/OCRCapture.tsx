@@ -9,14 +9,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
-  AlertTriangle,
-  CheckCircle2,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import type { InvoiceLineItem, InvoiceType } from "@/types/gst";
+import { GST_RATES } from "@/types/gst";
+import {
   FileImage,
   FileText,
   Loader2,
+  Minus,
+  Plus,
   RefreshCw,
+  Save,
   ScanLine,
   Upload,
   X,
@@ -25,181 +43,50 @@ import {
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
-interface OcrField {
-  value: string;
-  confidence: number; // 0-100
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TESSERACT_VERSION = "5.0.4";
+const PDFJS_VERSION = "3.11.174";
+
+let _tesseract: any = null;
+let _pdfjs: any = null;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LineItem {
+  description: string;
+  hsnSacCode: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  gstRate: number;
 }
 
-interface OcrResult {
-  vendorName: OcrField;
-  invoiceNo: OcrField;
-  date: OcrField;
-  amount: OcrField;
-  gstin: OcrField;
-  hsnCodes: OcrField;
-  taxAmount: OcrField;
-}
-
-interface EditableResult {
+interface OCRResult {
   vendorName: string;
+  gstin: string;
   invoiceNo: string;
   date: string;
-  amount: string;
-  gstin: string;
-  hsnCodes: string;
-  taxAmount: string;
+  lineItems: LineItem[];
+  subtotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalTax: number;
+  grandTotal: number;
+  confidence: number;
 }
 
-// ─── Text parsers ────────────────────────────────────────────────────────────
+type DocType =
+  | "purchase"
+  | "sales"
+  | "service"
+  | "proforma"
+  | "credit_note"
+  | "debit_note"
+  | "quotation";
 
-function parseGSTIN(text: string): OcrField {
-  const match = text.match(
-    /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/i,
-  );
-  return match
-    ? { value: match[1].toUpperCase(), confidence: 92 }
-    : { value: "", confidence: 0 };
-}
-
-function parseInvoiceNo(text: string): OcrField {
-  const patterns = [
-    /(?:invoice\s*(?:no\.?|number|#)|inv\s*(?:no\.?|#)|bill\s*(?:no\.?|number|#)|tax\s*invoice\s*(?:no\.?|#))\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
-    /(?:^|\s)((?:[A-Z]{2,}-)?\d{4,}(?:\/\d+)?)(?:\s|$)/m,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m?.[1]) return { value: m[1].trim(), confidence: 80 };
-  }
-  return { value: "", confidence: 0 };
-}
-
-function parseDate(text: string): OcrField {
-  const dmy = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
-  if (dmy) {
-    const [, d, m, y] = dmy;
-    const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-    return { value: iso, confidence: 88 };
-  }
-  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (iso) return { value: iso[0], confidence: 88 };
-  return { value: new Date().toISOString().split("T")[0], confidence: 30 };
-}
-
-function parseAmount(text: string): OcrField {
-  const patterns = [
-    /(?:grand\s*total|total\s*amount|net\s*payable|amount\s*payable|total\s*due|total\s*invoice)[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m?.[1]) {
-      const val = m[1].replace(/,/g, "");
-      return { value: val, confidence: 75 };
-    }
-  }
-  const numbers = [...text.matchAll(/[\d,]{4,}(?:\.\d{1,2})?/g)]
-    .map((x) => Number.parseFloat(x[0].replace(/,/g, "")))
-    .filter((n) => n > 0);
-  if (numbers.length) {
-    const max = Math.max(...numbers);
-    return { value: String(max), confidence: 40 };
-  }
-  return { value: "", confidence: 0 };
-}
-
-function parseTaxAmount(text: string): OcrField {
-  const patterns = [
-    /(?:total\s*(?:gst|tax)|cgst\s*\+\s*sgst|igst|total\s*cgst|total\s*sgst)[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /(?:cgst|sgst|igst)[\s:\-]*(?:@\d+%)?[\s:\-]*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m?.[1]) return { value: m[1].replace(/,/g, ""), confidence: 72 };
-  }
-  return { value: "", confidence: 0 };
-}
-
-function parseHSN(text: string): OcrField {
-  const hsnMatches = [
-    ...text.matchAll(/(?:hsn|sac|hsn\/sac)[\s:\.\-]*([0-9]{4,8})/gi),
-  ];
-  const codes = [...new Set(hsnMatches.map((m) => m[1]))];
-  if (codes.length) return { value: codes.join(", "), confidence: 85 };
-  const standalone = [...text.matchAll(/\b([0-9]{4,8})\b/g)]
-    .map((x) => x[1])
-    .filter((n) => !/^(20\d{2}|19\d{2})$/.test(n))
-    .slice(0, 3);
-  if (standalone.length)
-    return { value: standalone.join(", "), confidence: 40 };
-  return { value: "", confidence: 0 };
-}
-
-function parseVendorName(text: string): OcrField {
-  const labeled = text.match(
-    /(?:from|supplier|seller|vendor|billed\s*by|sold\s*by)[\s:\-]+([A-Z][A-Za-z0-9\s\.&,'-]{3,60}?)(?:\n|\r|,|GSTIN|GST)/i,
-  );
-  if (labeled?.[1]) return { value: labeled[1].trim(), confidence: 78 };
-
-  const lines = text
-    .split(/\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  for (const line of lines.slice(0, 8)) {
-    if (
-      line.length >= 3 &&
-      line.length <= 80 &&
-      /[A-Z]/.test(line) &&
-      !/^(invoice|bill|tax|gst|date|no\.|from|to)/i.test(line)
-    ) {
-      return { value: line, confidence: 55 };
-    }
-  }
-  return { value: "", confidence: 0 };
-}
-
-function parseText(rawText: string): OcrResult {
-  return {
-    vendorName: parseVendorName(rawText),
-    invoiceNo: parseInvoiceNo(rawText),
-    date: parseDate(rawText),
-    amount: parseAmount(rawText),
-    gstin: parseGSTIN(rawText),
-    hsnCodes: parseHSN(rawText),
-    taxAmount: parseTaxAmount(rawText),
-  };
-}
-
-// ─── CDN dynamic loaders ─────────────────────────────────────────────────────
-
-const PDFJS_VERSION = "3.11.174";
-const TESSERACT_VERSION = "5.0.4";
-
-// biome-ignore lint/suspicious/noExplicitAny: CDN module cache
-let _pdfjsLib: any = null;
-
-// biome-ignore lint/suspicious/noExplicitAny: CDN module cache
-let _tesseract: any = null;
-
-// Load PDF.js via script tag (UMD build exposes window.pdfjsLib)
-// biome-ignore lint/suspicious/noExplicitAny: CDN global
-async function getPdfjsLib(): Promise<any> {
-  if (_pdfjsLib) return _pdfjsLib;
-  try {
-    await loadScript(
-      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`,
-    );
-    // biome-ignore lint/suspicious/noExplicitAny: CDN global
-    const lib = (window as any).pdfjsLib;
-    if (!lib) throw new Error("pdfjsLib not found on window after script load");
-    lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
-    _pdfjsLib = lib;
-    return lib;
-  } catch {
-    throw new Error(
-      `Failed to load PDF.js ${PDFJS_VERSION} from CDN. Check your network connection.`,
-    );
-  }
-}
+// ─── Script Loader ────────────────────────────────────────────────────────────
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -210,72 +97,346 @@ function loadScript(src: string): Promise<void> {
     const s = document.createElement("script");
     s.src = src;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    s.onerror = () => reject(new Error(`Failed to load: ${src}`));
     document.head.appendChild(s);
   });
 }
 
-async function getTesseract(): Promise<{
-  createWorker: (
-    lang: string,
-    oem?: number,
-    options?: Record<string, string>,
-  ) => Promise<{
-    recognize: (
-      src: HTMLCanvasElement | string,
-    ) => Promise<{ data: { text: string } }>;
-    terminate: () => Promise<void>;
-  }>;
-}> {
+async function getTesseract() {
   if (_tesseract) return _tesseract;
   await loadScript(
     `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
   );
   // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const lib = (window as any).Tesseract;
-  if (!lib)
-    throw new Error(
-      `Tesseract.js ${TESSERACT_VERSION} failed to load from CDN`,
-    );
+  if (!lib) throw new Error(`Tesseract.js ${TESSERACT_VERSION} failed to load`);
   _tesseract = lib;
   return lib;
 }
 
-// ─── PDF → canvas ─────────────────────────────────────────────────────────────
+async function getPdfjsLib() {
+  if (_pdfjs) return _pdfjs;
+  await loadScript(
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.js`,
+  );
+  // biome-ignore lint/suspicious/noExplicitAny: CDN global
+  const lib = (window as any).pdfjsLib;
+  if (!lib) throw new Error(`PDF.js ${PDFJS_VERSION} failed to load`);
+  lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.js`;
+  _pdfjs = lib;
+  return lib;
+}
+
+// ─── PDF → Canvas ────────────────────────────────────────────────────────────
 
 async function pdfToCanvas(
   file: File,
   onProgress?: (page: number, total: number) => void,
 ): Promise<HTMLCanvasElement> {
   const pdfjsLib = await getPdfjsLib();
-
   const arrayBuffer = await file.arrayBuffer();
-  // biome-ignore lint/suspicious/noExplicitAny: pdfjs-dist CDN types
+  // biome-ignore lint/suspicious/noExplicitAny: pdfjs types
   const pdf = await (pdfjsLib as any).getDocument({ data: arrayBuffer })
     .promise;
   const totalPages = pdf.numPages;
-
-  const pageNum = 1;
-  onProgress?.(pageNum, totalPages);
-
-  const page = await pdf.getPage(pageNum);
+  onProgress?.(1, totalPages);
+  const page = await pdf.getPage(1);
   const viewport = page.getViewport({ scale: 2.5 });
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext("2d")!;
   await page.render({ canvasContext: ctx, viewport }).promise;
-
-  // Grayscale pre-processing for better OCR accuracy
+  // Grayscale pre-processing
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    data[i] = data[i + 1] = data[i + 2] = gray;
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = gray;
   }
   ctx.putImageData(imageData, 0, 0);
-
   return canvas;
+}
+
+// ─── Text Parsers ─────────────────────────────────────────────────────────────
+
+const MONTH_MAP: Record<string, string> = {
+  jan: "01",
+  january: "01",
+  feb: "02",
+  february: "02",
+  mar: "03",
+  march: "03",
+  apr: "04",
+  april: "04",
+  may: "05",
+  jun: "06",
+  june: "06",
+  jul: "07",
+  july: "07",
+  aug: "08",
+  august: "08",
+  sep: "09",
+  september: "09",
+  oct: "10",
+  october: "10",
+  nov: "11",
+  november: "11",
+  dec: "12",
+  december: "12",
+};
+
+function parseDate(text: string): string {
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  // ISO already
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return iso[0];
+  // Written: "05 Feb 2026", "5th Feb 2026", "5 February 2026"
+  const written = text.match(
+    /(\d{1,2})(?:st|nd|rd|th)?\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember))[,\.\s]+(\d{4})/i,
+  );
+  if (written) {
+    const [, d, m, y] = written;
+    const mo = MONTH_MAP[m.toLowerCase().slice(0, 3)];
+    if (mo) return `${y}-${mo}-${d.padStart(2, "0")}`;
+  }
+  // Month-first: "February 5, 2026" or "Feb 5 2026"
+  const mFirst = text.match(
+    /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember))\s+(\d{1,2})[,\.\s]+(\d{4})/i,
+  );
+  if (mFirst) {
+    const [, m, d, y] = mFirst;
+    const mo = MONTH_MAP[m.toLowerCase().slice(0, 3)];
+    if (mo) return `${y}-${mo}-${d.padStart(2, "0")}`;
+  }
+  return new Date().toISOString().split("T")[0];
+}
+
+function parseGSTIN(text: string): string {
+  const m = text.match(/\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/i);
+  return m ? m[1].toUpperCase() : "";
+}
+
+function parseInvoiceNo(text: string): string {
+  const patterns = [
+    /(?:invoice\s*(?:no\.?|number|#)|inv\s*(?:no\.?|#)|bill\s*(?:no\.?|number|#)|tax\s*invoice\s*(?:no\.?|#))\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:^|\s)((?:[A-Z]{2,}-)?\d{4,}(?:\/\d+)?)(?:\s|$)/m,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m?.[1]) return m[1].trim();
+  }
+  return "";
+}
+
+function parseVendorName(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  // Try to find after "Bill From", "Vendor", "Supplier" labels
+  for (const line of lines) {
+    const m = line.match(
+      /(?:bill\s*from|vendor|supplier|sold\s*by)[:\s]+(.+)/i,
+    );
+    if (m) return m[1].trim();
+  }
+  // Heuristic: first non-trivial line (not the invoice header)
+  for (const line of lines.slice(0, 6)) {
+    if (
+      line.length > 5 &&
+      !/invoice|gst|tax|gstin|receipt|bill/i.test(line) &&
+      !/^\d/.test(line)
+    ) {
+      return line;
+    }
+  }
+  return "";
+}
+
+function parseAmount(text: string, label: RegExp): number {
+  // Search for label then grab number on same line or next line
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (label.test(lines[i])) {
+      // Try same line first
+      const same = lines[i].match(
+        /(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/i,
+      );
+      if (same) return Number.parseFloat(same[1].replace(/,/g, ""));
+      // Try next line
+      if (i + 1 < lines.length) {
+        const next = lines[i + 1].match(
+          /(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/,
+        );
+        if (next) return Number.parseFloat(next[1].replace(/,/g, ""));
+      }
+    }
+  }
+  return 0;
+}
+
+function parseTaxAmounts(text: string): {
+  cgst: number;
+  sgst: number;
+  igst: number;
+} {
+  const extract = (label: RegExp): number => {
+    const m = text.match(
+      new RegExp(
+        `${label.source}[\\s\\S]{0,50}?([\\d,]+(?:\\.\\d{1,2})?)`,
+        "i",
+      ),
+    );
+    return m ? Number.parseFloat(m[1].replace(/,/g, "")) : 0;
+  };
+  return {
+    cgst: extract(/cgst|central\s*gst/i),
+    sgst: extract(/sgst|state\s*gst/i),
+    igst: extract(/igst|integrated\s*gst/i),
+  };
+}
+
+function parseLineItems(text: string): LineItem[] {
+  const lines = text.split("\n").map((l) => l.trim());
+  const items: LineItem[] = [];
+
+  // Find table header row index
+  let headerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (
+      /description|particulars|item\s*name|product/i.test(lines[i]) &&
+      /hsn|sac|qty|quantity/i.test(lines[i])
+    ) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  if (headerIdx === -1) {
+    // Try looser search - just has "description" or "particulars"
+    for (let i = 0; i < lines.length; i++) {
+      if (/^(?:.*\s+)?(description|particulars|item\s*name)/i.test(lines[i])) {
+        headerIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (headerIdx === -1) return items;
+
+  // Scan lines after header until footer keywords
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (
+      /^(?:sub\s*total|subtotal|grand\s*total|total\s*amount|net\s*payable|amount\s*payable|total\s*due|cgst|sgst|igst|tax|discount)/i.test(
+        line,
+      )
+    )
+      break;
+    if (!line || line.length < 5) continue;
+    // Skip if looks like a header repeat
+    if (/description|hsn.*qty|sr\.?\s*no/i.test(line)) continue;
+
+    // Try to parse: description (text), HSN (4-8 digits), qty (num), rate (num), amount (num)
+    const nums = [...line.matchAll(/(\d+(?:[,.]\d+)*)/g)].map((m) =>
+      Number.parseFloat(m[1].replace(/,/g, "")),
+    );
+    const hsnMatch = line.match(/\b(\d{4,8})\b/);
+    const descMatch = line.match(/^[\d.\s]*([A-Za-z][A-Za-z0-9\s\-\/&,]+)/);
+
+    const desc = descMatch ? descMatch[1].replace(/\d{4,}/g, "").trim() : "";
+    if (!desc || desc.length < 3) continue;
+
+    const item: LineItem = {
+      description: desc.trim(),
+      hsnSacCode: hsnMatch ? hsnMatch[1] : "",
+      qty: nums.length > 0 ? nums[0] : 1,
+      unit: "Nos",
+      unitPrice: nums.length > 1 ? nums[nums.length - 2] : 0,
+      gstRate: 18,
+    };
+    items.push(item);
+  }
+
+  return items;
+}
+
+function parseOCRText(text: string): OCRResult {
+  const vendorName = parseVendorName(text);
+  const gstin = parseGSTIN(text);
+  const invoiceNo = parseInvoiceNo(text);
+  const date = parseDate(text);
+  const lineItems = parseLineItems(text);
+
+  const grandTotal =
+    parseAmount(
+      text,
+      /grand\s*total|total\s*amount|net\s*payable|amount\s*payable|total\s*due|invoice\s*total|balance\s*due|total\s*payable|total\s*invoice\s*value/i,
+    ) ||
+    parseAmount(text, /total/i) ||
+    0;
+
+  const subtotal =
+    parseAmount(
+      text,
+      /sub\s*total|subtotal|taxable\s*amount|taxable\s*value/i,
+    ) || 0;
+
+  const { cgst, sgst, igst } = parseTaxAmounts(text);
+  const totalTax =
+    cgst + sgst + igst ||
+    (grandTotal - subtotal > 0 ? grandTotal - subtotal : 0);
+
+  const confidence = Math.round(
+    ([vendorName, gstin, invoiceNo, date].filter(Boolean).length / 4) * 100,
+  );
+
+  return {
+    vendorName,
+    gstin,
+    invoiceNo,
+    date,
+    lineItems:
+      lineItems.length > 0
+        ? lineItems
+        : [
+            {
+              description: "",
+              hsnSacCode: "",
+              qty: 1,
+              unit: "Nos",
+              unitPrice: grandTotal - totalTax || 0,
+              gstRate: 18,
+            },
+          ],
+    subtotal,
+    cgst,
+    sgst,
+    igst,
+    totalTax,
+    grandTotal,
+    confidence,
+  };
+}
+
+const DOC_TYPES: { value: DocType; label: string }[] = [
+  { value: "purchase", label: "Purchase Entry" },
+  { value: "sales", label: "Sales Invoice" },
+  { value: "service", label: "Service Invoice" },
+  { value: "proforma", label: "Proforma Invoice" },
+  { value: "credit_note", label: "Credit Note" },
+  { value: "debit_note", label: "Debit Note" },
+  { value: "quotation", label: "Quotation" },
+];
+
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -287,9 +448,24 @@ export function OCRCapture() {
   const [statusText, setStatusText] = useState("");
   const [progress, setProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [result, setResult] = useState<OcrResult | null>(null);
-  const [editedResult, setEditedResult] = useState<EditableResult | null>(null);
+  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Review form state
+  const [docType, setDocType] = useState<DocType>("purchase");
+  const [vendorName, setVendorName] = useState("");
+  const [gstin, setGstin] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [date, setDate] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [cgst, setCgst] = useState(0);
+  const [sgst, setSgst] = useState(0);
+  const [igst, setIgst] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
+
+  const { addInvoice } = useInvoices();
+  const { addPurchase } = usePurchases();
 
   const processFile = async (file: File) => {
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
@@ -300,7 +476,7 @@ export function OCRCapture() {
     setSelectedFile(file);
     setProcessing(true);
     setProgress(5);
-    setResult(null);
+    setOcrResult(null);
     setErrorMessage(null);
     setStatusText("Loading OCR libraries...");
 
@@ -316,7 +492,6 @@ export function OCRCapture() {
         });
         setProgress(30);
       } else {
-        // For images, convert File to object URL
         imageSource = URL.createObjectURL(file);
         setProgress(20);
       }
@@ -333,39 +508,37 @@ export function OCRCapture() {
       });
 
       setStatusText("Recognizing text...");
-
-      let pollInterval: ReturnType<typeof setInterval> | null = null;
       let fakeProgress = 35;
-      pollInterval = setInterval(() => {
+      const pollInterval = setInterval(() => {
         fakeProgress = Math.min(fakeProgress + 3, 90);
         setProgress(fakeProgress);
         setStatusText(`Reading text... ${fakeProgress}%`);
       }, 400);
 
       const { data } = await worker.recognize(imageSource);
-
-      if (pollInterval) clearInterval(pollInterval);
+      clearInterval(pollInterval);
       await worker.terminate();
-
-      // Clean up object URL if we created one
       if (typeof imageSource === "string") URL.revokeObjectURL(imageSource);
 
       setProgress(97);
       setStatusText("Parsing fields...");
-      const parsed = parseText(data.text);
-      setResult(parsed);
-      setEditedResult({
-        vendorName: parsed.vendorName.value,
-        invoiceNo: parsed.invoiceNo.value,
-        date: parsed.date.value,
-        amount: parsed.amount.value,
-        gstin: parsed.gstin.value,
-        hsnCodes: parsed.hsnCodes.value,
-        taxAmount: parsed.taxAmount.value,
-      });
+      const parsed = parseOCRText(data.text);
+      setOcrResult(parsed);
+
+      // Populate review form
+      setVendorName(parsed.vendorName);
+      setGstin(parsed.gstin);
+      setInvoiceNo(parsed.invoiceNo);
+      setDate(parsed.date);
+      setLineItems(parsed.lineItems);
+      setCgst(parsed.cgst);
+      setSgst(parsed.sgst);
+      setIgst(parsed.igst);
+      setGrandTotal(parsed.grandTotal);
+
       setProgress(100);
       setProcessing(false);
-      toast.success("Document scanned successfully");
+      toast.success("Document scanned — review and save below");
     } catch (err) {
       console.error("OCR error:", err);
       const message = err instanceof Error ? err.message : String(err);
@@ -388,99 +561,178 @@ export function OCRCapture() {
   };
 
   const handleRetry = () => {
-    if (selectedFile) {
-      processFile(selectedFile);
-    }
-  };
-
-  const handleCreatePurchase = () => {
-    if (!editedResult) return;
-    sessionStorage.setItem(
-      "ocr_prefill",
-      JSON.stringify({
-        vendorName: editedResult.vendorName,
-        billNumber: editedResult.invoiceNo,
-        billDate: editedResult.date,
-        grandTotal: Number(editedResult.amount),
-        vendorGstin: editedResult.gstin,
-      }),
-    );
-    toast.success(
-      "OCR data ready — go to Accounting > Purchases to create the entry",
-    );
+    if (selectedFile) processFile(selectedFile);
   };
 
   const handleClear = () => {
     setSelectedFile(null);
-    setResult(null);
-    setEditedResult(null);
+    setOcrResult(null);
     setErrorMessage(null);
     setProgress(0);
     setStatusText("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const confidenceColor = (c: number) =>
-    c >= 75 ? "text-green-600" : c >= 50 ? "text-amber-500" : "text-red-500";
+  const updateLineItem = (
+    idx: number,
+    field: keyof LineItem,
+    value: string | number,
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)),
+    );
+  };
 
-  const fields: {
-    key: keyof EditableResult;
-    label: string;
-    ocid: string;
-    resultKey: keyof OcrResult;
-  }[] = [
-    {
-      key: "vendorName",
-      label: "Vendor Name",
-      ocid: "ocr.vendorname.input",
-      resultKey: "vendorName",
-    },
-    {
-      key: "invoiceNo",
-      label: "Invoice No",
-      ocid: "ocr.invoiceno.input",
-      resultKey: "invoiceNo",
-    },
-    { key: "date", label: "Date", ocid: "ocr.date.input", resultKey: "date" },
-    {
-      key: "amount",
-      label: "Total Amount (₹)",
-      ocid: "ocr.amount.input",
-      resultKey: "amount",
-    },
-    {
-      key: "gstin",
-      label: "GSTIN",
-      ocid: "ocr.gstin.input",
-      resultKey: "gstin",
-    },
-    {
-      key: "hsnCodes",
-      label: "HSN / SAC Codes",
-      ocid: "ocr.hsncode.input",
-      resultKey: "hsnCodes",
-    },
-    {
-      key: "taxAmount",
-      label: "Tax Amount (₹)",
-      ocid: "ocr.taxamount.input",
-      resultKey: "taxAmount",
-    },
-  ];
+  const addLineItem = () => {
+    setLineItems((prev) => [
+      ...prev,
+      {
+        description: "",
+        hsnSacCode: "",
+        qty: 1,
+        unit: "Nos",
+        unitPrice: 0,
+        gstRate: 18,
+      },
+    ]);
+  };
+
+  const removeLineItem = (idx: number) => {
+    setLineItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const computedSubtotal = lineItems.reduce(
+    (sum, item) => sum + item.qty * item.unitPrice,
+    0,
+  );
+  const computedTotal = computedSubtotal + cgst + sgst + igst;
+
+  const handleSave = async () => {
+    if (!vendorName.trim()) {
+      toast.error("Vendor/Party name is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (docType === "purchase") {
+        const purchaseLineItems: InvoiceLineItem[] = lineItems.map((item) => {
+          const taxRate = item.gstRate;
+          const lineTotal = item.qty * item.unitPrice;
+          const cgstAmt = (lineTotal * (taxRate / 2)) / 100;
+          const sgstAmt = (lineTotal * (taxRate / 2)) / 100;
+          return {
+            id: generateId(),
+            itemId: "",
+            description: item.description,
+            hsnSacCode: item.hsnSacCode,
+            qty: item.qty,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            discountPercent: 0,
+            gstRate: taxRate,
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            igst: 0,
+            cessPercent: 0,
+            cess: 0,
+            lineTotal: lineTotal + cgstAmt + sgstAmt,
+          };
+        });
+        addPurchase({
+          billNumber: invoiceNo || `OCR-${Date.now()}`,
+          billDate: date || new Date().toISOString().split("T")[0],
+          dueDate: date || new Date().toISOString().split("T")[0],
+          vendorId: "",
+          vendorName: vendorName,
+          vendorGstin: gstin,
+          lineItems: purchaseLineItems,
+          subtotal: computedSubtotal,
+          totalDiscount: 0,
+          totalCgst: cgst,
+          totalSgst: sgst,
+          totalIgst: igst,
+          totalCess: 0,
+          grandTotal: grandTotal || computedTotal,
+          isRcm: false,
+          itcEligible: true,
+          status: "draft",
+          notes: "Created from OCR scan",
+        });
+        toast.success(
+          "Purchase entry saved! Navigate to Accounting > Purchases to view.",
+        );
+      } else {
+        const invoiceLineItems: InvoiceLineItem[] = lineItems.map((item) => {
+          const taxRate = item.gstRate;
+          const lineTotal = item.qty * item.unitPrice;
+          const cgstAmt = (lineTotal * (taxRate / 2)) / 100;
+          const sgstAmt = (lineTotal * (taxRate / 2)) / 100;
+          return {
+            id: generateId(),
+            itemId: "",
+            description: item.description,
+            hsnSacCode: item.hsnSacCode,
+            qty: item.qty,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            discountPercent: 0,
+            gstRate: taxRate,
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            igst: 0,
+            cessPercent: 0,
+            cess: 0,
+            lineTotal: lineTotal + cgstAmt + sgstAmt,
+          };
+        });
+        const invType: InvoiceType = docType as InvoiceType;
+        addInvoice({
+          type: invType,
+          invoiceNumber: invoiceNo || `OCR-${Date.now()}`,
+          date: date || new Date().toISOString().split("T")[0],
+          dueDate: date || new Date().toISOString().split("T")[0],
+          partyId: "",
+          partyName: vendorName,
+          partyGstin: gstin,
+          placeOfSupply: "",
+          placeOfSupplyName: "",
+          lineItems: invoiceLineItems,
+          subtotal: computedSubtotal,
+          totalDiscount: 0,
+          totalCgst: cgst,
+          totalSgst: sgst,
+          totalIgst: igst,
+          totalCess: 0,
+          grandTotal: grandTotal || computedTotal,
+          irnNumber: "",
+          eWayBillNumber: "",
+          notes: "Created from OCR scan",
+          termsConditions: "",
+          status: "draft",
+        });
+        const label =
+          DOC_TYPES.find((d) => d.value === docType)?.label ?? "Invoice";
+        toast.success(`${label} saved! Navigate to Invoicing to view.`);
+      }
+      handleClear();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="max-w-2xl space-y-6" data-ocid="ocr.section">
+    <div className="max-w-5xl space-y-6" data-ocid="ocr.section">
       <div>
         <h2 className="text-lg font-semibold">OCR / Document Capture</h2>
         <p className="text-sm text-muted-foreground">
-          Upload an invoice image or PDF to automatically extract vendor,
-          invoice number, amount, and GST details. All fields can be edited
-          before saving.
+          Upload a PDF or image invoice to automatically extract vendor,
+          amounts, GST, and line items. Review and edit all fields before
+          saving.
         </p>
       </div>
 
       {/* Upload Area */}
-      {!result && !errorMessage && (
+      {!ocrResult && !errorMessage && (
         <Card className="bg-card border-border/70">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -540,10 +792,7 @@ export function OCRCapture() {
                       <FileText className="w-3.5 h-3.5" /> PDF
                     </span>
                     <span className="flex items-center gap-1">
-                      <FileImage className="w-3.5 h-3.5" /> PNG
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FileImage className="w-3.5 h-3.5" /> JPG
+                      <FileImage className="w-3.5 h-3.5" /> PNG / JPG
                     </span>
                   </div>
                 </div>
@@ -562,7 +811,7 @@ export function OCRCapture() {
       )}
 
       {/* Error State */}
-      {errorMessage && !result && (
+      {errorMessage && !ocrResult && (
         <Card
           className="bg-card border-destructive/40"
           data-ocid="ocr.error_state"
@@ -572,9 +821,6 @@ export function OCRCapture() {
               <XCircle className="w-5 h-5" />
               OCR Failed
             </CardTitle>
-            <CardDescription>
-              The document could not be processed. See the error details below.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
@@ -582,133 +828,342 @@ export function OCRCapture() {
                 {errorMessage}
               </p>
             </div>
-
-            {selectedFile && (
-              <p className="text-xs text-muted-foreground">
-                File: <span className="font-medium">{selectedFile.name}</span>
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-3">
+            <div className="flex gap-3">
               {selectedFile && (
                 <Button onClick={handleRetry} data-ocid="ocr.retry.button">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Retry
                 </Button>
               )}
-              <Button
-                variant="outline"
-                onClick={handleClear}
-                data-ocid="ocr.scan_another.button"
-              >
-                <ScanLine className="w-4 h-4 mr-2" />
-                Try Another File
+              <Button variant="outline" onClick={handleClear}>
+                <X className="w-4 h-4 mr-2" />
+                Upload New
               </Button>
-            </div>
-
-            <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">
-                Tips for better results:
-              </p>
-              <ul className="list-disc list-inside space-y-0.5">
-                <li>Use high-resolution scans (300 DPI or higher)</li>
-                <li>Digital/native PDFs work better than scanned images</li>
-                <li>Ensure the document is not password-protected</li>
-                <li>Try converting images to PNG before uploading</li>
-              </ul>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* OCR Results */}
-      {result && editedResult && (
-        <Card className="bg-card border-border/70">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                Extracted Data
-                {selectedFile && (
-                  <span className="text-xs font-normal text-muted-foreground ml-2">
-                    from {selectedFile.name}
-                  </span>
-                )}
+      {/* Review Form */}
+      {ocrResult && (
+        <div className="space-y-6" data-ocid="ocr.panel">
+          {/* Confidence badge */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium">Review Extracted Data</p>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  ocrResult.confidence >= 75
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : ocrResult.confidence >= 50
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                }`}
+              >
+                {ocrResult.confidence}% confidence
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              Scan New
+            </Button>
+          </div>
+
+          {/* Document Type */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">
+                Document Type
               </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClear}
-                className="text-muted-foreground hover:text-foreground"
-                data-ocid="ocr.close_button"
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={docType}
+                onValueChange={(v) => setDocType(v as DocType)}
               >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <CardDescription>
-              Review and correct the extracted fields. Confidence indicators
-              show how reliable each extraction is.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {fields.map(({ key, label, ocid, resultKey }) => {
-                const conf = result[resultKey].confidence;
-                return (
-                  <div key={key} className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor={key}>{label}</Label>
-                      {conf > 0 && (
-                        <span
-                          className={`text-xs flex items-center gap-0.5 ${confidenceColor(conf)}`}
-                        >
-                          {conf < 70 && <AlertTriangle className="w-3 h-3" />}
-                          {conf}% confidence
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      id={key}
-                      type={key === "date" ? "date" : "text"}
-                      value={editedResult[key]}
-                      onChange={(e) =>
-                        setEditedResult((p) =>
-                          p ? { ...p, [key]: e.target.value } : p,
-                        )
-                      }
-                      className={
-                        conf < 50 && conf > 0
-                          ? "border-amber-400 focus-visible:ring-amber-400"
-                          : ""
-                      }
-                      data-ocid={ocid}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+                <SelectTrigger className="w-72" data-ocid="ocr.select">
+                  <SelectValue placeholder="Select document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOC_TYPES.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
 
-            <Separator />
+          {/* Party Details */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">
+                Party / Vendor Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ocr-vendor">Party Name *</Label>
+                  <Input
+                    id="ocr-vendor"
+                    value={vendorName}
+                    onChange={(e) => setVendorName(e.target.value)}
+                    placeholder="Vendor / Party Name"
+                    data-ocid="ocr.input"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ocr-gstin">GSTIN</Label>
+                  <Input
+                    id="ocr-gstin"
+                    value={gstin}
+                    onChange={(e) => setGstin(e.target.value)}
+                    placeholder="22AAAAA0000A1Z5"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ocr-invno">Invoice / Bill Number</Label>
+                  <Input
+                    id="ocr-invno"
+                    value={invoiceNo}
+                    onChange={(e) => setInvoiceNo(e.target.value)}
+                    placeholder="INV-001"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ocr-date">Date</Label>
+                  <Input
+                    id="ocr-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={handleClear}
-                data-ocid="ocr.scan_another.button"
-              >
-                <ScanLine className="w-4 h-4 mr-2" />
-                Scan Another
-              </Button>
-              <Button
-                onClick={handleCreatePurchase}
-                data-ocid="ocr.create_purchase.button"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Create Purchase Entry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Line Items */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold">
+                  Line Items
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={addLineItem}
+                  data-ocid="ocr.primary_button"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Add Row
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[30%] min-w-[150px]">
+                        Description
+                      </TableHead>
+                      <TableHead className="w-[12%]">HSN/SAC</TableHead>
+                      <TableHead className="w-[8%]">Qty</TableHead>
+                      <TableHead className="w-[8%]">Unit</TableHead>
+                      <TableHead className="w-[14%]">Unit Price (₹)</TableHead>
+                      <TableHead className="w-[10%]">GST %</TableHead>
+                      <TableHead className="w-[12%]">Amount (₹)</TableHead>
+                      <TableHead className="w-[6%]" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineItems.map((item, idx) => (
+                      <TableRow
+                        // biome-ignore lint/suspicious/noArrayIndexKey: line items have no stable id
+                        key={idx}
+                        data-ocid={`ocr.item.${idx + 1}`}
+                      >
+                        <TableCell>
+                          <Input
+                            value={item.description}
+                            onChange={(e) =>
+                              updateLineItem(idx, "description", e.target.value)
+                            }
+                            placeholder="Description"
+                            className="h-8 text-sm"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={item.hsnSacCode}
+                            onChange={(e) =>
+                              updateLineItem(idx, "hsnSacCode", e.target.value)
+                            }
+                            placeholder="HSN"
+                            className="h-8 text-sm"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={item.qty}
+                            onChange={(e) =>
+                              updateLineItem(idx, "qty", Number(e.target.value))
+                            }
+                            className="h-8 text-sm"
+                            min={0}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={item.unit}
+                            onChange={(e) =>
+                              updateLineItem(idx, "unit", e.target.value)
+                            }
+                            className="h-8 text-sm"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              updateLineItem(
+                                idx,
+                                "unitPrice",
+                                Number(e.target.value),
+                              )
+                            }
+                            className="h-8 text-sm"
+                            min={0}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={String(item.gstRate)}
+                            onValueChange={(v) =>
+                              updateLineItem(idx, "gstRate", Number(v))
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {GST_RATES.map((r) => (
+                                <SelectItem key={r} value={String(r)}>
+                                  {r}%
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-medium">
+                          ₹
+                          {(item.qty * item.unitPrice).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                            onClick={() => removeLineItem(idx)}
+                            data-ocid={`ocr.delete_button.${idx + 1}`}
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tax Summary */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">
+                Tax Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Subtotal (₹)</Label>
+                  <Input
+                    type="number"
+                    value={computedSubtotal.toFixed(2)}
+                    readOnly
+                    className="bg-muted/40"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>CGST (₹)</Label>
+                  <Input
+                    type="number"
+                    value={cgst}
+                    onChange={(e) => setCgst(Number(e.target.value))}
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>SGST (₹)</Label>
+                  <Input
+                    type="number"
+                    value={sgst}
+                    onChange={(e) => setSgst(Number(e.target.value))}
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>IGST (₹)</Label>
+                  <Input
+                    type="number"
+                    value={igst}
+                    onChange={(e) => setIgst(Number(e.target.value))}
+                    min={0}
+                  />
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <Label>Grand Total (₹)</Label>
+                  <Input
+                    type="number"
+                    value={grandTotal || computedTotal}
+                    onChange={(e) => setGrandTotal(Number(e.target.value))}
+                    className="w-48 font-semibold"
+                    min={0}
+                  />
+                </div>
+                <Button
+                  size="lg"
+                  onClick={handleSave}
+                  disabled={saving}
+                  data-ocid="ocr.submit_button"
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  {saving
+                    ? "Saving..."
+                    : `Save as ${DOC_TYPES.find((d) => d.value === docType)?.label}`}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

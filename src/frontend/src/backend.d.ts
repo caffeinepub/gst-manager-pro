@@ -100,4 +100,10 @@ export interface backendInterface {
     updateItem(id: NatId, updatedItem: Item): Promise<void>;
     updateParty(id: NatId, updatedParty: Party): Promise<void>;
     updateTaxRate(id: NatId, updatedTaxRate: TaxRate): Promise<void>;
+    // Cloud sync
+    saveCloudData(key: string, value: string): Promise<void>;
+    getCloudData(key: string): Promise<string | null>;
+    getAllCloudData(): Promise<Array<[string, string]>>;
+    getLastSyncTime(): Promise<bigint | null>;
+    deleteCloudData(key: string): Promise<void>;
 }

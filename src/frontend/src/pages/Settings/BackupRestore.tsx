@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -29,23 +30,42 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type CloudBackup, useBackup } from "@/hooks/useBackup";
+import { useCloudSync } from "@/hooks/useCloudSync";
 import {
+  CheckCircle2,
   Cloud,
+  CloudOff,
   Database,
   Download,
   FileJson,
   HardDrive,
+  Loader2,
   RefreshCw,
   Trash2,
   Upload,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
+const SYNC_ENABLED_KEY = "gst_cloud_sync_enabled";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatDate(date: Date | null): string {
+  if (!date) return "Never";
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function BackupRestore() {
@@ -58,6 +78,9 @@ export function BackupRestore() {
     deleteCloudBackup,
   } = useBackup();
 
+  const { syncStatus, lastSyncedAt, syncNow, loadFromCloud, isOnline } =
+    useCloudSync();
+
   const [cloudBackups, setCloudBackups] =
     useState<CloudBackup[]>(getCloudBackups);
   const [cloudName, setCloudName] = useState("");
@@ -65,6 +88,11 @@ export function BackupRestore() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isCreatingCloud, setIsCreatingCloud] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(
+    () => localStorage.getItem(SYNC_ENABLED_KEY) !== "false",
+  );
+  const [cloudRestoreConfirmOpen, setCloudRestoreConfirmOpen] = useState(false);
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
 
   // AlertDialog states
   const [fileRestoreOpen, setFileRestoreOpen] = useState(false);
@@ -72,6 +100,44 @@ export function BackupRestore() {
   const [cloudDeleteId, setCloudDeleteId] = useState<string | null>(null);
 
   const refreshCloudBackups = () => setCloudBackups(getCloudBackups());
+
+  const handleAutoSyncToggle = (enabled: boolean) => {
+    setAutoSyncEnabled(enabled);
+    localStorage.setItem(SYNC_ENABLED_KEY, String(enabled));
+    if (enabled) {
+      toast.success(
+        "Auto-sync enabled — changes will save to cloud automatically",
+      );
+    } else {
+      toast.info("Auto-sync disabled");
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setIsSyncingNow(true);
+    try {
+      await syncNow();
+      toast.success("All data synced to cloud");
+    } catch {
+      toast.error("Sync failed — please try again");
+    } finally {
+      setIsSyncingNow(false);
+    }
+  };
+
+  const handleRestoreFromCloud = async () => {
+    try {
+      await loadFromCloud();
+      toast.success(
+        "Data restored from cloud! Refresh the page to see all changes.",
+        { duration: 6000 },
+      );
+    } catch {
+      toast.error("Failed to restore from cloud");
+    } finally {
+      setCloudRestoreConfirmOpen(false);
+    }
+  };
 
   // ── Local Backup ──────────────────────────────────────────────────────────
 
@@ -153,6 +219,42 @@ export function BackupRestore() {
     setCloudDeleteId(null);
   };
 
+  // Sync status display helpers
+  const syncStatusBadge = (() => {
+    if (!isOnline)
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <WifiOff className="w-3 h-3" /> Offline
+        </Badge>
+      );
+    if (syncStatus === "syncing")
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" /> Syncing...
+        </Badge>
+      );
+    if (syncStatus === "synced")
+      return (
+        <Badge
+          variant="secondary"
+          className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300"
+        >
+          <CheckCircle2 className="w-3 h-3" /> Synced
+        </Badge>
+      );
+    if (syncStatus === "error")
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <CloudOff className="w-3 h-3" /> Sync Error
+        </Badge>
+      );
+    return (
+      <Badge variant="outline" className="gap-1">
+        <Cloud className="w-3 h-3" /> Idle
+      </Badge>
+    );
+  })();
+
   return (
     <div className="max-w-4xl space-y-6" data-ocid="backup.section">
       <div>
@@ -161,9 +263,87 @@ export function BackupRestore() {
           Backup &amp; Restore
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Protect your GST data with local downloads or in-app cloud snapshots.
+          Protect your GST data with local downloads, cloud snapshots, and
+          real-time auto-sync.
         </p>
       </div>
+
+      {/* ── REAL-TIME CLOUD SYNC SECTION ─────────────────────────────── */}
+      <Card className="bg-card border-border/70" data-ocid="backup.sync.card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cloud className="w-4 h-4 text-primary" />
+            Real-Time Cloud Sync
+            {isOnline ? (
+              <Wifi className="w-3.5 h-3.5 text-emerald-500 ml-1" />
+            ) : (
+              <WifiOff className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+            )}
+          </CardTitle>
+          <CardDescription>
+            Automatically saves all your GST data to the secure ICP cloud
+            whenever changes are made. Data is encrypted on-chain and tied to
+            your Internet Identity.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Status row */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Status:</span>
+              {syncStatusBadge}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Last synced:
+              </span>
+              <span className="text-sm font-medium">
+                {formatDate(lastSyncedAt)}
+              </span>
+            </div>
+          </div>
+
+          {/* Auto-sync toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3 bg-muted/20">
+            <div>
+              <p className="text-sm font-medium">Auto-Sync</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically sync data to cloud within 2 seconds of any change
+              </p>
+            </div>
+            <Switch
+              checked={autoSyncEnabled}
+              onCheckedChange={handleAutoSyncToggle}
+              data-ocid="backup.sync.auto.switch"
+            />
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={handleSyncNow}
+              disabled={isSyncingNow || syncStatus === "syncing" || !isOnline}
+              data-ocid="backup.sync.now.button"
+            >
+              {isSyncingNow || syncStatus === "syncing" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Sync Now
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCloudRestoreConfirmOpen(true)}
+              disabled={!isOnline}
+              data-ocid="backup.sync.restore.button"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Restore from Cloud
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="local" data-ocid="backup.tab">
         <TabsList className="grid w-full grid-cols-2 max-w-xs">
@@ -224,7 +404,7 @@ export function BackupRestore() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Dropzone — use <label> so it's semantically correct for file inputs */}
+              {/* Dropzone */}
               <label
                 htmlFor="backup-file-input"
                 onDragOver={(e) => {
@@ -408,6 +588,35 @@ export function BackupRestore() {
 
       {/* ── DIALOGS ───────────────────────────────────────────────────────── */}
 
+      {/* Cloud restore from real-time sync */}
+      <AlertDialog
+        open={cloudRestoreConfirmOpen}
+        onOpenChange={setCloudRestoreConfirmOpen}
+      >
+        <AlertDialogContent data-ocid="backup.sync.restore.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore from Cloud?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will <strong>overwrite your local data</strong> with the
+              latest version from the ICP cloud. Any unsaved local changes will
+              be lost. Consider downloading a local backup first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="backup.sync.restore.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRestoreFromCloud}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-ocid="backup.sync.restore.confirm_button"
+            >
+              Yes, Restore from Cloud
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* File restore confirm */}
       <AlertDialog open={fileRestoreOpen} onOpenChange={setFileRestoreOpen}>
         <AlertDialogContent data-ocid="backup.local.restore.dialog">
@@ -435,7 +644,7 @@ export function BackupRestore() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cloud restore confirm */}
+      {/* Cloud snapshot restore confirm */}
       <AlertDialog
         open={!!cloudRestoreId}
         onOpenChange={(o) => !o && setCloudRestoreId(null)}
@@ -466,7 +675,7 @@ export function BackupRestore() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cloud delete confirm */}
+      {/* Cloud snapshot delete confirm */}
       <AlertDialog
         open={!!cloudDeleteId}
         onOpenChange={(o) => !o && setCloudDeleteId(null)}

@@ -1,0 +1,271 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Huxley Titling (user-uploaded) ──────────────────────────────────── */
+@font-face {
+  font-family: "Huxley Titling";
+  src: url("/assets/Huxley Titling.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Huxley Titling";
+  src: url("/assets/Huxley Titling-1.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Design Tokens: Light Mode ───────────────────────────────────────── */
+@layer base {
+  :root {
+    /* Backgrounds */
+    --background: 0.985 0.003 254;
+    --foreground: 0.18 0.04 254;
+
+    /* Card / Popover */
+    --card: 1 0 0;
+    --card-foreground: 0.18 0.04 254;
+    --popover: 1 0 0;
+    --popover-foreground: 0.18 0.04 254;
+
+    /* Primary — Navy Blue */
+    --primary: 0.32 0.1 254;
+    --primary-foreground: 0.99 0.002 254;
+
+    /* Secondary — Slate */
+    --secondary: 0.92 0.01 254;
+    --secondary-foreground: 0.28 0.05 254;
+
+    /* Muted */
+    --muted: 0.94 0.008 254;
+    --muted-foreground: 0.52 0.035 254;
+
+    /* Accent — Indigo tint */
+    --accent: 0.9 0.02 254;
+    --accent-foreground: 0.25 0.08 254;
+
+    /* Destructive */
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.99 0.002 0;
+
+    /* Borders & Inputs */
+    --border: 0.88 0.012 254;
+    --input: 0.88 0.012 254;
+    --ring: 0.32 0.1 254;
+
+    /* Radius */
+    --radius: 0.5rem;
+
+    /* Gold accent */
+    --gold: 0.75 0.14 75;
+    --gold-foreground: 0.18 0.06 75;
+
+    /* Success / Warning */
+    --success: 0.62 0.16 142;
+    --warning: 0.72 0.18 65;
+    --warning-foreground: 0.18 0.06 65;
+
+    /* Charts */
+    --chart-1: 0.55 0.18 254;
+    --chart-2: 0.62 0.16 142;
+    --chart-3: 0.72 0.18 65;
+    --chart-4: 0.6 0.2 320;
+    --chart-5: 0.65 0.2 25;
+
+    /* Sidebar */
+    --sidebar: 0.22 0.065 254;
+    --sidebar-foreground: 0.93 0.015 254;
+    --sidebar-primary: 0.7 0.1 254;
+    --sidebar-primary-foreground: 0.99 0.002 254;
+    --sidebar-accent: 0.3 0.075 254;
+    --sidebar-accent-foreground: 0.93 0.015 254;
+    --sidebar-border: 0.3 0.05 254;
+    --sidebar-ring: 0.7 0.1 254;
+  }
+
+  .dark {
+    --background: 0.14 0.03 254;
+    --foreground: 0.93 0.015 254;
+    --card: 0.18 0.04 254;
+    --card-foreground: 0.93 0.015 254;
+    --popover: 0.18 0.04 254;
+    --popover-foreground: 0.93 0.015 254;
+    --primary: 0.62 0.12 254;
+    --primary-foreground: 0.99 0.002 254;
+    --secondary: 0.24 0.05 254;
+    --secondary-foreground: 0.88 0.015 254;
+    --muted: 0.22 0.04 254;
+    --muted-foreground: 0.58 0.04 254;
+    --accent: 0.24 0.05 254;
+    --accent-foreground: 0.9 0.015 254;
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.99 0.002 0;
+    --border: 0.28 0.05 254;
+    --input: 0.28 0.05 254;
+    --ring: 0.62 0.12 254;
+    --sidebar: 0.14 0.035 254;
+    --sidebar-foreground: 0.9 0.015 254;
+    --sidebar-primary: 0.62 0.12 254;
+    --sidebar-primary-foreground: 0.99 0.002 254;
+    --sidebar-accent: 0.22 0.05 254;
+    --sidebar-accent-foreground: 0.9 0.015 254;
+    --sidebar-border: 0.24 0.04 254;
+    --sidebar-ring: 0.62 0.12 254;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  /* Business name font everywhere it's used */
+  .font-business-name,
+  .business-name {
+    font-family: "Huxley Titling", "Cinzel", "Playfair Display", serif;
+  }
+
+  /* Smooth table scrolling on mobile */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Touch targets */
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
+
+/* ── Print Styles ─────────────────────────────────────────────────────── */
+@media print {
+  /* Hide the entire app shell */
+  [data-sidebar],
+  aside,
+  nav,
+  header,
+  .no-print,
+  [class*="SidebarProvider"],
+  [class*="AppLayout"] > *:not(main),
+  footer {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 10pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #999 !important;
+    padding: 4px 8px !important;
+  }
+
+  @page {
+    margin: 0.5in;
+    size: A4;
+  }
+}
+
+/* ── Utility Classes ──────────────────────────────────────────────────── */
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Mobile table horizontal scroll */
+  .mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* INR amount formatting */
+  .amount-positive {
+    @apply text-green-600 dark:text-green-400;
+  }
+  .amount-negative {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  /* Status badges */
+  .status-confirmed {
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+  .status-draft {
+    @apply bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400;
+  }
+  .status-cancelled {
+    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+  }
+}
+
+/* ── Scrollbar Styling ────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--muted-foreground));
+}
+
+/* ── Focus Visible ────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid oklch(var(--ring));
+  outline-offset: 2px;
+}

@@ -355,4 +355,5 @@ export type AppPage =
   | "backup-restore"
   | "settings-api-config"
   | "settings-ocr"
-  | "settings-preferences";
+  | "settings-preferences"
+  | "settings-import";

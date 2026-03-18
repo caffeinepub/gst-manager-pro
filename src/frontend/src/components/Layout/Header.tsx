@@ -1,3 +1,4 @@
+import { CloudSyncStatus } from "@/components/CloudSyncStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "backup-restore": "Backup & Restore",
   "settings-api-config": "API Configuration",
   "settings-ocr": "OCR / Document Capture",
+  "settings-import": "Import Data",
   "settings-preferences": "Preferences",
 };
 
@@ -118,6 +120,7 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "backup-restore": ["Settings", "Backup & Restore"],
   "settings-api-config": ["Settings", "API Configuration"],
   "settings-ocr": ["Settings", "OCR Capture"],
+  "settings-import": ["Settings", "Import Data"],
   "settings-preferences": ["Settings", "Preferences"],
 };
 
@@ -287,6 +290,9 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Cloud Sync Status */}
+        <CloudSyncStatus />
+
         {/* Language Toggle */}
         <Button
           variant="ghost"

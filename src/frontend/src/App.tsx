@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
+import { useCloudSync } from "@/hooks/useCloudSync";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { AIAssistant } from "@/pages/AIAssistant/AIAssistant";
@@ -30,6 +31,7 @@ import { Reports } from "@/pages/Reports/Reports";
 import { StockSummary } from "@/pages/Reports/StockSummary";
 import { APIConfig } from "@/pages/Settings/APIConfig";
 import { BackupRestore } from "@/pages/Settings/BackupRestore";
+import { DataImport } from "@/pages/Settings/DataImport";
 import { OCRCapture } from "@/pages/Settings/OCRCapture";
 import { Preferences } from "@/pages/Settings/Preferences";
 import type { AppPage } from "@/types/gst";
@@ -124,6 +126,8 @@ function PageContent({
       return <APIConfig />;
     case "settings-ocr":
       return <OCRCapture />;
+    case "settings-import":
+      return <DataImport />;
     case "settings-preferences":
       return <Preferences />;
     default:
@@ -131,9 +135,20 @@ function PageContent({
   }
 }
 
+function AuthenticatedApp() {
+  const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
+  // Activate cloud sync globally for authenticated users
+  useCloudSync();
+
+  return (
+    <AppLayout currentPage={currentPage} onNavigate={setCurrentPage}>
+      <PageContent page={currentPage} onNavigate={setCurrentPage} />
+    </AppLayout>
+  );
+}
+
 export default function App() {
   const { identity, isInitializing } = useInternetIdentity();
-  const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
 
   useEffect(() => {
     seedInitialData();
@@ -164,9 +179,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
-      <AppLayout currentPage={currentPage} onNavigate={setCurrentPage}>
-        <PageContent page={currentPage} onNavigate={setCurrentPage} />
-      </AppLayout>
+      <AuthenticatedApp />
       <Toaster richColors position="top-right" />
     </LanguageProvider>
   );

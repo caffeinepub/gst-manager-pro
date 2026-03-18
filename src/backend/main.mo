@@ -111,6 +111,10 @@ actor {
   let taxRates = Map.empty<NatId, TaxRateMaster.TaxRate>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
+  // Cloud sync storage: per-user key-value store
+  let cloudData = Map.empty<Principal, Map.Map<Text, Text>>();
+  let lastSyncTimes = Map.empty<Principal, Int>();
+
   module Party {
     public func compare(p1 : PartyMaster.Party, p2 : PartyMaster.Party) : Order.Order {
       Nat.compare(p1.id, p2.id);
@@ -160,7 +164,6 @@ actor {
   };
 
   public query ({ caller }) func getBusinessProfile() : async ?BusinessProfile.BusinessProfile {
-    // Anyone can view business profile (including guests)
     businessProfile;
   };
 
@@ -196,12 +199,10 @@ actor {
   };
 
   public query ({ caller }) func getParty(id : NatId) : async ?PartyMaster.Party {
-    // Anyone can view parties (including guests for viewer role)
     parties.get(id);
   };
 
   public query ({ caller }) func getAllParties() : async [PartyMaster.Party] {
-    // Anyone can view parties (including guests for viewer role)
     parties.values().toArray().sort();
   };
 
@@ -237,12 +238,10 @@ actor {
   };
 
   public query ({ caller }) func getItem(id : NatId) : async ?ItemServiceMaster.Item {
-    // Anyone can view items (including guests for viewer role)
     items.get(id);
   };
 
   public query ({ caller }) func getAllItems() : async [ItemServiceMaster.Item] {
-    // Anyone can view items (including guests for viewer role)
     items.values().toArray().sort();
   };
 
@@ -278,12 +277,71 @@ actor {
   };
 
   public query ({ caller }) func getTaxRate(id : NatId) : async ?TaxRateMaster.TaxRate {
-    // Anyone can view tax rates (including guests for viewer role)
     taxRates.get(id);
   };
 
   public query ({ caller }) func getAllTaxRates() : async [TaxRateMaster.TaxRate] {
-    // Anyone can view tax rates (including guests for viewer role)
     taxRates.values().toArray().sort();
+  };
+
+  // Cloud Data Sync
+  // Save a key-value pair for the caller
+  public shared ({ caller }) func saveCloudData(key : Text, value : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save cloud data");
+    };
+    let userMap = switch (cloudData.get(caller)) {
+      case (?m) { m };
+      case null {
+        let m = Map.empty<Text, Text>();
+        cloudData.add(caller, m);
+        m;
+      };
+    };
+    userMap.add(key, value);
+    lastSyncTimes.add(caller, Time.now());
+  };
+
+  // Get a single value by key for the caller
+  public query ({ caller }) func getCloudData(key : Text) : async ?Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (cloudData.get(caller)) {
+      case (?userMap) { userMap.get(key) };
+      case null { null };
+    };
+  };
+
+  // Get all key-value pairs for the caller
+  public query ({ caller }) func getAllCloudData() : async [(Text, Text)] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (cloudData.get(caller)) {
+      case (?userMap) {
+        userMap.entries().toArray();
+      };
+      case null { [] };
+    };
+  };
+
+  // Get last sync timestamp for the caller
+  public query ({ caller }) func getLastSyncTime() : async ?Int {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    lastSyncTimes.get(caller);
+  };
+
+  // Delete a key from cloud storage for the caller
+  public shared ({ caller }) func deleteCloudData(key : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (cloudData.get(caller)) {
+      case (?userMap) { userMap.remove(key) };
+      case null {};
+    };
   };
 };
