@@ -1,51 +1,88 @@
 # GST Manager Pro
 
 ## Current State
-- OCRCapture.tsx uses Tesseract.js 5.0.4 + PDF.js 3.11.174 to extract invoice data from PDFs/images
-- Extracts: vendorName, invoiceNo, date, amount, taxAmount, hsnCodes, gstin — but item descriptions are missing, date/amount/tax patterns are unreliable for Indian invoices
-- After OCR, only one save option: "Create Purchase Entry" via sessionStorage prefill — no Sales Invoice, Proforma, Credit/Debit Note options
-- No Data Import module exists anywhere
+
+Version 32 is deployed. The app is a comprehensive GST compliance & accounting application with the following modules:
+- Masters: Business Profile, Parties, Items, Tax Rates, Chart of Accounts
+- Invoicing: Sales/Purchase invoices, Credit/Debit notes, Print, PDF
+- Accounting: CashBook, Bank Reconciliation, Journal Entries, RCM Tracker, Audit Trail, Bank Accounts
+- GST Compliance: GSTR-1, GSTR-3B, e-Invoice IRN, e-Way Bill, GST API Integration, ITC Reconciliation, Audit Trail, RCM Tracker, Workflow Automation
+- Reporting: Sales/Purchase registers, P&L, Balance Sheet, Stock Summary, Cash Flow
+- Automation & AI: AI Tax Assistant, OCR Capture, Workflow Automation
+- Settings: Backup/Restore, API Config, Preferences, Data Import
+- Cloud Sync: Real-time ICP sync with status in header
+
+Data Import (Settings > Import Data) exists but only supports .xlsx, .csv, .json file formats.
+OCR Capture exists but real-time API calls and some modules have incomplete/broken integrations.
+Mobile navigation was fixed in Version 32 but some API interactions may be broken.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Item/service description line extraction in OCR (parse line item rows from PDF text, extract description, HSN, qty, rate, amount)
-- Full editable review form after OCR with all fields: vendor, GSTIN, invoice no, date, line items table (description, HSN, qty, unit, rate, GST rate), tax breakdown, grand total
-- Document type selector in OCR review form: Sales Invoice, Service Invoice, Proforma Invoice, Purchase Entry, Credit Note, Debit Note, Quotation
-- Direct save to the selected module using useGSTStore hooks (addInvoice / addPurchase)
-- New "Import Data" page under Settings (route: settings-import)
-  - Supports Excel (.xlsx), CSV, JSON file uploads
-  - Modules: Parties, Items, Sales Invoices, Purchase Entries, Chart of Accounts, CashBook Transactions
-  - Merge mode: skip duplicates (matched by invoice number / party name / account code)
-  - Show import preview table and summary (imported / skipped / errors) before confirming
-- Add "Import Data" link in Settings sidebar and AppSidebar navigation
+- **Data Import: JPG/Image support** — allow importing invoice images (JPG, PNG, WEBP) in the DataImport page via OCR extraction (using Tesseract.js) to extract tabular data and map to the selected module
+- **Data Import: PDF support** — allow importing PDF files in the DataImport page via PDF.js + OCR extraction (same pipeline as OCR Capture) to extract data rows and map to modules
+- **Data Import: enhanced UI** — show accepted file types clearly including image and PDF
+- **Real-time API completeness** — ensure all real-time hooks (useGSTStore, useCloudSync, useInternetIdentity) are fully wired: sync triggers on every data mutation, optimistic UI for all CRUD operations, error recovery
+- **Module completeness sweep** — audit and fix every module's CRUD, ensuring add/edit/delete all work and persist correctly in localStorage, and sync to cloud
 
 ### Modify
-- OCR date regex: add support for written dates ("05 Feb 2026", "February 5, 2026", "5th February 2026")
-- OCR amount regex: improve grand total detection ("Amount Payable", "Net Payable", "Total Due", "Invoice Total", "Balance Due", "Total Payable")
-- OCR tax regex: sum CGST + SGST + IGST individually and present as separate fields in review form
-- OCR item extraction: scan PDF text for tabular line item patterns (description followed by HSN, qty, rate, amount on same/adjacent line)
-- Save flow: replace sessionStorage prefill approach with direct in-component save using useGSTStore
-- App.tsx: add route for settings-import
-- AppSidebar.tsx: add "Import Data" menu item under Settings section
+- **DataImport.tsx** — extend file parser to accept .jpg, .jpeg, .png, .webp, .pdf; for images/PDFs run Tesseract.js OCR and attempt to map extracted text to template headers; show a field-mapping review step before confirming import
+- **DataImport.tsx** — fix duplicate detection for parties and items (currently returns false for all — should check localStorage for existing names/codes)
+- **DataImport.tsx** — fix cashbook import to handle both credit/debit properly
+- **OCRCapture.tsx** — ensure save workflow (save as Sales Invoice, Purchase Entry, etc.) is fully functional end-to-end
+- **All CRUD modules** — ensure addParty, addItem mutations in Parties/Items pages fire localStorage writes and trigger cloud sync
+- **useGSTStore.ts** — verify all store hooks expose stable add/update/delete functions and they persist correctly
+- **CloudSyncStatus.tsx** — already correct; ensure it mounts and is visible in header
+- **AppLayout.tsx** — ensure bottom nav on mobile works and all tabs are accessible with horizontal scroll
+- **GSTR1.tsx / GSTR3B.tsx** — ensure auto-generation pulls from real invoice/purchase data in store
+- **WorkflowAutomation.tsx** — ensure real-data triggers work (GSTR deadlines, overdue invoices, e-Way expiry)
+- **AIAssistant.tsx** — ensure live queries work against localStorage data
+- **BankReconciliation.tsx** — ensure CSV import, auto-match, export all work
+- **Reports.tsx** — ensure all exports (CSV, Excel, PDF) work
+- **InvoiceForm.tsx** — ensure CGST/SGST/IGST auto-calculation is correct on all line item changes
 
 ### Remove
-- sessionStorage ocr_prefill hack (replaced by direct save)
+- Nothing to remove
 
 ## Implementation Plan
-1. Rewrite OCRCapture.tsx:
-   a. Improved regex extraction (dates, amounts, taxes, item descriptions)
-   b. Line item parser: detect table rows in OCR text, extract description/HSN/qty/rate per row
-   c. Build full editable review form (React state for all fields, line items editable table)
-   d. Document type selector dropdown
-   e. Save handler: construct Invoice or Purchase object and call addInvoice/addPurchase
-2. Create new DataImport.tsx page under src/pages/Settings/:
-   a. File upload with format detection (xlsx/csv/json)
-   b. Module selector (which data type is being imported)
-   c. Template download links (sample CSV/Excel per module)
-   d. Parse uploaded file into preview table
-   e. Duplicate detection logic per module
-   f. Confirm import: write to useGSTStore, show summary
-3. Update App.tsx: add settings-import route
-4. Update AppSidebar.tsx: add Import Data nav item under Settings
-5. Update AppPage type in gst.ts to include 'settings-import'
+
+1. **DataImport.tsx — image/PDF OCR import**
+   - Add .jpg/.jpeg/.png/.webp/.pdf to accepted file types
+   - For image files: load into canvas, run Tesseract.js, parse extracted text into rows using header matching heuristics
+   - For PDF files: use PDF.js to render first page to canvas, then run same OCR pipeline
+   - After OCR extraction, show a column-mapping step: list detected columns, let user map each to template header
+   - Integrate with existing confirm/import flow
+
+2. **DataImport.tsx — duplicate detection fix**
+   - Parties: check localStorage gst_parties and gst_parties_import by name
+   - Items: check localStorage gst_items and gst_items_import by name
+
+3. **DataImport.tsx — cashbook fix**
+   - Use `debit` for payments and `credit` for receipts correctly
+
+4. **useGSTStore.ts — verify all mutations**
+   - Ensure addParty, updateParty, deleteParty all persist to localStorage key `gst_parties`
+   - Same for items (`gst_items`)
+   - All mutations should dispatch a `storage` event so other hooks/components react
+
+5. **OCRCapture.tsx — fix save workflow**
+   - After extraction, the document type selector and save button must fire the appropriate store mutation
+   - Show success toast and reset form after save
+
+6. **GSTR-1 / GSTR-3B — real data verification**
+   - Confirm computations use `useInvoices().invoices` and `usePurchases().purchases`
+   - Fix any filter or reduce bugs
+
+7. **Workflow Automation — real triggers**
+   - Compute GSTR-1 deadline as 11th of next month from latest invoice date
+   - Count overdue invoices from store
+   - Show real numbers in alert cards
+
+8. **AI Assistant — live query fix**
+   - Ensure GSTIN validation, overdue count, GST liability, ITC balance queries read from real store data
+
+9. **Reports — export verification**
+   - Ensure SheetJS CDN loads before Excel export
+   - Ensure jsPDF print export uses correct branding
+
+10. **Full regression pass** — verify every page renders without crash, all navigation tabs accessible, form submissions persist data, branding consistent
