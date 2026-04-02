@@ -36,6 +36,7 @@ import {
   FilePlus,
   FileSpreadsheet,
   FileText,
+  FlaskConical,
   History,
   Landmark,
   LayoutDashboard,
@@ -191,6 +192,7 @@ const navItems: NavItem[] = [
       { label: "Import Data", page: "settings-import", icon: Upload },
       { label: "Backup & Restore", page: "backup-restore", icon: Database },
       { label: "Preferences", page: "settings-preferences", icon: Sliders },
+      { label: "UAT Dashboard", page: "uat-dashboard", icon: FlaskConical },
     ],
   },
 ];

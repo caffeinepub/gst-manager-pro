@@ -74,6 +74,7 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "settings-ocr": "OCR / Document Capture",
   "settings-import": "Import Data",
   "settings-preferences": "Preferences",
+  "uat-dashboard": "UAT Dashboard",
 };
 
 const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
@@ -122,6 +123,7 @@ const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {
   "settings-ocr": ["Settings", "OCR Capture"],
   "settings-import": ["Settings", "Import Data"],
   "settings-preferences": ["Settings", "Preferences"],
+  "uat-dashboard": ["Settings", "UAT Dashboard"],
 };
 
 interface Notification {

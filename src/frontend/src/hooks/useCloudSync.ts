@@ -13,7 +13,7 @@ export interface CloudSyncResult {
   isOnline: boolean;
 }
 
-// Cloud sync methods available on the backend (may not be in the base backendInterface type yet)
+// Cloud sync methods available on the backend
 interface CloudActor {
   saveCloudData(key: string, value: string): Promise<void>;
   getCloudData(key: string): Promise<string | null>;
@@ -70,6 +70,7 @@ export function useCloudSync(): CloudSyncResult {
       if (!actor || !isAuthenticated || isSyncingRef.current) return;
       // Guard: check cloud method actually exists at runtime
       if (typeof actor.saveCloudData !== "function") return;
+      if (!isOnline) return;
       isSyncingRef.current = true;
       setSyncStatus("syncing");
       try {
@@ -91,7 +92,7 @@ export function useCloudSync(): CloudSyncResult {
         isSyncingRef.current = false;
       }
     },
-    [actor, isAuthenticated],
+    [actor, isAuthenticated, isOnline],
   );
 
   const syncNow = useCallback(async () => {
@@ -112,16 +113,11 @@ export function useCloudSync(): CloudSyncResult {
       }
       for (const [key, value] of allData) {
         if (key.startsWith("gst_") && key !== "gst_cloud_backups") {
-          // Write directly without triggering our listener
-          Object.getPrototypeOf(localStorage).setItem.call(
-            localStorage,
-            key,
-            value,
-          );
+          localStorage.setItem(key, value);
         }
       }
-      // Trigger re-render across components
-      window.dispatchEvent(new Event("storage"));
+      // Notify all useLocalStorage hooks to re-read
+      window.dispatchEvent(new CustomEvent("gst-cloud-restored"));
       setLastSyncedAt(new Date());
       setSyncStatus("synced");
     } catch (err) {
@@ -130,33 +126,18 @@ export function useCloudSync(): CloudSyncResult {
     }
   }, [actor, isAuthenticated]);
 
-  // Patch localStorage.setItem to listen for gst_ changes
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const originalSetItem = localStorage.setItem.bind(localStorage);
-    localStorage.setItem = (key: string, value: string) => {
-      originalSetItem(key, value);
-      if (key.startsWith("gst_") && key !== "gst_cloud_backups") {
-        window.dispatchEvent(
-          new CustomEvent("gst-data-changed", { detail: { key, value } }),
-        );
-      }
-    };
-    return () => {
-      localStorage.setItem = originalSetItem;
-    };
-  }, [isAuthenticated]);
-
-  // Listen for gst-data-changed events and debounce push
+  // Listen for storage changes via native storage events (cross-tab)
+  // and custom mutation events (same-tab)
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const syncEnabled = localStorage.getItem(SYNC_ENABLED_KEY) !== "false";
     if (!syncEnabled) return;
 
+    // Listen for custom data-change events dispatched from mutations
     const handleChange = (e: Event) => {
-      const { key } = (e as CustomEvent<{ key: string; value: string }>).detail;
+      const key = (e as CustomEvent<{ key: string }>).detail?.key;
+      if (!key) return;
       pendingKeysRef.current.add(key);
 
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -193,21 +174,19 @@ export function useCloudSync(): CloudSyncResult {
           const allData = await actor.getAllCloudData();
           for (const [key, value] of allData) {
             if (key.startsWith("gst_") && key !== "gst_cloud_backups") {
-              Object.getPrototypeOf(localStorage).setItem.call(
-                localStorage,
-                key,
-                value,
-              );
+              localStorage.setItem(key, value);
             }
           }
-          window.dispatchEvent(new Event("storage"));
+          window.dispatchEvent(new CustomEvent("gst-cloud-restored"));
           setLastSyncedAt(new Date());
           setSyncStatus("synced");
           toast.success("Data synced from cloud", { id: "cloud-sync-init" });
         } else {
           // Cloud empty — push local data up
           await syncNow();
-          toast.success("Local data saved to cloud", { id: "cloud-sync-init" });
+          toast.success("Local data saved to cloud", {
+            id: "cloud-sync-init",
+          });
         }
       } catch (err) {
         setSyncStatus("error");

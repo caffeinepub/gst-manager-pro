@@ -356,4 +356,5 @@ export type AppPage =
   | "settings-api-config"
   | "settings-ocr"
   | "settings-preferences"
-  | "settings-import";
+  | "settings-import"
+  | "uat-dashboard";

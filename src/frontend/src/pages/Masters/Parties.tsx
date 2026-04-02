@@ -470,7 +470,7 @@ export function Parties() {
               <div className="space-y-1.5">
                 <Label>State</Label>
                 <Select
-                  value={String(form.stateCode)}
+                  value={String(form.stateCode).padStart(2, "0")}
                   onValueChange={(v) =>
                     setForm((p) => ({ ...p, stateCode: BigInt(v) }))
                   }

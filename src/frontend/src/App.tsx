@@ -34,6 +34,7 @@ import { BackupRestore } from "@/pages/Settings/BackupRestore";
 import { DataImport } from "@/pages/Settings/DataImport";
 import { OCRCapture } from "@/pages/Settings/OCRCapture";
 import { Preferences } from "@/pages/Settings/Preferences";
+import { AutomatedUAT } from "@/pages/UAT/AutomatedUAT";
 import type { AppPage } from "@/types/gst";
 import { seedInitialData } from "@/utils/seedData";
 import { useEffect, useState } from "react";
@@ -130,6 +131,8 @@ function PageContent({
       return <DataImport />;
     case "settings-preferences":
       return <Preferences />;
+    case "uat-dashboard":
+      return <AutomatedUAT />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }

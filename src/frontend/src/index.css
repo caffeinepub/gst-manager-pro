@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -143,6 +143,19 @@
     font-family: "Huxley Titling", "Cinzel", "Playfair Display", serif;
   }
 
+  /* Numeric font utility — tabular numerals for financial figures */
+  .font-numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: -0.01em;
+  }
+
+  /* Cabinet Grotesk fallback — maps to Plus Jakarta Sans */
+  .font-cabinet {
+    font-family: "Plus Jakarta Sans", "DM Sans", system-ui, sans-serif;
+    font-weight: 600;
+  }
+
   /* Smooth table scrolling on mobile */
   .table-scroll {
     overflow-x: auto;
@@ -169,7 +182,6 @@
   header,
   .no-print,
   [class*="SidebarProvider"],
-  [class*="AppLayout"] > *:not(main),
   footer {
     display: none !important;
   }
@@ -246,6 +258,15 @@
   .status-cancelled {
     @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
   }
+
+  /* Hide scrollbar but keep scrolling */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ── Scrollbar Styling ────────────────────────────────────────────────── */
@@ -268,4 +289,34 @@
 *:focus-visible {
   outline: 2px solid oklch(var(--ring));
   outline-offset: 2px;
+}
+
+/* ── PWA / Mobile Safe Areas ─────────────────────────────────────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── Keyframes ────────────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

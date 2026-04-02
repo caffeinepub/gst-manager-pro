@@ -18,7 +18,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         try {
           window.localStorage.setItem(key, JSON.stringify(next));
         } catch {
-          // ignore
+          // ignore quota errors
         }
         return next;
       });
@@ -26,19 +26,36 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     [key],
   );
 
-  // Sync across tabs
+  // Sync across tabs and after cloud restore
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === key && e.newValue !== null) {
         try {
           setStoredValue(JSON.parse(e.newValue) as T);
         } catch {
-          // ignore
+          // ignore malformed JSON
         }
       }
     };
+
+    // Also listen for custom cloud sync events
+    const handleCloudSync = () => {
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item !== null) {
+          setStoredValue(JSON.parse(item) as T);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener("gst-cloud-restored", handleCloudSync);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("gst-cloud-restored", handleCloudSync);
+    };
   }, [key]);
 
   return [storedValue, setValue] as const;

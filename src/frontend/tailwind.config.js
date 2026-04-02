@@ -16,11 +16,14 @@ export default {
     },
     extend: {
       fontFamily: {
-        cabinet: ['"Cabinet Grotesk"', "sans-serif"],
-        satoshi: ["Satoshi", "sans-serif"],
-        mono: ['"JetBrains Mono"', "monospace"],
-        playfair: ['"Playfair Display"', '"Georgia"', '"Times New Roman"', "serif"],
-        brand: ['"Playfair Display"', '"Georgia"', '"Times New Roman"', "serif"],
+        // 'cabinet' resolves to Plus Jakarta Sans (available in project)
+        cabinet: ['"Plus Jakarta Sans"', '"DM Sans"', 'system-ui', 'sans-serif'],
+        satoshi: ["Satoshi", '"Plus Jakarta Sans"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+        playfair: ['"Playfair Display"', '"Georgia"', '"Times New Roman"', 'serif'],
+        brand: ['"Playfair Display"', '"Georgia"', '"Times New Roman"', 'serif'],
+        // 'numeric' is a utility alias for tabular-nums; actual font is set in CSS
+        numeric: ['"Plus Jakarta Sans"', '"DM Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "oklch(var(--border))",
@@ -85,7 +88,8 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        card: "0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)",
+        card: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
+        "card-dark": "0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)",
         glow: "0 0 20px oklch(0.55 0.18 255 / 0.25)",
       },
       keyframes: {
@@ -105,12 +109,17 @@ export default {
           from: { opacity: "0", transform: "translateX(20px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
+        "slide-up": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.2s ease-out",
         "slide-in-right": "slide-in-right 0.2s ease-out",
+        "slide-up": "slide-up 0.25s ease-out",
       },
     },
   },

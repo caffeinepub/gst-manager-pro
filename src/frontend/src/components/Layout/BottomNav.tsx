@@ -2,6 +2,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import type { AppPage } from "@/types/gst";
 import {
   BarChart3,
+  BookOpen,
   FileText,
   LayoutDashboard,
   Menu,
@@ -19,6 +20,7 @@ const BOTTOM_NAV_ITEMS: Array<{
   page: AppPage;
   icon: React.ComponentType<{ className?: string }>;
   ocid: string;
+  matchPrefix?: string;
 }> = [
   {
     label: "Dashboard",
@@ -31,18 +33,28 @@ const BOTTOM_NAV_ITEMS: Array<{
     page: "invoicing-sales",
     icon: FileText,
     ocid: "bottom_nav.invoices.link",
+    matchPrefix: "invoicing",
   },
   {
     label: "GST",
     page: "gst-gstr1",
     icon: ShieldCheck,
     ocid: "bottom_nav.gst.link",
+    matchPrefix: "gst",
+  },
+  {
+    label: "Accounts",
+    page: "accounting-cashbook",
+    icon: BookOpen,
+    ocid: "bottom_nav.accounting.link",
+    matchPrefix: "accounting",
   },
   {
     label: "Reports",
     page: "reports-sales",
     icon: BarChart3,
     ocid: "bottom_nav.reports.link",
+    matchPrefix: "reports",
   },
   {
     label: "AI Chat",
@@ -56,6 +68,7 @@ const DIRECT_NAV_PAGES = new Set<AppPage>([
   "dashboard",
   "invoicing-sales",
   "gst-gstr1",
+  "accounting-cashbook",
   "reports-sales",
   "ai-assistant",
 ]);
@@ -67,10 +80,12 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
     !DIRECT_NAV_PAGES.has(currentPage) &&
     !currentPage.startsWith("invoicing") &&
     !currentPage.startsWith("gst") &&
-    !currentPage.startsWith("reports");
+    !currentPage.startsWith("accounting") &&
+    !currentPage.startsWith("reports") &&
+    currentPage !== "ai-assistant";
 
   const btnClass = (isActive: boolean) =>
-    `flex flex-shrink-0 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors min-h-[52px] min-w-[64px] touch-manipulation ${
+    `flex flex-shrink-0 flex-col items-center justify-center gap-0.5 py-1.5 text-[9px] font-medium transition-colors min-h-[52px] min-w-[52px] px-1 touch-manipulation ${
       isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
     }`;
 
@@ -79,18 +94,22 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
       className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-sidebar border-t border-sidebar-border"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
+      {/* Horizontally scrollable, hidden scrollbar, allows vertical scroll on page */}
       <div
         className="flex items-stretch overflow-x-auto"
-        style={{ touchAction: "pan-x", scrollbarWidth: "none" }}
+        style={{
+          touchAction: "pan-x pan-y",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          WebkitOverflowScrolling: "touch",
+        }}
       >
         {BOTTOM_NAV_ITEMS.map((item) => {
           const isActive =
             currentPage === item.page ||
-            (item.page === "invoicing-sales" &&
-              currentPage.startsWith("invoicing")) ||
-            (item.page === "gst-gstr1" && currentPage.startsWith("gst")) ||
-            (item.page === "reports-sales" &&
-              currentPage.startsWith("reports"));
+            (item.matchPrefix
+              ? currentPage.startsWith(item.matchPrefix)
+              : false);
 
           return (
             <button

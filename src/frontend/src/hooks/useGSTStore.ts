@@ -18,6 +18,13 @@ function now() {
   return new Date().toISOString();
 }
 
+/** Dispatch a cloud-sync event so useCloudSync picks up mutations. */
+function notifyChange(key: string) {
+  window.dispatchEvent(
+    new CustomEvent("gst-data-changed", { detail: { key } }),
+  );
+}
+
 export function useInvoices() {
   const [invoices, setInvoices] = useLocalStorage<Invoice[]>(
     "gst_invoices",
@@ -33,6 +40,7 @@ export function useInvoices() {
         updatedAt: now(),
       };
       setInvoices((prev) => [newInv, ...prev]);
+      notifyChange("gst_invoices");
       return newInv.id;
     },
     [setInvoices],
@@ -45,6 +53,7 @@ export function useInvoices() {
           inv.id === id ? { ...inv, ...updates, updatedAt: now() } : inv,
         ),
       );
+      notifyChange("gst_invoices");
     },
     [setInvoices],
   );
@@ -52,6 +61,7 @@ export function useInvoices() {
   const deleteInvoice = useCallback(
     (id: string) => {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+      notifyChange("gst_invoices");
     },
     [setInvoices],
   );
@@ -69,6 +79,7 @@ export function usePayments() {
     (p: Omit<Payment, "id" | "createdAt">) => {
       const newP: Payment = { ...p, id: generateId(), createdAt: now() };
       setPayments((prev) => [newP, ...prev]);
+      notifyChange("gst_payments");
       return newP.id;
     },
     [setPayments],
@@ -77,6 +88,7 @@ export function usePayments() {
   const deletePayment = useCallback(
     (id: string) => {
       setPayments((prev) => prev.filter((p) => p.id !== id));
+      notifyChange("gst_payments");
     },
     [setPayments],
   );
@@ -99,6 +111,7 @@ export function usePurchases() {
         updatedAt: now(),
       };
       setPurchases((prev) => [newP, ...prev]);
+      notifyChange("gst_purchases");
       return newP.id;
     },
     [setPurchases],
@@ -111,6 +124,7 @@ export function usePurchases() {
           p.id === id ? { ...p, ...updates, updatedAt: now() } : p,
         ),
       );
+      notifyChange("gst_purchases");
     },
     [setPurchases],
   );
@@ -118,6 +132,7 @@ export function usePurchases() {
   const deletePurchase = useCallback(
     (id: string) => {
       setPurchases((prev) => prev.filter((p) => p.id !== id));
+      notifyChange("gst_purchases");
     },
     [setPurchases],
   );
@@ -135,6 +150,7 @@ export function useJournalEntries() {
     (e: Omit<JournalEntry, "id" | "createdAt">) => {
       const newE: JournalEntry = { ...e, id: generateId(), createdAt: now() };
       setEntries((prev) => [newE, ...prev]);
+      notifyChange("gst_journal");
       return newE.id;
     },
     [setEntries],
@@ -143,6 +159,7 @@ export function useJournalEntries() {
   const deleteEntry = useCallback(
     (id: string) => {
       setEntries((prev) => prev.filter((e) => e.id !== id));
+      notifyChange("gst_journal");
     },
     [setEntries],
   );
@@ -152,6 +169,7 @@ export function useJournalEntries() {
       setEntries((prev) =>
         prev.map((e) => (e.id === id ? { ...e, ...updates } : e)),
       );
+      notifyChange("gst_journal");
     },
     [setEntries],
   );
@@ -169,6 +187,7 @@ export function useBankAccounts() {
     (a: Omit<BankAccount, "id" | "createdAt">) => {
       const newA: BankAccount = { ...a, id: generateId(), createdAt: now() };
       setAccounts((prev) => [newA, ...prev]);
+      notifyChange("gst_bank_accounts");
       return newA.id;
     },
     [setAccounts],
@@ -179,6 +198,7 @@ export function useBankAccounts() {
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
       );
+      notifyChange("gst_bank_accounts");
     },
     [setAccounts],
   );
@@ -186,6 +206,7 @@ export function useBankAccounts() {
   const deleteAccount = useCallback(
     (id: string) => {
       setAccounts((prev) => prev.filter((a) => a.id !== id));
+      notifyChange("gst_bank_accounts");
     },
     [setAccounts],
   );
@@ -207,6 +228,7 @@ export function useBankTransactions() {
         createdAt: now(),
       };
       setTransactions((prev) => [newT, ...prev]);
+      notifyChange("gst_bank_transactions");
       return newT.id;
     },
     [setTransactions],
@@ -215,6 +237,7 @@ export function useBankTransactions() {
   const deleteTransaction = useCallback(
     (id: string) => {
       setTransactions((prev) => prev.filter((t) => t.id !== id));
+      notifyChange("gst_bank_transactions");
     },
     [setTransactions],
   );
@@ -224,6 +247,7 @@ export function useBankTransactions() {
       setTransactions((prev) =>
         prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
       );
+      notifyChange("gst_bank_transactions");
     },
     [setTransactions],
   );
@@ -238,6 +262,7 @@ export function useAuditLogs() {
     (log: Omit<AuditLog, "id" | "timestamp">) => {
       const newLog: AuditLog = { ...log, id: generateId(), timestamp: now() };
       setLogs((prev) => [newLog, ...prev].slice(0, 500)); // Keep last 500 logs
+      // Don't notify cloud for audit logs (too frequent)
     },
     [setLogs],
   );
@@ -269,6 +294,7 @@ export function useCustomAccounts() {
         createdAt: now(),
       };
       setCustomAccounts((prev) => [...prev, newA]);
+      notifyChange("gst_custom_accounts");
     },
     [setCustomAccounts],
   );
@@ -276,6 +302,7 @@ export function useCustomAccounts() {
   const deleteAccount = useCallback(
     (id: string) => {
       setCustomAccounts((prev) => prev.filter((a) => a.id !== id));
+      notifyChange("gst_custom_accounts");
     },
     [setCustomAccounts],
   );
@@ -288,6 +315,7 @@ export function useCustomAccounts() {
       setCustomAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
       );
+      notifyChange("gst_custom_accounts");
     },
     [setCustomAccounts],
   );
@@ -317,6 +345,7 @@ export function useStockMovements() {
     (m: Omit<StockMovement, "id" | "createdAt">) => {
       const newM: StockMovement = { ...m, id: generateId(), createdAt: now() };
       setMovements((prev) => [newM, ...prev]);
+      notifyChange("gst_stock_movements");
     },
     [setMovements],
   );
@@ -324,6 +353,7 @@ export function useStockMovements() {
   const deleteMovement = useCallback(
     (id: string) => {
       setMovements((prev) => prev.filter((m) => m.id !== id));
+      notifyChange("gst_stock_movements");
     },
     [setMovements],
   );
@@ -350,6 +380,7 @@ export function useInvoiceDefaults() {
   const saveDefaults = useCallback(
     (updates: Partial<InvoiceDefaults>) => {
       setDefaults((prev) => ({ ...prev, ...updates }));
+      notifyChange("gst_invoice_defaults");
     },
     [setDefaults],
   );

@@ -259,26 +259,43 @@ function parseVendorName(text: string): string {
   return "";
 }
 
-function parseAmount(text: string, label: RegExp): number {
-  // Search for label then grab number on same line or next line
+/**
+ * Extract a tax amount from text by finding lines that match a label pattern,
+ * then extracting the rightmost plausible currency amount on that line.
+ * This avoids picking up GST rates (like "9%") instead of the actual tax amount.
+ */
+function extractTaxLineAmount(text: string, pattern: RegExp): number {
   const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (label.test(lines[i])) {
-      // Try same line first
-      const same = lines[i].match(
-        /(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\s*$/i,
-      );
-      if (same) return Number.parseFloat(same[1].replace(/,/g, ""));
-      // Try next line
-      if (i + 1 < lines.length) {
-        const next = lines[i + 1].match(
-          /(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/,
-        );
-        if (next) return Number.parseFloat(next[1].replace(/,/g, ""));
-      }
+  for (const line of lines) {
+    if (!pattern.test(line)) continue;
+    // Prefer: Rs./₹/INR prefix followed by number
+    const withPrefix = line.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+    if (withPrefix?.[1]) {
+      return Number.parseFloat(withPrefix[1].replace(/,/g, ""));
     }
+    // Next: last number on the line (rightmost column in a table)
+    const allNums = [...line.matchAll(/([\d,]+(?:\.\d{1,2})?)/g)].map((m) =>
+      Number.parseFloat(m[1].replace(/,/g, "")),
+    );
+    // Filter out small numbers that are likely percentages (< 30 suggests a rate)
+    const amounts = allNums.filter((n) => n >= 10);
+    if (amounts.length > 0) return amounts[amounts.length - 1];
+    // Fall back to any non-zero number
+    const nonZero = allNums.filter((n) => n > 0);
+    if (nonZero.length > 0) return nonZero[nonZero.length - 1];
+  }
+  // Try next line after label
+  const labelIdx = lines.findIndex((l) => pattern.test(l));
+  if (labelIdx >= 0 && labelIdx + 1 < lines.length) {
+    const nextLine = lines[labelIdx + 1];
+    const m = nextLine.match(/(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+    if (m?.[1]) return Number.parseFloat(m[1].replace(/,/g, ""));
   }
   return 0;
+}
+
+function parseAmount(text: string, label: RegExp): number {
+  return extractTaxLineAmount(text, label);
 }
 
 function parseTaxAmounts(text: string): {
@@ -286,19 +303,10 @@ function parseTaxAmounts(text: string): {
   sgst: number;
   igst: number;
 } {
-  const extract = (label: RegExp): number => {
-    const m = text.match(
-      new RegExp(
-        `${label.source}[\\s\\S]{0,50}?([\\d,]+(?:\\.\\d{1,2})?)`,
-        "i",
-      ),
-    );
-    return m ? Number.parseFloat(m[1].replace(/,/g, "")) : 0;
-  };
   return {
-    cgst: extract(/cgst|central\s*gst/i),
-    sgst: extract(/sgst|state\s*gst/i),
-    igst: extract(/igst|integrated\s*gst/i),
+    cgst: extractTaxLineAmount(text, /cgst|central\s*gst/i),
+    sgst: extractTaxLineAmount(text, /sgst|state\s*gst/i),
+    igst: extractTaxLineAmount(text, /igst|integrated\s*gst/i),
   };
 }
 
@@ -367,7 +375,8 @@ function parseLineItems(text: string): LineItem[] {
   return items;
 }
 
-function parseOCRText(text: string): OCRResult {
+function parseOCRText(rawText: string): OCRResult {
+  const text = rawText ?? "";
   const vendorName = parseVendorName(text);
   const gstin = parseGSTIN(text);
   const invoiceNo = parseInvoiceNo(text);
