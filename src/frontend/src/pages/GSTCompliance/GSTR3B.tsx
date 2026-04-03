@@ -4,6 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatINR } from "@/utils/formatting";
@@ -81,12 +87,36 @@ export function GSTR3B() {
     const rcmSum = {
       cgst: rcm.reduce((s, p) => s + p.totalCgst, 0),
       sgst: rcm.reduce((s, p) => s + p.totalSgst, 0),
+      igst: rcm.reduce((s, p) => s + p.totalIgst, 0), // Include IGST for interstate RCM
     };
 
+    // GST ITC set-off in correct statutory order (Section 49 & 49A of CGST Act)
+    const rawCgstLiability = outSum.cgst + rcmSum.cgst;
+    const rawSgstLiability = outSum.sgst + rcmSum.sgst;
+    const rawIgstLiability = outSum.igst + rcmSum.igst;
+
+    // Step 1: IGST ITC offsets IGST liability first
+    let remainingIgstItc = itcSum.igst;
+    let igstAfterItc = Math.max(0, rawIgstLiability - remainingIgstItc);
+    remainingIgstItc = Math.max(0, remainingIgstItc - rawIgstLiability);
+
+    // Step 2: Remaining IGST ITC offsets CGST liability
+    let cgstAfterIgstItc = Math.max(0, rawCgstLiability - remainingIgstItc);
+    remainingIgstItc = Math.max(0, remainingIgstItc - rawCgstLiability);
+
+    // Step 3: Remaining IGST ITC offsets SGST liability
+    let sgstAfterIgstItc = Math.max(0, rawSgstLiability - remainingIgstItc);
+
+    // Step 4: CGST ITC offsets remaining CGST liability
+    const cgstAfterAllItc = Math.max(0, cgstAfterIgstItc - itcSum.cgst);
+
+    // Step 5: SGST ITC offsets remaining SGST liability
+    const sgstAfterAllItc = Math.max(0, sgstAfterIgstItc - itcSum.sgst);
+
     const netPayable = {
-      cgst: Math.max(0, outSum.cgst + rcmSum.cgst - itcSum.cgst),
-      sgst: Math.max(0, outSum.sgst + rcmSum.sgst - itcSum.sgst),
-      igst: Math.max(0, outSum.igst - itcSum.igst),
+      cgst: cgstAfterAllItc,
+      sgst: sgstAfterAllItc,
+      igst: igstAfterItc,
       cess: Math.max(0, outSum.cess - itcSum.cess),
     };
 
@@ -146,15 +176,33 @@ export function GSTR3B() {
               )}
             </div>
             {periodStatus.status === "not_filed" && (
-              <Button
-                size="sm"
-                onClick={handleFile}
-                data-ocid="gstr3b.file.primary_button"
-                className="gap-2"
-              >
-                <ClipboardList className="w-3.5 h-3.5" />
-                Generate & File GSTR-3B
-              </Button>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="text-xs text-amber-600 border-amber-400"
+                >
+                  Demo
+                </Badge>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        onClick={handleFile}
+                        data-ocid="gstr3b.file.primary_button"
+                        className="gap-2"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        Generate & File GSTR-3B
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      This is a simulation. Real filing requires GSTN API
+                      credentials in Settings &gt; API Config.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             )}
           </div>
           {periodStatus.status === "not_filed" && (
@@ -335,7 +383,7 @@ export function GSTR3B() {
                 label="Inward supplies (RCM)"
                 cgst={data.rcmSum.cgst}
                 sgst={data.rcmSum.sgst}
-                igst={0}
+                igst={data.rcmSum.igst}
                 cess={0}
               />
 

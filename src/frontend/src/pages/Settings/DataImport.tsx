@@ -53,7 +53,7 @@ async function getXLSX(): Promise<any> {
       return;
     }
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.src = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
     s.onload = () => {
       _xlsxLib = (window as any).XLSX;
       resolve();

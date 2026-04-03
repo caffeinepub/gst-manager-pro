@@ -273,6 +273,24 @@ export function GSTAPIIntegration() {
 
   return (
     <div className="space-y-6" data-ocid="api.section">
+      {/* Simulation Disclaimer Banner */}
+      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              Demo / Simulation Mode
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+              All API calls on this page are simulated with sample data. To
+              enable real API integration, configure your credentials in
+              Settings &gt; API Config. Real GSTN, IRP, and e-Way Bill APIs
+              require valid credentials from the respective portals.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
           <Shield className="w-5 h-5 text-primary" />
@@ -282,10 +300,14 @@ export function GSTAPIIntegration() {
             GST API Integration
           </h1>
           <p className="text-sm text-muted-foreground">
-            Simulated GSTN, PAN, Banking & e-Invoice API endpoints
+            Format validation &amp; simulation mode — configure API keys for
+            live calls
           </p>
         </div>
-        <Badge variant="secondary" className="ml-auto text-xs">
+        <Badge
+          variant="outline"
+          className="ml-auto text-xs text-amber-600 border-amber-400"
+        >
           Simulated
         </Badge>
       </div>
@@ -311,9 +333,9 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>
@@ -357,9 +379,9 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>
@@ -404,9 +426,9 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>
@@ -456,16 +478,16 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Real-time taxpayer lookup — returns legal name, registration type,
-              and status.
+              Format validation (simulation mode) — returns legal name,
+              registration type, and status.
             </p>
             <div className="space-y-2">
               <Label className="text-xs">GSTIN to Validate</Label>
@@ -544,9 +566,9 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>
@@ -605,9 +627,9 @@ export function GSTAPIIntegration() {
               </div>
               <Badge
                 variant="outline"
-                className="text-xs text-chart-2 border-chart-2/30 shrink-0"
+                className="text-xs text-amber-600 border-amber-400 shrink-0"
               >
-                Active
+                Simulated
               </Badge>
             </div>
           </CardHeader>

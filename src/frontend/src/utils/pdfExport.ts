@@ -1,6 +1,9 @@
 import type { Invoice } from "@/types/gst";
 import { amountInWords, formatINR } from "@/utils/formatting";
 
+// Note: jsPDF does not natively support custom TTF fonts without base64 embedding.
+// We use "helvetica" bold as a fallback for business name rendering.
+// For true Huxley Titling support, the font would need to be embedded as base64.
 const HUXLEY_FONT = "helvetica";
 const NAVY = [30, 58, 95] as [number, number, number];
 const WHITE = [255, 255, 255] as [number, number, number];

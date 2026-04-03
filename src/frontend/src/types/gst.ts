@@ -52,8 +52,8 @@ export interface Invoice {
   totalIgst: number;
   totalCess: number;
   grandTotal: number;
-  irnNumber: string;
-  eWayBillNumber: string;
+  irnNumber?: string;
+  eWayBillNumber?: string;
   vehicleNumber?: string;
   transporter?: string;
   distanceKm?: number;
@@ -84,6 +84,7 @@ export interface Payment {
   notes: string;
   type: "received" | "paid";
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Purchase {
@@ -141,6 +142,7 @@ export interface BankAccount {
   accountType: "savings" | "current" | "cash";
   isActive: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BankTransaction {

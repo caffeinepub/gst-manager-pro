@@ -47,7 +47,8 @@ interface MatchResult {
 
 export function BankReconciliation() {
   const { accounts } = useBankAccounts();
-  const { transactions, addTransaction } = useBankTransactions();
+  const { transactions, addTransaction, updateTransaction } =
+    useBankTransactions();
   const { invoices } = useInvoices();
   const { start: defaultStart, end: defaultEnd } = getCurrentMonth();
 
@@ -99,24 +100,24 @@ export function BankReconciliation() {
     setTimeout(() => {
       const results: MatchResult[] = filteredTransactions.map((txn) => {
         const txnAmount = txn.credit > 0 ? txn.credit : txn.debit;
-        // Find best matching invoice
+        const txnDate = new Date(txn.date).getTime();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+
+        // Find best matching invoice — BOTH amount (±₹1) AND date (±3 days) must match
         let bestMatch: (typeof filteredInvoices)[0] | null = null;
         let bestDiff = Number.POSITIVE_INFINITY;
         for (const inv of filteredInvoices) {
-          const diff = Math.abs(inv.grandTotal - txnAmount);
-          if (diff < bestDiff) {
-            bestDiff = diff;
-            bestMatch = inv;
+          const amountDiff = Math.abs(inv.grandTotal - txnAmount);
+          const dateDiff = Math.abs(new Date(inv.date).getTime() - txnDate);
+          // Both conditions: amount within ₹1 tolerance AND date within ±3 days
+          if (amountDiff <= 1 && dateDiff <= threeDaysMs) {
+            if (amountDiff < bestDiff) {
+              bestDiff = amountDiff;
+              bestMatch = inv;
+            }
           }
         }
-        let confidence = 0;
-        if (bestMatch && txnAmount > 0) {
-          const pctDiff = bestDiff / txnAmount;
-          if (pctDiff === 0) confidence = 100;
-          else if (pctDiff <= 0.05) confidence = 90;
-          else if (pctDiff <= 0.1) confidence = 75;
-          else confidence = 0;
-        }
+        const confidence = bestMatch ? (bestDiff === 0 ? 100 : 95) : 0;
         return {
           transactionId: txn.id,
           transactionDesc: txn.description,
@@ -412,9 +413,8 @@ export function BankReconciliation() {
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Matched Invoice</TableHead>
                     <TableHead className="text-right">Invoice Amount</TableHead>
-                    <TableHead className="text-right pr-4">
-                      Confidence
-                    </TableHead>
+                    <TableHead className="text-right">Confidence</TableHead>
+                    <TableHead className="text-right pr-4">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -454,6 +454,39 @@ export function BankReconciliation() {
                         >
                           {r.confidence}%
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        {r.confidence > 0 &&
+                          (() => {
+                            const txn = transactions.find(
+                              (t) => t.id === r.transactionId,
+                            );
+                            return (
+                              <Button
+                                size="sm"
+                                variant={
+                                  txn?.reconciled ? "default" : "outline"
+                                }
+                                className="text-xs h-7"
+                                onClick={() => {
+                                  if (txn) {
+                                    updateTransaction(txn.id, {
+                                      reconciled: !txn.reconciled,
+                                    });
+                                    toast.success(
+                                      txn.reconciled
+                                        ? "Marked as unreconciled"
+                                        : "Marked as reconciled",
+                                    );
+                                  }
+                                }}
+                              >
+                                {txn?.reconciled
+                                  ? "✓ Reconciled"
+                                  : "Mark Reconciled"}
+                              </Button>
+                            );
+                          })()}
                       </TableCell>
                     </TableRow>
                   ))}

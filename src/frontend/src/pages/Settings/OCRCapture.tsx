@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import { useParties } from "@/hooks/useQueries";
 import type { InvoiceLineItem, InvoiceType } from "@/types/gst";
 import { GST_RATES } from "@/types/gst";
 import {
@@ -475,6 +476,7 @@ export function OCRCapture() {
 
   const { addInvoice } = useInvoices();
   const { addPurchase } = usePurchases();
+  const { data: parties = [] } = useParties();
 
   const processFile = async (file: File) => {
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
@@ -513,7 +515,7 @@ export function OCRCapture() {
         workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
         corePath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
+          "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.4/tesseract-core.wasm.js",
       });
 
       setStatusText("Recognizing text...");
@@ -647,11 +649,14 @@ export function OCRCapture() {
             lineTotal: lineTotal + cgstAmt + sgstAmt,
           };
         });
+        const foundParty = gstin
+          ? parties.find((p) => p.gstin === gstin)
+          : null;
         addPurchase({
           billNumber: invoiceNo || `OCR-${Date.now()}`,
           billDate: date || new Date().toISOString().split("T")[0],
           dueDate: date || new Date().toISOString().split("T")[0],
-          vendorId: "",
+          vendorId: foundParty ? String(foundParty.id) : "",
           vendorName: vendorName,
           vendorGstin: gstin,
           lineItems: purchaseLineItems,
@@ -695,12 +700,15 @@ export function OCRCapture() {
           };
         });
         const invType: InvoiceType = docType as InvoiceType;
+        const foundInvoiceParty = gstin
+          ? parties.find((p) => p.gstin === gstin)
+          : null;
         addInvoice({
           type: invType,
           invoiceNumber: invoiceNo || `OCR-${Date.now()}`,
           date: date || new Date().toISOString().split("T")[0],
           dueDate: date || new Date().toISOString().split("T")[0],
-          partyId: "",
+          partyId: foundInvoiceParty ? String(foundInvoiceParty.id) : "",
           partyName: vendorName,
           partyGstin: gstin,
           placeOfSupply: "",

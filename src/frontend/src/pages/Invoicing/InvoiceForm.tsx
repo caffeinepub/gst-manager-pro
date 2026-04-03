@@ -170,8 +170,8 @@ export function InvoiceForm({
       setPartyId(editingInvoice.partyId);
       setPlaceOfSupply(editingInvoice.placeOfSupply);
       setLines(editingInvoice.lineItems);
-      setIrnNumber(editingInvoice.irnNumber);
-      setEWayBillNumber(editingInvoice.eWayBillNumber);
+      setIrnNumber(editingInvoice.irnNumber || "");
+      setEWayBillNumber(editingInvoice.eWayBillNumber || "");
       setNotes(editingInvoice.notes);
       setTermsConditions(editingInvoice.termsConditions);
       setDeclaration(
@@ -279,6 +279,20 @@ export function InvoiceForm({
     }
 
     const posState = INDIAN_STATES.find((s) => s.code === placeOfSupply);
+    // For credit/debit notes, populate linkedInvoiceNumber from the linked invoice
+    let resolvedLinkedInvoiceNumber = "";
+    if ((type === "credit_note" || type === "debit_note") && linkedInvoiceId) {
+      const linkedInv = (
+        typeof window !== "undefined"
+          ? (JSON.parse(localStorage.getItem("gst_invoices") || "[]") as {
+              id: string;
+              invoiceNumber: string;
+            }[])
+          : []
+      ).find((inv) => inv.id === linkedInvoiceId);
+      resolvedLinkedInvoiceNumber = linkedInv?.invoiceNumber || "";
+    }
+
     const invoiceData = {
       type,
       invoiceNumber,
@@ -298,6 +312,7 @@ export function InvoiceForm({
       declaration,
       status: newStatus,
       linkedInvoiceId,
+      linkedInvoiceNumber: resolvedLinkedInvoiceNumber,
     };
 
     if (editingInvoice) {
@@ -396,28 +411,51 @@ export function InvoiceForm({
             <Button
               variant="outline"
               onClick={() => {
+                // biome-ignore lint/suspicious/noExplicitAny: Web Speech API not in standard TS lib types
+                const w = window as any;
+                const SpeechRecognitionAPI =
+                  w.SpeechRecognition || w.webkitSpeechRecognition;
+                if (!SpeechRecognitionAPI) {
+                  toast.error(
+                    "Voice input is not supported in this browser. Please use Chrome or Edge.",
+                  );
+                  return;
+                }
                 setShowVoiceDialog(true);
                 setVoiceListening(true);
-                setTimeout(() => {
+                const recognition = new SpeechRecognitionAPI();
+                recognition.lang = "en-IN";
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+                recognition.onresult = (event: {
+                  results: {
+                    [key: number]: { [key: number]: { transcript: string } };
+                  };
+                }) => {
+                  const transcript = event.results[0][0].transcript;
                   setVoiceListening(false);
-                  // Pre-fill first available party
-                  if (parties.length > 0) {
-                    setPartyId(String(parties[0].id));
-                  }
-                  // Add a voice-captured line item
+                  setShowVoiceDialog(false);
+                  // Add line item with transcribed description
                   setLines((prev) => [
                     ...prev.filter((l) => l.description),
                     {
                       ...emptyLine(),
-                      description: "Voice Captured Item",
-                      qty: 1,
-                      unitPrice: 5000,
-                      gstRate: 18,
+                      description: transcript,
                     },
                   ]);
+                  toast.success(
+                    `Voice captured: "${transcript}" — please fill in price and quantity.`,
+                  );
+                };
+                recognition.onerror = () => {
+                  setVoiceListening(false);
                   setShowVoiceDialog(false);
-                  toast.success("Voice captured — please verify the details");
-                }, 2000);
+                  toast.error("Voice capture failed. Please try again.");
+                };
+                recognition.onend = () => {
+                  setVoiceListening(false);
+                };
+                recognition.start();
               }}
               data-ocid="invoice.voice.button"
               className="gap-1.5"

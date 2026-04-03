@@ -12,6 +12,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useInvoices } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
@@ -153,15 +159,36 @@ export function GSTR1() {
             </div>
             <div className="flex gap-2">
               {periodStatus.status === "not_filed" && (
-                <Button
-                  size="sm"
-                  onClick={handleFilingAction}
-                  data-ocid="gstr1.file.primary_button"
-                  className="gap-2"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  File GSTR-1
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="text-xs text-amber-600 border-amber-400"
+                  >
+                    Demo
+                  </Badge>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          onClick={handleFilingAction}
+                          data-ocid="gstr1.file.primary_button"
+                          className="gap-2"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          File GSTR-1
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        className="max-w-xs text-xs"
+                      >
+                        This is a simulation. Real filing requires GSTN API
+                        credentials in Settings &gt; API Config.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               )}
               {periodStatus.status === "filed" && (
                 <Button
@@ -245,7 +272,8 @@ export function GSTR1() {
                   }),
                 );
 
-                // B2CS: small B2C supplies (no GSTIN, taxable value per inv)
+                // B2CS: small B2C supplies — group by (placeOfSupply, gstRate, isIgst)
+                // Iterate ALL line items to create separate entry per unique GST rate
                 const b2csGrouped = b2c.reduce<
                   Record<
                     string,
@@ -256,24 +284,32 @@ export function GSTR1() {
                       camt: number;
                       samt: number;
                       csamt: number;
+                      isIgst: boolean;
                     }
                   >
                 >((acc, inv) => {
-                  const key = `${inv.placeOfSupply}-${inv.lineItems[0]?.gstRate ?? 0}`;
-                  if (!acc[key])
-                    acc[key] = {
-                      txval: 0,
-                      rt: inv.lineItems[0]?.gstRate ?? 0,
-                      iamt: 0,
-                      camt: 0,
-                      samt: 0,
-                      csamt: 0,
-                    };
-                  acc[key].txval += inv.subtotal - inv.totalDiscount;
-                  acc[key].iamt += inv.totalIgst;
-                  acc[key].camt += inv.totalCgst;
-                  acc[key].samt += inv.totalSgst;
-                  acc[key].csamt += inv.totalCess;
+                  const isIgst = inv.totalIgst > 0;
+                  for (const li of inv.lineItems) {
+                    const rate = li.gstRate ?? 0;
+                    const key = `${inv.placeOfSupply}-${rate}-${isIgst ? "I" : "C"}`;
+                    if (!acc[key])
+                      acc[key] = {
+                        txval: 0,
+                        rt: rate,
+                        iamt: 0,
+                        camt: 0,
+                        samt: 0,
+                        csamt: 0,
+                        isIgst,
+                      };
+                    const taxable =
+                      li.qty * li.unitPrice * (1 - li.discountPercent / 100);
+                    acc[key].txval += taxable;
+                    acc[key].iamt += li.igst;
+                    acc[key].camt += li.cgst;
+                    acc[key].samt += li.sgst;
+                    acc[key].csamt += li.cess;
+                  }
                   return acc;
                 }, {});
                 const b2csSchema = Object.entries(b2csGrouped).map(
@@ -365,7 +401,10 @@ export function GSTR1() {
                   version: "GST3.0.4",
                   hash: "hash",
                   gstin: "",
-                  fp: dateFrom.slice(0, 7).replace("-", ""),
+                  fp: (() => {
+                    const [year, month] = dateFrom.split("-");
+                    return `${month}${year}`;
+                  })(),
                   gt: [...b2b, ...b2c].reduce((s, i) => s + i.grandTotal, 0),
                   cur_gt: [...b2b, ...b2c].reduce(
                     (s, i) => s + i.grandTotal,
@@ -444,6 +483,103 @@ export function GSTR1() {
               className="gap-2"
             >
               <Table2 className="w-4 h-4" /> Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                // Excel export using SheetJS CDN
+                try {
+                  const w = window as typeof window & {
+                    XLSX?: {
+                      utils: {
+                        json_to_sheet: (d: object[]) => object;
+                        book_new: () => object;
+                        book_append_sheet: (
+                          wb: object,
+                          ws: object,
+                          name: string,
+                        ) => void;
+                      };
+                      writeFile: (wb: object, name: string) => void;
+                    };
+                  };
+                  if (!w.XLSX) {
+                    await new Promise<void>((resolve, reject) => {
+                      const s = document.createElement("script");
+                      s.src =
+                        "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+                      s.onload = () => resolve();
+                      s.onerror = () =>
+                        reject(new Error("Failed to load XLSX"));
+                      document.head.appendChild(s);
+                    });
+                  }
+                  const XLSX = w.XLSX;
+                  if (!XLSX) {
+                    toast.error("Failed to load Excel library");
+                    return;
+                  }
+                  const b2bData = b2b.map((inv) => ({
+                    "Invoice #": inv.invoiceNumber,
+                    Date: inv.date,
+                    Party: inv.partyName,
+                    GSTIN: inv.partyGstin,
+                    "Place of Supply": inv.placeOfSupplyName,
+                    Taxable: inv.subtotal - inv.totalDiscount,
+                    CGST: inv.totalCgst,
+                    SGST: inv.totalSgst,
+                    IGST: inv.totalIgst,
+                    "Grand Total": inv.grandTotal,
+                  }));
+                  const b2cData = b2c.map((inv) => ({
+                    "Invoice #": inv.invoiceNumber,
+                    Date: inv.date,
+                    Party: inv.partyName,
+                    "Place of Supply": inv.placeOfSupplyName,
+                    Taxable: inv.subtotal - inv.totalDiscount,
+                    CGST: inv.totalCgst,
+                    SGST: inv.totalSgst,
+                    IGST: inv.totalIgst,
+                    "Grand Total": inv.grandTotal,
+                  }));
+                  const cdnrData = [...creditNotes, ...debitNotes].map(
+                    (inv) => ({
+                      "Note #": inv.invoiceNumber,
+                      Date: inv.date,
+                      Type: inv.type,
+                      Party: inv.partyName,
+                      GSTIN: inv.partyGstin,
+                      Taxable: inv.subtotal - inv.totalDiscount,
+                      CGST: inv.totalCgst,
+                      SGST: inv.totalSgst,
+                      IGST: inv.totalIgst,
+                    }),
+                  );
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(
+                    wb,
+                    XLSX.utils.json_to_sheet(b2bData),
+                    "B2B",
+                  );
+                  XLSX.utils.book_append_sheet(
+                    wb,
+                    XLSX.utils.json_to_sheet(b2cData),
+                    "B2CS",
+                  );
+                  XLSX.utils.book_append_sheet(
+                    wb,
+                    XLSX.utils.json_to_sheet(cdnrData),
+                    "CDNR",
+                  );
+                  XLSX.writeFile(wb, `GSTR1_${dateFrom}_${dateTo}.xlsx`);
+                } catch {
+                  toast.error("Excel export failed");
+                }
+              }}
+              data-ocid="gstr1.export_excel.button"
+              className="gap-2"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </Button>
           </div>
         </CardContent>

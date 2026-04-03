@@ -42,16 +42,21 @@ interface ReportsProps {
   page: AppPage;
 }
 
-export function Reports({ page }: ReportsProps) {
-  const { invoices } = useInvoices();
-  const { purchases } = usePurchases();
-  const { entries } = useJournalEntries();
-  const { accounts } = useBankAccounts();
-  const { start: defStart, end: defEnd } = getCurrentMonth();
-  const [dateFrom, setDateFrom] = useState(defStart);
-  const [dateTo, setDateTo] = useState(defEnd);
-
-  const FilterBar = ({ onExport }: { onExport: () => void }) => (
+// Defined outside Reports to prevent remounts on state change
+function FilterBar({
+  dateFrom,
+  dateTo,
+  setDateFrom,
+  setDateTo,
+  onExport,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  setDateFrom: (v: string) => void;
+  setDateTo: (v: string) => void;
+  onExport: () => void;
+}) {
+  return (
     <Card className="bg-card border-border/70">
       <CardContent className="pt-4">
         <div className="flex flex-wrap gap-4 items-end">
@@ -85,6 +90,16 @@ export function Reports({ page }: ReportsProps) {
       </CardContent>
     </Card>
   );
+}
+
+export function Reports({ page }: ReportsProps) {
+  const { invoices } = useInvoices();
+  const { purchases } = usePurchases();
+  const { entries } = useJournalEntries();
+  const { accounts } = useBankAccounts();
+  const { start: defStart, end: defEnd } = getCurrentMonth();
+  const [dateFrom, setDateFrom] = useState(defStart);
+  const [dateTo, setDateTo] = useState(defEnd);
 
   if (page === "reports-sales") {
     const filtered = invoices.filter(
@@ -137,7 +152,13 @@ export function Reports({ page }: ReportsProps) {
     };
     return (
       <div className="space-y-4" data-ocid="report.sales.section">
-        <FilterBar onExport={exportSales} />
+        <FilterBar
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          setDateFrom={setDateFrom}
+          setDateTo={setDateTo}
+          onExport={exportSales}
+        />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
@@ -304,7 +325,13 @@ export function Reports({ page }: ReportsProps) {
     };
     return (
       <div className="space-y-4" data-ocid="report.purchase.section">
-        <FilterBar onExport={exportPurchase} />
+        <FilterBar
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          setDateFrom={setDateFrom}
+          setDateTo={setDateTo}
+          onExport={exportPurchase}
+        />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
@@ -419,7 +446,7 @@ export function Reports({ page }: ReportsProps) {
       const month = inv.date.slice(0, 7);
       if (!months[month])
         months[month] = { sales: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 };
-      months[month].sales += inv.grandTotal;
+      months[month].sales += (inv.subtotal || 0) - (inv.totalDiscount || 0);
       months[month].cgst += inv.totalCgst;
       months[month].sgst += inv.totalSgst;
       months[month].igst += inv.totalIgst;
@@ -711,7 +738,10 @@ export function Reports({ page }: ReportsProps) {
           inv.date >= dateFrom &&
           inv.date <= dateTo,
       )
-      .reduce((s, inv) => s + inv.grandTotal, 0);
+      .reduce(
+        (s, inv) => s + (inv.subtotal || 0) - (inv.totalDiscount || 0),
+        0,
+      );
     const expenses = purchases
       .filter(
         (p) =>
@@ -719,7 +749,7 @@ export function Reports({ page }: ReportsProps) {
           p.billDate >= dateFrom &&
           p.billDate <= dateTo,
       )
-      .reduce((s, p) => s + p.grandTotal, 0);
+      .reduce((s, p) => s + (p.subtotal || 0) - (p.totalDiscount || 0), 0);
     const profit = income - expenses;
 
     const exportPL = () => {
@@ -742,7 +772,13 @@ export function Reports({ page }: ReportsProps) {
 
     return (
       <div className="space-y-4" data-ocid="report.pl.section">
-        <FilterBar onExport={exportPL} />
+        <FilterBar
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          setDateFrom={setDateFrom}
+          setDateTo={setDateTo}
+          onExport={exportPL}
+        />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Profit & Loss Statement</CardTitle>

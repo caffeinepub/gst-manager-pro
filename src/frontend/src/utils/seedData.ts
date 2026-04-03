@@ -446,6 +446,9 @@ export const SEED_TRANSACTIONS: BankTransaction[] = [
 ];
 
 export function seedInitialData() {
+  // Only seed if the user has never saved any data (truly first-time load)
+  // Guard: if a business profile already exists, the user has real data — never overwrite
+  if (localStorage.getItem("gst_business_profile")) return;
   if (localStorage.getItem("gst_seeded")) return;
 
   localStorage.setItem("gst_invoices", JSON.stringify(SEED_INVOICES));

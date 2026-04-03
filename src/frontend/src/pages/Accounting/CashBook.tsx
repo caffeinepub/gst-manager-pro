@@ -69,6 +69,13 @@ export function CashBook() {
       ? transactions
       : transactions.filter((t) => t.accountId === filterAccount);
 
+  // Get opening balance for the selected account
+  const selectedAccount =
+    filterAccount !== "all"
+      ? accounts.find((a) => a.id === filterAccount)
+      : null;
+  const openingBalance = selectedAccount?.openingBalance || 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.accountId) {
@@ -102,13 +109,19 @@ export function CashBook() {
   const totalDebit = filtered.reduce((s, t) => s + t.debit, 0);
   const totalCredit = filtered.reduce((s, t) => s + t.credit, 0);
 
-  // Calculate running balance sorted by date
-  const sortedFiltered = [...filtered].sort(
+  // Calculate running balance using ALL transactions for the account (not just visible ones)
+  // This ensures the balance is accurate even when filters are applied
+  const allAccountTransactions =
+    filterAccount === "all"
+      ? transactions
+      : transactions.filter((t) => t.accountId === filterAccount);
+
+  const sortedAll = [...allAccountTransactions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
   const runningBalances = new Map<string, number>();
-  let runningTotal = 0;
-  for (const txn of sortedFiltered) {
+  let runningTotal = openingBalance;
+  for (const txn of sortedAll) {
     runningTotal += txn.credit - txn.debit;
     runningBalances.set(txn.id, runningTotal);
   }

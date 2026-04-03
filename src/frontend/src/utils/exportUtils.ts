@@ -143,15 +143,13 @@ export async function exportToPDF(
     const pageHeight = pdf.internal.pageSize.getHeight();
     const imgWidth = pageWidth - 20;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let y = 10;
-    let remaining = imgHeight;
-    while (remaining > 0) {
-      pdf.addImage(imgData, "PNG", 10, y, imgWidth, imgHeight);
-      remaining -= pageHeight - 20;
-      if (remaining > 0) {
-        pdf.addPage();
-        y = 10 - (imgHeight - remaining);
-      }
+    const pageH = pageHeight - 20;
+    let yOffset = 0;
+    while (yOffset < imgHeight) {
+      if (yOffset > 0) pdf.addPage();
+      // Clip each page to a page-height slice of the image
+      pdf.addImage(imgData, "PNG", 10, 10 - yOffset, imgWidth, imgHeight);
+      yOffset += pageH;
     }
     pdf.save(`${filename}.pdf`);
   } catch (err) {

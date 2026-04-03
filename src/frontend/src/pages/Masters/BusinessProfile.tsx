@@ -41,7 +41,11 @@ export function BusinessProfile() {
   const { logo, saveLogo, clearLogo } = useBusinessLogo();
   const { saveLocalBusinessName } = useLocalBusinessName();
   const { profile: extended, saveProfile: saveExtended } = useExtendedProfile();
-  const { accounts, updateAccount } = useBankAccounts();
+  const {
+    accounts,
+    addAccount: addBankAccount,
+    updateAccount,
+  } = useBankAccounts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [defaultsForm, setDefaultsForm] = useState({
@@ -120,7 +124,8 @@ export function BusinessProfile() {
       return;
     }
     if (form.gstin.trim() && !GSTIN_REGEX.test(form.gstin.trim())) {
-      toast.warning("GSTIN format looks incorrect. Saving anyway.");
+      toast.error("Invalid GSTIN format. Please correct before saving.");
+      return;
     }
 
     // 1. Save to localStorage immediately — this is the primary store
@@ -182,28 +187,8 @@ export function BusinessProfile() {
         ifsc: extForm.ifsc,
       });
     } else if (extForm.bankName || extForm.accountNo || extForm.ifsc) {
-      // Use direct localStorage write to set a fixed ID
-      const stored = localStorage.getItem("gst_bank_accounts");
-      const existingAccounts: BankAccount[] = stored ? JSON.parse(stored) : [];
-      const idx = existingAccounts.findIndex(
-        (a) => a.id === "profile-primary-bank",
-      );
-      if (idx >= 0) {
-        existingAccounts[idx] = { ...existingAccounts[idx], ...profileEntry };
-      } else {
-        existingAccounts.push(profileEntry);
-      }
-      localStorage.setItem(
-        "gst_bank_accounts",
-        JSON.stringify(existingAccounts),
-      );
-      // Dispatch storage event so useBankAccounts hook re-reads
-      window.dispatchEvent(
-        new StorageEvent("storage", {
-          key: "gst_bank_accounts",
-          newValue: JSON.stringify(existingAccounts),
-        }),
-      );
+      // Use the addAccount hook function to properly persist via store
+      addBankAccount(profileEntry);
     }
 
     toast.success("Bank details saved and synced to Bank Accounts");

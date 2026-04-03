@@ -73,17 +73,12 @@ function injectSeedData() {
   localStorage.setItem(
     "gst_business_profile",
     JSON.stringify({
-      name: "MILITIS Technologies Pvt Ltd",
+      businessName: "MILITIS Technologies Pvt Ltd",
       gstin: "27AABCM1234F1Z5",
-      pan: "AABCM1234F",
-      address: "501, Tech Park, Andheri East, Mumbai - 400069",
-      state: "Maharashtra",
+      registrationType: "regular",
       stateCode: "27",
-      phone: "9820123456",
-      email: "accounts@militis.in",
-      bankName: "State Bank of India",
-      accountNumber: "10234567890",
-      ifsc: "SBIN0001234",
+      address: "501, Tech Park, Andheri East, Mumbai - 400069",
+      contactDetails: "9820123456 | accounts@militis.in",
     }),
   );
 
@@ -693,11 +688,18 @@ function buildTestGroups(): TestGroup[] {
           name: "Business Profile: exists with correct GSTIN",
           run: async () => {
             const bp = readLS("gst_business_profile");
-            const expected = "gstin = 27AABCM1234F1Z5";
+            const expected =
+              "businessName = MILITIS Technologies Pvt Ltd & gstin = 27AABCM1234F1Z5";
             const actual = bp
-              ? `gstin = ${bp.gstin}`
+              ? `businessName = ${bp.businessName}, gstin = ${bp.gstin}`
               : "gst_business_profile not found";
-            return { pass: bp?.gstin === "27AABCM1234F1Z5", expected, actual };
+            return {
+              pass:
+                bp?.gstin === "27AABCM1234F1Z5" &&
+                bp?.businessName === "MILITIS Technologies Pvt Ltd",
+              expected,
+              actual,
+            };
           },
         },
         {

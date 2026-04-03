@@ -450,6 +450,10 @@ export function Parties() {
                     {gstinValidResult.message}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  ⚠️ Format validation only. Live taxpayer lookup requires GSTN
+                  API key in Settings &gt; API Config.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>PAN</Label>

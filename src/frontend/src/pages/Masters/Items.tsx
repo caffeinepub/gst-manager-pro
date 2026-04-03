@@ -37,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs } from "@/hooks/useGSTStore";
+import { useAuditLogs, useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { ItemType } from "@/hooks/useQueries";
 import {
   useAddItem,
@@ -67,6 +67,24 @@ const emptyItem: Omit<Item, "id"> = {
 
 export function Items() {
   const { data: items = [], isLoading } = useItems();
+  const { invoices } = useInvoices();
+  const { purchases } = usePurchases();
+
+  // Compute live closing stock for each item
+  const getClosingStock = (itemId: string, openingStock: number): number => {
+    const itemIdStr = String(itemId);
+    const soldQty = invoices
+      .filter((inv) => inv.status === "confirmed")
+      .flatMap((inv) => inv.lineItems)
+      .filter((li) => String(li.itemId) === itemIdStr)
+      .reduce((sum, li) => sum + li.qty, 0);
+    const purchasedQty = purchases
+      .filter((p) => p.status === "confirmed")
+      .flatMap((p) => p.lineItems)
+      .filter((li) => String(li.itemId) === itemIdStr)
+      .reduce((sum, li) => sum + li.qty, 0);
+    return openingStock + purchasedQty - soldQty;
+  };
   const { mutate: addItem, isPending: isAdding } = useAddItem();
   const { mutate: updateItem, isPending: isUpdating } = useUpdateItem();
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteItem();
@@ -235,19 +253,23 @@ export function Items() {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const openingStock = Number(item.openingStock);
+                          const closingStock = getClosingStock(
+                            String(item.id),
+                            Number(item.openingStock),
+                          );
                           return (
                             <Badge
                               variant={
-                                openingStock > 10
+                                closingStock > 10
                                   ? "default"
-                                  : openingStock > 0
+                                  : closingStock > 0
                                     ? "secondary"
                                     : "destructive"
                               }
                               className="font-numeric text-xs"
+                              title={`Opening: ${Number(item.openingStock)} | Live: ${closingStock}`}
                             >
-                              {openingStock}
+                              {closingStock}
                             </Badge>
                           );
                         })()}

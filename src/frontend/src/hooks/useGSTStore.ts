@@ -85,6 +85,18 @@ export function usePayments() {
     [setPayments],
   );
 
+  const updatePayment = useCallback(
+    (id: string, updates: Partial<Payment>) => {
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, ...updates, updatedAt: now() } : p,
+        ),
+      );
+      notifyChange("gst_payments");
+    },
+    [setPayments],
+  );
+
   const deletePayment = useCallback(
     (id: string) => {
       setPayments((prev) => prev.filter((p) => p.id !== id));
@@ -93,7 +105,7 @@ export function usePayments() {
     [setPayments],
   );
 
-  return { payments, addPayment, deletePayment };
+  return { payments, addPayment, updatePayment, deletePayment };
 }
 
 export function usePurchases() {
@@ -262,7 +274,7 @@ export function useAuditLogs() {
     (log: Omit<AuditLog, "id" | "timestamp">) => {
       const newLog: AuditLog = { ...log, id: generateId(), timestamp: now() };
       setLogs((prev) => [newLog, ...prev].slice(0, 500)); // Keep last 500 logs
-      // Don't notify cloud for audit logs (too frequent)
+      notifyChange("gst_audit_logs");
     },
     [setLogs],
   );
