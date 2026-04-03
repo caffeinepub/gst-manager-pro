@@ -8,6 +8,7 @@ import {
   Menu,
   MessageSquare,
   ShieldCheck,
+  Users2,
 } from "lucide-react";
 
 interface BottomNavProps {
@@ -57,6 +58,13 @@ const BOTTOM_NAV_ITEMS: Array<{
     matchPrefix: "reports",
   },
   {
+    label: "Payroll",
+    page: "payroll-employees",
+    icon: Users2,
+    ocid: "bottom_nav.payroll.link",
+    matchPrefix: "payroll",
+  },
+  {
     label: "AI Chat",
     page: "ai-assistant",
     icon: MessageSquare,
@@ -70,6 +78,7 @@ const DIRECT_NAV_PAGES = new Set<AppPage>([
   "gst-gstr1",
   "accounting-cashbook",
   "reports-sales",
+  "payroll-employees",
   "ai-assistant",
 ]);
 
@@ -82,6 +91,7 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
     !currentPage.startsWith("gst") &&
     !currentPage.startsWith("accounting") &&
     !currentPage.startsWith("reports") &&
+    !currentPage.startsWith("payroll") &&
     currentPage !== "ai-assistant";
 
   const btnClass = (isActive: boolean) =>

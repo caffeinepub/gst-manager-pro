@@ -75,6 +75,12 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "settings-import": "Import Data",
   "settings-preferences": "Preferences",
   "uat-dashboard": "UAT Dashboard",
+  "payroll-employees": "Employees",
+  "payroll-attendance": "Attendance",
+  "payroll-process": "Process Payroll",
+  "payroll-payslips": "Payslips",
+  "payroll-reports": "Payroll Reports",
+  "payroll-statutory": "Statutory Compliance",
 };
 
 const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {

@@ -281,6 +281,9 @@ export const CHART_OF_ACCOUNTS = [
   { code: "2103", name: "GST Payable - IGST", type: "liability" },
   { code: "2104", name: "GST Payable - Cess", type: "liability" },
   { code: "2201", name: "TDS Payable", type: "liability" },
+  { code: "2301", name: "PF Payable", type: "liability" },
+  { code: "2302", name: "ESI Payable", type: "liability" },
+  { code: "2303", name: "Professional Tax Payable", type: "liability" },
   { code: "3001", name: "Capital Account", type: "equity" },
   { code: "3002", name: "Retained Earnings", type: "equity" },
   { code: "4001", name: "Sales Revenue", type: "income" },
@@ -292,6 +295,8 @@ export const CHART_OF_ACCOUNTS = [
   { code: "5102", name: "Rent", type: "expense" },
   { code: "5103", name: "Utilities", type: "expense" },
   { code: "5104", name: "Depreciation", type: "expense" },
+  { code: "5105", name: "Employer PF Contribution", type: "expense" },
+  { code: "5106", name: "Employer ESI Contribution", type: "expense" },
   { code: "5201", name: "Marketing & Advertising", type: "expense" },
   { code: "5202", name: "Travel & Conveyance", type: "expense" },
   { code: "5203", name: "Professional Fees", type: "expense" },
@@ -359,4 +364,121 @@ export type AppPage =
   | "settings-ocr"
   | "settings-preferences"
   | "settings-import"
-  | "uat-dashboard";
+  | "uat-dashboard"
+  | "payroll-employees"
+  | "payroll-attendance"
+  | "payroll-process"
+  | "payroll-payslips"
+  | "payroll-reports"
+  | "payroll-statutory";
+
+// ─── Payroll Types ───────────────────────────────────────────────────────────
+
+export type EmployeeType = "salaried" | "daily_wage" | "contract";
+export type EmployeeStatus = "active" | "inactive" | "terminated";
+export type LeaveType = "CL" | "SL" | "EL";
+export type AttendanceStatus = "P" | "A" | "H"; // Present, Absent, Half-day
+export type PayrollRunStatus = "draft" | "approved" | "finalized";
+
+export interface SalaryComponent {
+  name: string;
+  amount: number;
+  type: "earning" | "deduction";
+}
+
+export interface Employee {
+  id: string;
+  empCode: string;
+  name: string;
+  designation: string;
+  department: string;
+  employeeType: EmployeeType;
+  status: EmployeeStatus;
+  dateOfJoining: string;
+  // Salary
+  basicSalary: number;
+  hra: number;
+  da: number;
+  specialAllowance: number;
+  customComponents: SalaryComponent[];
+  dailyWageRate?: number;
+  // Statutory flags
+  isPfApplicable: boolean;
+  isEsiApplicable: boolean;
+  professionalTaxState: string;
+  tdsSectionApplicable: boolean;
+  // Bank details
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  pan: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  month: string; // "YYYY-MM"
+  days: Record<string, AttendanceStatus>; // key = "YYYY-MM-DD"
+  presentDays: number;
+  absentDays: number;
+  halfDays: number;
+  lopDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveBalance {
+  id: string;
+  employeeId: string;
+  year: number;
+  CL: number;
+  SL: number;
+  EL: number;
+  CLUsed: number;
+  SLUsed: number;
+  ELUsed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollRunLine {
+  employeeId: string;
+  employeeName: string;
+  empCode: string;
+  basicSalary: number;
+  hra: number;
+  da: number;
+  specialAllowance: number;
+  otherEarnings: number;
+  grossSalary: number;
+  lopDays: number;
+  lopDeduction: number;
+  employeePF: number;
+  employerPF: number;
+  employeeESI: number;
+  employerESI: number;
+  professionalTax: number;
+  tdsDeduction: number;
+  otherDeductions: number;
+  totalDeductions: number;
+  netPay: number;
+}
+
+export interface PayrollRun {
+  id: string;
+  month: string; // "YYYY-MM"
+  status: PayrollRunStatus;
+  lines: PayrollRunLine[];
+  totalGross: number;
+  totalDeductions: number;
+  totalNetPay: number;
+  totalEmployerPF: number;
+  totalEmployerESI: number;
+  journalEntryId?: string;
+  notes: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

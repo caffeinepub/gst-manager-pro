@@ -28,6 +28,7 @@ import {
   BookMarked,
   BookOpen,
   Building2,
+  CalendarDays,
   ChevronDown,
   ClipboardList,
   CreditCard,
@@ -38,6 +39,7 @@ import {
   FileText,
   FlaskConical,
   History,
+  IndianRupee,
   Landmark,
   LayoutDashboard,
   MessageSquare,
@@ -57,6 +59,7 @@ import {
   Truck,
   Upload,
   Users,
+  Users2,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -152,6 +155,18 @@ const navItems: NavItem[] = [
     icon: Package,
     children: [
       { label: "Inventory ERP", page: "inventory-erp", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Payroll",
+    icon: Users2,
+    children: [
+      { label: "Employees", page: "payroll-employees", icon: Users },
+      { label: "Attendance", page: "payroll-attendance", icon: CalendarDays },
+      { label: "Process Payroll", page: "payroll-process", icon: IndianRupee },
+      { label: "Payslips", page: "payroll-payslips", icon: FileText },
+      { label: "Reports", page: "payroll-reports", icon: BarChart3 },
+      { label: "Statutory", page: "payroll-statutory", icon: ShieldCheck },
     ],
   },
   {

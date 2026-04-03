@@ -26,6 +26,12 @@ import { BusinessProfile } from "@/pages/Masters/BusinessProfile";
 import { Items } from "@/pages/Masters/Items";
 import { Parties } from "@/pages/Masters/Parties";
 import { TaxRates } from "@/pages/Masters/TaxRates";
+import { Attendance } from "@/pages/Payroll/Attendance";
+import { Employees } from "@/pages/Payroll/Employees";
+import { PayrollReports } from "@/pages/Payroll/PayrollReports";
+import { Payslips } from "@/pages/Payroll/Payslips";
+import { ProcessPayroll } from "@/pages/Payroll/ProcessPayroll";
+import { StatutoryCompliance } from "@/pages/Payroll/StatutoryCompliance";
 import { CashFlow } from "@/pages/Reports/CashFlow";
 import { Reports } from "@/pages/Reports/Reports";
 import { StockSummary } from "@/pages/Reports/StockSummary";
@@ -133,6 +139,18 @@ function PageContent({
       return <Preferences />;
     case "uat-dashboard":
       return <AutomatedUAT />;
+    case "payroll-employees":
+      return <Employees />;
+    case "payroll-attendance":
+      return <Attendance />;
+    case "payroll-process":
+      return <ProcessPayroll />;
+    case "payroll-payslips":
+      return <Payslips />;
+    case "payroll-reports":
+      return <PayrollReports />;
+    case "payroll-statutory":
+      return <StatutoryCompliance />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }

@@ -1,10 +1,14 @@
 import type {
+  AttendanceRecord,
   AuditLog,
   BankAccount,
   BankTransaction,
+  Employee,
   Invoice,
   JournalEntry,
+  LeaveBalance,
   Payment,
+  PayrollRun,
   Purchase,
 } from "@/types/gst";
 import { useCallback } from "react";
@@ -420,4 +424,171 @@ export function useInvoiceCounter() {
   );
 
   return { getNextNumber };
+}
+
+// ─── Payroll Hooks ────────────────────────────────────────────────────────────
+
+export function useEmployees() {
+  const [employees, setEmployees] = useLocalStorage<Employee[]>(
+    "gst_employees",
+    [],
+  );
+
+  const addEmployee = useCallback(
+    (emp: Omit<Employee, "id" | "createdAt" | "updatedAt">) => {
+      const newEmp: Employee = {
+        ...emp,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      setEmployees((prev) => [newEmp, ...prev]);
+      notifyChange("gst_employees");
+      return newEmp.id;
+    },
+    [setEmployees],
+  );
+
+  const updateEmployee = useCallback(
+    (id: string, updates: Partial<Employee>) => {
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === id ? { ...e, ...updates, updatedAt: now() } : e,
+        ),
+      );
+      notifyChange("gst_employees");
+    },
+    [setEmployees],
+  );
+
+  const deleteEmployee = useCallback(
+    (id: string) => {
+      setEmployees((prev) => prev.filter((e) => e.id !== id));
+      notifyChange("gst_employees");
+    },
+    [setEmployees],
+  );
+
+  return { employees, addEmployee, updateEmployee, deleteEmployee };
+}
+
+export function useAttendanceRecords() {
+  const [records, setRecords] = useLocalStorage<AttendanceRecord[]>(
+    "gst_attendance",
+    [],
+  );
+
+  const addRecord = useCallback(
+    (r: Omit<AttendanceRecord, "id" | "createdAt" | "updatedAt">) => {
+      const newR: AttendanceRecord = {
+        ...r,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      setRecords((prev) => [newR, ...prev]);
+      notifyChange("gst_attendance");
+      return newR.id;
+    },
+    [setRecords],
+  );
+
+  const updateRecord = useCallback(
+    (id: string, updates: Partial<AttendanceRecord>) => {
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, ...updates, updatedAt: now() } : r,
+        ),
+      );
+      notifyChange("gst_attendance");
+    },
+    [setRecords],
+  );
+
+  const deleteRecord = useCallback(
+    (id: string) => {
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      notifyChange("gst_attendance");
+    },
+    [setRecords],
+  );
+
+  return { records, addRecord, updateRecord, deleteRecord };
+}
+
+export function useLeaveBalances() {
+  const [balances, setBalances] = useLocalStorage<LeaveBalance[]>(
+    "gst_leave_balances",
+    [],
+  );
+
+  const addBalance = useCallback(
+    (b: Omit<LeaveBalance, "id" | "createdAt" | "updatedAt">) => {
+      const newB: LeaveBalance = {
+        ...b,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      setBalances((prev) => [...prev, newB]);
+      notifyChange("gst_leave_balances");
+      return newB.id;
+    },
+    [setBalances],
+  );
+
+  const updateBalance = useCallback(
+    (id: string, updates: Partial<LeaveBalance>) => {
+      setBalances((prev) =>
+        prev.map((b) =>
+          b.id === id ? { ...b, ...updates, updatedAt: now() } : b,
+        ),
+      );
+      notifyChange("gst_leave_balances");
+    },
+    [setBalances],
+  );
+
+  return { balances, addBalance, updateBalance };
+}
+
+export function usePayrollRuns() {
+  const [runs, setRuns] = useLocalStorage<PayrollRun[]>("gst_payroll_runs", []);
+
+  const addRun = useCallback(
+    (r: Omit<PayrollRun, "id" | "createdAt" | "updatedAt">) => {
+      const newR: PayrollRun = {
+        ...r,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      setRuns((prev) => [newR, ...prev]);
+      notifyChange("gst_payroll_runs");
+      return newR.id;
+    },
+    [setRuns],
+  );
+
+  const updateRun = useCallback(
+    (id: string, updates: Partial<PayrollRun>) => {
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, ...updates, updatedAt: now() } : r,
+        ),
+      );
+      notifyChange("gst_payroll_runs");
+    },
+    [setRuns],
+  );
+
+  const deleteRun = useCallback(
+    (id: string) => {
+      setRuns((prev) => prev.filter((r) => r.id !== id));
+      notifyChange("gst_payroll_runs");
+    },
+    [setRuns],
+  );
+
+  return { runs, addRun, updateRun, deleteRun };
 }
