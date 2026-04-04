@@ -46,7 +46,8 @@ import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TESSERACT_VERSION = "5.0.4";
+// Use Tesseract.js v4 (stable, widely cached on CDN) to avoid v5 WASM worker issues
+const TESSERACT_VERSION = "4.1.4";
 const PDFJS_VERSION = "3.11.174";
 
 let _tesseract: any = null;
@@ -105,10 +106,10 @@ function loadScript(src: string): Promise<void> {
 
 async function getTesseract() {
   if (_tesseract) return _tesseract;
+  // Load Tesseract.js v4 UMD bundle from unpkg (more reliable than jsdelivr for WASM workers)
   await loadScript(
-    `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
+    `https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
   );
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const lib = (window as any).Tesseract;
   if (!lib) throw new Error(`Tesseract.js ${TESSERACT_VERSION} failed to load`);
   _tesseract = lib;
@@ -120,7 +121,6 @@ async function getPdfjsLib() {
   await loadScript(
     `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.js`,
   );
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const lib = (window as any).pdfjsLib;
   if (!lib) throw new Error(`PDF.js ${PDFJS_VERSION} failed to load`);
   lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.js`;
@@ -263,7 +263,6 @@ function parseVendorName(text: string): string {
 /**
  * Extract a tax amount from text by finding lines that match a label pattern,
  * then extracting the rightmost plausible currency amount on that line.
- * This avoids picking up GST rates (like "9%") instead of the actual tax amount.
  */
 function extractTaxLineAmount(text: string, pattern: RegExp): number {
   const lines = text.split("\n");
@@ -449,6 +448,37 @@ function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// ─── Tesseract v4 Worker Runner ───────────────────────────────────────────────
+
+// Tesseract.js v4 uses a different worker API than v5.
+// corePath must point to the directory (with trailing slash), not a file.
+// We use unpkg for all three assets to avoid CDN cross-origin worker issues.
+async function runOCR(
+  imageSource: HTMLCanvasElement | string,
+  onProgress: (pct: number, status: string) => void,
+): Promise<string> {
+  const Tesseract = await getTesseract();
+
+  const workerOptions = {
+    workerPath: `https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    corePath:
+      "https://unpkg.com/tesseract.js-core@4.0.4/tesseract-core.wasm.js",
+    logger: (m: { status: string; progress: number }) => {
+      if (m.progress != null) {
+        onProgress(Math.round(35 + m.progress * 55), m.status);
+      }
+    },
+  };
+
+  const worker = await Tesseract.createWorker(workerOptions);
+  await worker.loadLanguage("eng");
+  await worker.initialize("eng");
+  const { data } = await worker.recognize(imageSource);
+  await worker.terminate();
+  return data.text;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function OCRCapture() {
@@ -510,30 +540,16 @@ export function OCRCapture() {
       setStatusText("Loading OCR engine...");
       setProgress(35);
 
-      const Tesseract = await getTesseract();
-      const worker = await Tesseract.createWorker("eng", 1, {
-        workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
-        langPath: "https://tessdata.projectnaptha.com/4.0.0",
-        corePath:
-          "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.4/tesseract-core.wasm.js",
+      const rawText = await runOCR(imageSource, (pct, status) => {
+        setProgress(pct);
+        setStatusText(status || `Reading text... ${pct}%`);
       });
 
-      setStatusText("Recognizing text...");
-      let fakeProgress = 35;
-      const pollInterval = setInterval(() => {
-        fakeProgress = Math.min(fakeProgress + 3, 90);
-        setProgress(fakeProgress);
-        setStatusText(`Reading text... ${fakeProgress}%`);
-      }, 400);
-
-      const { data } = await worker.recognize(imageSource);
-      clearInterval(pollInterval);
-      await worker.terminate();
       if (typeof imageSource === "string") URL.revokeObjectURL(imageSource);
 
       setProgress(97);
       setStatusText("Parsing fields...");
-      const parsed = parseOCRText(data.text);
+      const parsed = parseOCRText(rawText);
       setOcrResult(parsed);
 
       // Populate review form
