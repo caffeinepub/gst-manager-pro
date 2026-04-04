@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useBusinessContext } from "@/hooks/useBusinessContext";
+import { useBusinessTheme } from "@/hooks/useBusinessTheme";
 import { useCloudSync } from "@/hooks/useCloudSync";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { LanguageProvider } from "@/hooks/useLanguage";
@@ -172,6 +173,8 @@ function AuthenticatedApp() {
   const { businesses } = useBusinessContext();
   // Activate cloud sync globally for authenticated users
   useCloudSync();
+  // Apply per-business theme/font whenever active business changes
+  useBusinessTheme();
 
   // Show setup wizard if no businesses are configured yet
   if (businesses.length === 0) {

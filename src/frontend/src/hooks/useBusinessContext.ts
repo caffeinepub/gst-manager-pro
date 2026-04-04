@@ -11,6 +11,15 @@ export interface Business {
   businessType?: "Regular" | "Composition" | "Unregistered";
   createdAt: string;
   updatedAt: string;
+  // Branding
+  fontFamily?: string; // e.g. "Roboto", "Open Sans", "custom"
+  customFontBase64?: string; // base64-encoded .ttf/.woff2
+  customFontName?: string; // filename of custom font
+  themePreset?: string; // "blue-corporate" | "green-fresh" | etc.
+  primaryColor?: string; // OKLCH string e.g. "0.55 0.18 142"
+  secondaryColor?: string; // OKLCH string
+  bgColor?: string; // OKLCH string
+  textColor?: string; // OKLCH string
 }
 
 const BUSINESSES_KEY = "gst_businesses";

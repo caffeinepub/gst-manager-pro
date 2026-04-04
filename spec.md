@@ -2,51 +2,50 @@
 
 ## Current State
 
-GST Manager Pro is a fully-featured single-business GST compliance and accounting app. All data is stored in localStorage under flat keys (`gst_invoices`, `gst_purchases`, `gst_parties`, etc.) without any business-level namespace. Authentication is via Internet Identity. The app has:
-
-- Masters, Invoicing, Accounting, GST Compliance, Payroll, Reports, Settings modules
-- `useGSTStore.ts` hooks using `useLocalStorage` with hardcoded localStorage keys
-- `useCloudSync.ts` syncing all `gst_*` keys to the ICP backend
-- `AppSidebar.tsx` with a `BusinessHeader` component at the top
-- `Login.tsx` for Internet Identity auth
-- `App.tsx` for routing between all pages
+- Multi-business support is live (Version 48+). Each business has an isolated `id`, `name`, `gstin`, `stateCode`, `logo` (base64), and `role` stored in the `Business` interface in `useBusinessContext.ts`.
+- The `logo` field already exists on the `Business` object and is shown in the sidebar (`BusinessSwitcher`) and header (`Header.tsx`).
+- `BusinessProfile.tsx` has a logo upload section that calls `saveLogo()` from `useBusinessLogo.ts`, which writes the base64 to `activeBusiness.logo` via `updateBusiness`.
+- No font customization exists -- all businesses use the same Plus Jakarta Sans body font and Huxley Titling for the business name.
+- No theme customization exists -- all businesses share the same global OKLCH CSS tokens.
+- The app applies CSS variables via `index.css` on `:root` and `.dark`. There is no per-business theming mechanism.
 
 ## Requested Changes (Diff)
 
 ### Add
-
-- **Business type definition** (`Business` interface in `gst.ts`): id, name, gstin, stateCode, logo, role (`admin`|`user`), ownerId, createdAt
-- **`useBusinessContext` hook**: manages active business ID in localStorage (`gst_active_business`), list of businesses (`gst_businesses`), CRUD for businesses
-- **`BusinessManager` page** (new page `business-manager`): grid of all businesses with name, GSTIN, last sync, outstanding invoices; "Add Business" button; "Switch" and "Delete" actions per card
-- **`BusinessSetupWizard` component**: shown on first launch (no businesses exist); 3-step wizard: (1) role selection admin vs user, (2) business name + GSTIN + state, (3) confirmation; creates first business and sets it as active
-- **`BusinessSwitcher` component**: dropdown in AppSidebar header showing active business name + logo; opens a panel listing all businesses; "Add New Business" and "Manage Businesses" options
-- **`AppPage` type extension**: add `"business-manager"` to the union
-- **`seedData.ts` update**: seed data uses active business prefix instead of flat keys
-- **New navbar entry**: "Businesses" link under Settings section or as a top-level sidebar item
+- `BusinessBranding` interface: extend `Business` with `fontFamily`, `customFontBase64`, `customFontName`, `themePreset`, `primaryColor`, `secondaryColor`, `bgColor`, `textColor`.
+- `useBusinessTheme` hook: reads active business branding settings and injects CSS custom properties onto `document.documentElement` whenever the active business changes. Applies font-family via a `<style>` tag injected into `<head>`.
+- Theme presets: 6 pre-built named themes with OKLCH token sets -- Blue Corporate (current default), Green Fresh, Dark Professional, Saffron Classic, Purple Fintech, Slate Minimal.
+- Business Profile > new **Font & Theme** card section with:
+  - Preset font dropdown (Roboto, Open Sans, Montserrat, Playfair Display, Cinzel, Poppins, Inter, Lato)
+  - Custom font upload (.ttf / .woff2) -- stored as base64 on the business record
+  - Theme preset picker (6 cards with color swatches, click to apply instantly)
+  - Individual color pickers for primary, secondary, background, text
+  - All changes apply live (no save needed to preview)
+  - Save button persists settings
+- Theme tokens also applied in invoice/print CSS via `@media print` style injection so printed docs use the business's primary color.
 
 ### Modify
-
-- **`useLocalStorage.ts`**: no changes to the hook itself; business-namespacing is done at the call-site key level
-- **`useGSTStore.ts`**: all localStorage keys become dynamic: `gst_${bizId}_invoices`, `gst_${bizId}_purchases`, etc. All hooks read the active business ID from `useBusinessContext` to compute the namespaced key.
-- **`useCloudSync.ts`**: sync keys filtered to `gst_${bizId}_*` for the active business only
-- **`AppSidebar.tsx`**: replace static `BusinessHeader` in sidebar header area with `BusinessSwitcher` component
-- **`App.tsx`**: wrap `AuthenticatedApp` with business context check; if no businesses exist, show `BusinessSetupWizard` instead of normal app; add `"business-manager"` case in `PageContent`
-- **`Header.tsx`**: show active business name and sync status
+- `Business` interface in `useBusinessContext.ts`: add branding fields.
+- `App.tsx`: wrap `AuthenticatedApp` with a `BusinessThemeProvider` that calls `useBusinessTheme`.
+- `BusinessProfile.tsx`: add Font & Theme card section.
+- `useBusinessLogo.ts`: no changes needed (logo already on business object).
+- `index.css`: ensure CSS variables are structured to support runtime override via `document.documentElement.style.setProperty`.
 
 ### Remove
-
-- Nothing removed; flat keys remain in localStorage for any legacy data but new data is written under business-namespaced keys
+- Nothing removed.
 
 ## Implementation Plan
 
-1. Add `Business` type and `"business-manager"` to `AppPage` in `types/gst.ts`
-2. Create `hooks/useBusinessContext.ts`: manages `gst_businesses` (array) and `gst_active_business` (string ID) in localStorage; exports `activeBizId`, `businesses`, `addBusiness`, `updateBusiness`, `deleteBusiness`, `switchBusiness`
-3. Update `hooks/useGSTStore.ts`: all hooks accept `bizId` from `useBusinessContext` and use it to namespace keys
-4. Update `hooks/useCloudSync.ts`: sync only `gst_${bizId}_*` keys
-5. Create `components/BusinessSwitcher/BusinessSwitcher.tsx`: dropdown showing active biz, list panel, add/switch actions
-6. Create `pages/Business/BusinessSetupWizard.tsx`: first-launch wizard (role + biz details + confirm)
-7. Create `pages/Business/BusinessManager.tsx`: full business management page
-8. Update `App.tsx`: add business context gating and `business-manager` route
-9. Update `AppSidebar.tsx`: use `BusinessSwitcher` in header
-10. Update `utils/seedData.ts`: use active biz ID prefix
-11. Add sidebar navigation entry for Business Manager
+1. Extend `Business` interface with branding fields: `fontFamily`, `customFontBase64`, `customFontName`, `themePreset`, `primaryColor`, `secondaryColor`, `bgColor`, `textColor`.
+2. Create `src/frontend/src/hooks/useBusinessTheme.ts` -- hook that watches active business ID, reads branding from the business record, and applies CSS custom properties to `document.documentElement` plus injects a `@font-face` rule if a custom font is set.
+3. Define 6 theme presets as named OKLCH token maps in the hook file.
+4. Add a `BusinessThemeProvider` wrapper component that calls `useBusinessTheme` and renders children -- mount it in `App.tsx` inside `AuthenticatedApp`.
+5. Update `BusinessProfile.tsx` to add a Font & Theme card:
+   - Preset font selector (8 Google Fonts + custom upload)
+   - Custom font upload handler (read as base64, store on business)
+   - Theme preset grid (6 clickable preset cards with live preview swatches)
+   - 4 color pickers (primary, secondary, background, text)
+   - All onChange handlers call `updateBusiness` immediately for live preview
+   - Save button saves the whole profile including branding
+6. Ensure the theme is re-applied on business switch via the `gst-business-switched` event in `useBusinessTheme`.
+7. Validate build passes (typecheck + lint).

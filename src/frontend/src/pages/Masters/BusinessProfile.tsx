@@ -10,11 +10,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import {
   useBusinessLogo,
   useExtendedProfile,
   useLocalBusinessName,
 } from "@/hooks/useBusinessLogo";
+import { GOOGLE_FONTS, THEME_PRESETS } from "@/hooks/useBusinessTheme";
 import { useBankAccounts, useInvoiceDefaults } from "@/hooks/useGSTStore";
 import { RegistrationType } from "@/hooks/useQueries";
 import { useBusinessProfile, useSetBusinessProfile } from "@/hooks/useQueries";
@@ -26,13 +28,156 @@ import {
   FileText,
   ImageIcon,
   Loader2,
+  Palette,
+  RefreshCw,
   Save,
   Trash2,
+  Type,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+// ── Color conversion helpers ───────────────────────────────────────────────
+
+function hexToOklch(hex: string): string {
+  const r = Number.parseInt(hex.slice(1, 3), 16) / 255;
+  const g = Number.parseInt(hex.slice(3, 5), 16) / 255;
+  const b = Number.parseInt(hex.slice(5, 7), 16) / 255;
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const C = Math.sqrt((r - L) ** 2 + (g - L) ** 2 + (b - L) ** 2) * 0.5;
+  const H = Math.atan2(b - g, r - g) * (180 / Math.PI);
+  return `${L.toFixed(3)} ${C.toFixed(3)} ${((H + 360) % 360).toFixed(0)}`;
+}
+
+function oklchToHex(oklch: string): string {
+  const parts = oklch.trim().split(/\s+/);
+  if (parts.length < 3) return "#6366f1";
+  const l = Number(parts[0]);
+  const c = Number(parts[1]);
+  const h = Number(parts[2]);
+  const hRad = (h * Math.PI) / 180;
+  const a = c * Math.cos(hRad);
+  const b2 = c * Math.sin(hRad);
+  const r = Math.max(0, Math.min(1, l + 0.3897 * a + 0.2283 * b2));
+  const g = Math.max(0, Math.min(1, l - 0.209 * a - 0.1412 * b2));
+  const b = Math.max(0, Math.min(1, l - 0.0091 * a - 1.3342 * b2));
+  const toHex = (v: number) =>
+    Math.round(v * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// ── Preset swatch component ────────────────────────────────────────────────
+
+const SWATCH_ROLES = ["primary", "secondary", "background", "sidebar"] as const;
+
+function PresetCard({
+  presetKey,
+  isActive,
+  onClick,
+}: {
+  presetKey: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const tokens = THEME_PRESETS[presetKey];
+  const label = presetKey
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+  const swatchColors: Record<string, string> = {
+    primary: tokens.primary,
+    secondary: tokens.secondary,
+    background: tokens.background,
+    sidebar: tokens.sidebar,
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative rounded-xl border-2 p-3 text-left transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        isActive
+          ? "border-primary shadow-md ring-1 ring-primary/30"
+          : "border-border hover:border-primary/40"
+      }`}
+      data-ocid="profile.theme.card"
+    >
+      {/* Color swatches */}
+      <div className="flex gap-1 mb-2">
+        {SWATCH_ROLES.map((role) => (
+          <div
+            key={role}
+            className="w-5 h-5 rounded-full border border-black/10 flex-shrink-0"
+            style={{ background: `oklch(${swatchColors[role]})` }}
+          />
+        ))}
+      </div>
+      <p className="text-xs font-medium text-foreground leading-tight">
+        {label}
+      </p>
+      {isActive && (
+        <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+          <svg
+            aria-label="Selected"
+            role="img"
+            className="w-2.5 h-2.5 text-primary-foreground"
+            fill="currentColor"
+            viewBox="0 0 12 12"
+          >
+            <title>Selected</title>
+            <path
+              d="M10 3L5 8.5 2 5.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ── Custom color row ───────────────────────────────────────────────────────
+
+function ColorRow({
+  label,
+  value,
+  onChange,
+  ocid,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (oklch: string) => void;
+  ocid: string;
+}) {
+  const hexValue = value ? oklchToHex(value) : "#6366f1";
+
+  return (
+    <div className="flex items-center gap-3">
+      <Label className="w-36 shrink-0 text-sm">{label}</Label>
+      <input
+        type="color"
+        value={hexValue}
+        onChange={(e) => onChange(hexToOklch(e.target.value))}
+        className="w-9 h-9 rounded-lg border border-border cursor-pointer p-0.5 bg-transparent"
+        data-ocid={ocid}
+      />
+      <code className="text-xs font-mono text-muted-foreground bg-muted/60 px-2 py-1 rounded">
+        {value ?? "—"}
+      </code>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 
 export function BusinessProfile() {
   const { data: profile, isLoading } = useBusinessProfile();
@@ -41,12 +186,14 @@ export function BusinessProfile() {
   const { logo, saveLogo, clearLogo } = useBusinessLogo();
   const { saveLocalBusinessName } = useLocalBusinessName();
   const { profile: extended, saveProfile: saveExtended } = useExtendedProfile();
+  const { activeBizId, activeBusiness, updateBusiness } = useBusinessContext();
   const {
     accounts,
     addAccount: addBankAccount,
     updateAccount,
   } = useBankAccounts();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fontFileRef = useRef<HTMLInputElement>(null);
 
   const [defaultsForm, setDefaultsForm] = useState({
     declaration: invoiceDefaults.declaration,
@@ -64,6 +211,11 @@ export function BusinessProfile() {
 
   const [extForm, setExtForm] = useState({ ...extended });
 
+  // Live preview font state
+  const [previewFont, setPreviewFont] = useState<string>(
+    activeBusiness?.fontFamily ?? "",
+  );
+
   useEffect(() => {
     if (profile) {
       setForm({
@@ -80,6 +232,10 @@ export function BusinessProfile() {
   useEffect(() => {
     setExtForm({ ...extended });
   }, [extended]);
+
+  useEffect(() => {
+    setPreviewFont(activeBusiness?.fontFamily ?? "");
+  }, [activeBusiness?.fontFamily]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -200,6 +356,83 @@ export function BusinessProfile() {
     toast.success("Invoice defaults saved");
   };
 
+  // ── Branding handlers ─────────────────────────────────────────────────
+
+  const handleFontChange = (fontFamily: string) => {
+    setPreviewFont(fontFamily);
+    if (!activeBizId) return;
+    updateBusiness(activeBizId, { fontFamily });
+    toast.success(
+      fontFamily === "custom"
+        ? "Upload a font file below to apply your custom font"
+        : `Font changed to ${fontFamily}`,
+      { duration: 2000 },
+    );
+  };
+
+  const handleCustomFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeBizId) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Font file must be smaller than 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      updateBusiness(activeBizId, {
+        fontFamily: "custom",
+        customFontBase64: base64,
+        customFontName: file.name,
+      });
+      toast.success(`Custom font "${file.name}" applied`);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePresetSelect = (presetKey: string) => {
+    if (!activeBizId) return;
+    updateBusiness(activeBizId, {
+      themePreset: presetKey,
+      primaryColor: undefined,
+      secondaryColor: undefined,
+      bgColor: undefined,
+      textColor: undefined,
+    });
+  };
+
+  const handleColorChange = (
+    field: "primaryColor" | "secondaryColor" | "bgColor" | "textColor",
+    value: string,
+  ) => {
+    if (!activeBizId) return;
+    updateBusiness(activeBizId, { [field]: value });
+  };
+
+  const handleResetBranding = () => {
+    if (!activeBizId) return;
+    updateBusiness(activeBizId, {
+      fontFamily: undefined,
+      customFontBase64: undefined,
+      customFontName: undefined,
+      themePreset: "blue-corporate",
+      primaryColor: undefined,
+      secondaryColor: undefined,
+      bgColor: undefined,
+      textColor: undefined,
+    });
+    setPreviewFont("");
+    toast.success("Branding reset to defaults");
+  };
+
+  // Compute preview font-family string
+  const previewFontFamily =
+    previewFont === "custom"
+      ? "'BizCustomFont', system-ui, sans-serif"
+      : previewFont && GOOGLE_FONTS[previewFont]
+        ? `"${GOOGLE_FONTS[previewFont].display}", system-ui, sans-serif`
+        : "inherit";
+
   if (isLoading) {
     return (
       <div
@@ -279,6 +512,177 @@ export function BusinessProfile() {
                 </Button>
               )}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Font & Theme */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Palette className="w-5 h-5 text-primary" />
+              Font &amp; Theme
+            </CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetBranding}
+              className="text-muted-foreground hover:text-destructive text-xs"
+              data-ocid="profile.branding.reset_button"
+            >
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Reset to Default
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Changes apply instantly as you configure them.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-8">
+          {/* Font Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Type className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-medium text-sm">UI Font</h3>
+            </div>
+
+            <div className="space-y-3">
+              <Select
+                value={previewFont || "__default__"}
+                onValueChange={(v) =>
+                  handleFontChange(v === "__default__" ? "" : v)
+                }
+              >
+                <SelectTrigger data-ocid="profile.font.select">
+                  <SelectValue placeholder="System Default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">System Default</SelectItem>
+                  {Object.keys(GOOGLE_FONTS).map((fontName) => (
+                    <SelectItem key={fontName} value={fontName}>
+                      {fontName}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">
+                    Custom Font (.ttf / .woff2)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Live font preview */}
+              {previewFont && previewFont !== "custom" && (
+                <div
+                  className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-foreground"
+                  style={{ fontFamily: previewFontFamily }}
+                >
+                  The quick brown fox jumps over the lazy dog
+                </div>
+              )}
+
+              {/* Custom font file input */}
+              {previewFont === "custom" && (
+                <div className="space-y-2">
+                  <div
+                    className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => fontFileRef.current?.click()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && fontFileRef.current?.click()
+                    }
+                    data-ocid="profile.font.dropzone"
+                  >
+                    <Type className="w-5 h-5 mx-auto mb-2 text-muted-foreground/60" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload{" "}
+                      <span className="text-primary underline">
+                        your font file
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      .ttf or .woff2 • Max 2MB
+                    </p>
+                  </div>
+                  <input
+                    ref={fontFileRef}
+                    type="file"
+                    accept=".ttf,.woff2,font/truetype,font/woff2"
+                    className="hidden"
+                    onChange={handleCustomFontUpload}
+                    data-ocid="profile.font.upload_button"
+                  />
+                  {activeBusiness?.customFontName && (
+                    <p className="text-xs text-muted-foreground">
+                      Current:{" "}
+                      <span className="text-foreground font-medium">
+                        {activeBusiness.customFontName}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Theme Preset Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-medium text-sm">Theme Preset</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {Object.keys(THEME_PRESETS).map((key) => (
+                <PresetCard
+                  key={key}
+                  presetKey={key}
+                  isActive={
+                    (activeBusiness?.themePreset ?? "blue-corporate") === key
+                  }
+                  onClick={() => handlePresetSelect(key)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Colors Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-medium text-sm">Custom Colors</h3>
+              <span className="text-xs text-muted-foreground">
+                (overrides preset)
+              </span>
+            </div>
+            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <ColorRow
+                label="Primary Color"
+                value={activeBusiness?.primaryColor}
+                onChange={(v) => handleColorChange("primaryColor", v)}
+                ocid="profile.color.primary"
+              />
+              <ColorRow
+                label="Secondary Color"
+                value={activeBusiness?.secondaryColor}
+                onChange={(v) => handleColorChange("secondaryColor", v)}
+                ocid="profile.color.secondary"
+              />
+              <ColorRow
+                label="Background Color"
+                value={activeBusiness?.bgColor}
+                onChange={(v) => handleColorChange("bgColor", v)}
+                ocid="profile.color.background"
+              />
+              <ColorRow
+                label="Text Color"
+                value={activeBusiness?.textColor}
+                onChange={(v) => handleColorChange("textColor", v)}
+                ocid="profile.color.text"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Custom colors override the selected preset. Use &ldquo;Reset to
+              Default&rdquo; to clear all custom colors.
+            </p>
           </div>
         </CardContent>
       </Card>
