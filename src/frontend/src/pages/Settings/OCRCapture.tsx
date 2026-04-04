@@ -136,7 +136,6 @@ async function pdfToCanvas(
 ): Promise<HTMLCanvasElement> {
   const pdfjsLib = await getPdfjsLib();
   const arrayBuffer = await file.arrayBuffer();
-  // biome-ignore lint/suspicious/noExplicitAny: pdfjs types
   const pdf = await (pdfjsLib as any).getDocument({ data: arrayBuffer })
     .promise;
   const totalPages = pdf.numPages;

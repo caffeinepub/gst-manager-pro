@@ -377,7 +377,8 @@ export type AppPage =
   | "payroll-process"
   | "payroll-payslips"
   | "payroll-reports"
-  | "payroll-statutory";
+  | "payroll-statutory"
+  | "payroll-pan-verification";
 
 // ─── Payroll Types ────────────────────────────────────────────────
 
@@ -419,6 +420,11 @@ export interface Employee {
   accountNumber: string;
   ifsc: string;
   pan: string;
+  // PAN Verification
+  panVerified?: boolean;
+  panVerifiedName?: string;
+  panVerifiedAt?: string; // ISO timestamp
+  panType?: string;
   createdAt: string;
   updatedAt: string;
 }

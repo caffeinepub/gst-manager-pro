@@ -167,6 +167,11 @@ const navItems: NavItem[] = [
       { label: "Payslips", page: "payroll-payslips", icon: FileText },
       { label: "Reports", page: "payroll-reports", icon: BarChart3 },
       { label: "Statutory", page: "payroll-statutory", icon: ShieldCheck },
+      {
+        label: "PAN Verification",
+        page: "payroll-pan-verification",
+        icon: ShieldCheck,
+      },
     ],
   },
   {

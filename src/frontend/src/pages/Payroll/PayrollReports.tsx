@@ -11,7 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEmployees, usePayrollRuns } from "@/hooks/useGSTStore";
 import { exportToCSV } from "@/utils/exportUtils";
-import { BarChart3, Download } from "lucide-react";
+import { BarChart3, CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("en-IN");
@@ -377,7 +377,12 @@ export function PayrollReports() {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {r.emp.pan || "-"}
+                        <div className="flex items-center gap-1">
+                          {r.emp.pan || "-"}
+                          {r.emp.panVerified && (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         ₹{fmt(Math.round(r.annualProjection))}

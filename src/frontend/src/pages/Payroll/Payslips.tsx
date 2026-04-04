@@ -102,7 +102,7 @@ export function Payslips() {
   <div><b>Emp Code:</b> ${line.empCode}</div>
   <div><b>Designation:</b> ${emp?.designation || ""}</div>
   <div><b>Department:</b> ${emp?.department || ""}</div>
-  <div><b>PAN:</b> ${emp?.pan || ""}</div>
+  <div><b>PAN:</b> ${emp?.pan || ""}${emp?.panVerified ? '<span style="color:#16a34a;font-size:9pt;"> ✓ Verified</span>' : ""}</div>
   <div><b>Bank:</b> ${emp?.bankName || ""}</div>
 </div>
 <table>

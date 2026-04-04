@@ -29,6 +29,7 @@ import { Parties } from "@/pages/Masters/Parties";
 import { TaxRates } from "@/pages/Masters/TaxRates";
 import { Attendance } from "@/pages/Payroll/Attendance";
 import { Employees } from "@/pages/Payroll/Employees";
+import { PayrollPANVerification } from "@/pages/Payroll/PayrollPANVerification";
 import { PayrollReports } from "@/pages/Payroll/PayrollReports";
 import { Payslips } from "@/pages/Payroll/Payslips";
 import { ProcessPayroll } from "@/pages/Payroll/ProcessPayroll";
@@ -154,6 +155,8 @@ function PageContent({
       return <PayrollReports />;
     case "payroll-statutory":
       return <StatutoryCompliance />;
+    case "payroll-pan-verification":
+      return <PayrollPANVerification />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }

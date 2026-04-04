@@ -13,10 +13,7 @@ function loadScript(src: string): Promise<void> {
     document.head.appendChild(s);
   });
 }
-
-// biome-ignore lint/suspicious/noExplicitAny: CDN global
 async function getXLSX(): Promise<any> {
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const w = window as any;
   if (!w.XLSX) {
     await loadScript(
@@ -26,10 +23,7 @@ async function getXLSX(): Promise<any> {
   if (!w.XLSX) throw new Error("SheetJS XLSX failed to load from CDN");
   return w.XLSX;
 }
-
-// biome-ignore lint/suspicious/noExplicitAny: CDN global
 async function getHtml2Canvas(): Promise<any> {
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const w = window as any;
   if (!w.html2canvas) {
     await loadScript(
@@ -39,10 +33,7 @@ async function getHtml2Canvas(): Promise<any> {
   if (!w.html2canvas) throw new Error("html2canvas failed to load from CDN");
   return w.html2canvas;
 }
-
-// biome-ignore lint/suspicious/noExplicitAny: CDN global
 async function getCDNJsPDF(): Promise<any> {
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const w = window as any;
   if (!w.jspdf?.jsPDF) {
     await loadScript(
@@ -130,7 +121,6 @@ export async function exportToPDF(
       getHtml2Canvas(),
       getCDNJsPDF(),
     ]);
-    // biome-ignore lint/suspicious/noExplicitAny: CDN types
     const canvas = await (html2canvas as any)(element, {
       scale: 2,
       useCORS: true,

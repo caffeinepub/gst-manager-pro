@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuditLogs, useEmployees } from "@/hooks/useGSTStore";
+import { verifyPAN } from "@/services/gstVerificationService";
 import { INDIAN_STATES } from "@/types/gst";
 import type {
   Employee,
@@ -33,7 +34,7 @@ import type {
   EmployeeType,
   SalaryComponent,
 } from "@/types/gst";
-import { Edit, Plus, Trash2, Users } from "lucide-react";
+import { Edit, Loader2, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -85,6 +86,11 @@ export function Employees() {
   const [form, setForm] =
     useState<Omit<Employee, "id" | "createdAt" | "updatedAt">>(EMPTY_EMPLOYEE);
   const [search, setSearch] = useState("");
+  const [panVerifying, setPanVerifying] = useState(false);
+  const [panVerifyStatus, setPanVerifyStatus] = useState<
+    "idle" | "success" | "error" | "no_key" | "format_error"
+  >("idle");
+  const [panVerifyMsg, setPanVerifyMsg] = useState("");
 
   const grossCTC = (emp: typeof form) =>
     emp.basicSalary +
@@ -98,6 +104,8 @@ export function Employees() {
   const openAdd = () => {
     setEditing(null);
     setForm(EMPTY_EMPLOYEE);
+    setPanVerifyStatus("idle");
+    setPanVerifyMsg("");
     setOpen(true);
   };
 
@@ -105,7 +113,62 @@ export function Employees() {
     setEditing(emp);
     const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = emp;
     setForm(rest);
+    setPanVerifyStatus(emp.panVerified ? "success" : "idle");
+    setPanVerifyMsg(
+      emp.panVerifiedName ? `Verified: ${emp.panVerifiedName}` : "",
+    );
     setOpen(true);
+  };
+
+  const handleVerifyPAN = async () => {
+    if (!form.pan) {
+      toast.error("Please enter a PAN number first");
+      return;
+    }
+    setPanVerifying(true);
+    setPanVerifyStatus("idle");
+    setPanVerifyMsg("");
+    try {
+      const result = await verifyPAN(form.pan);
+      if (result.errorCode === "INVALID_FORMAT") {
+        setPanVerifyStatus("format_error");
+        setPanVerifyMsg(result.error || "Invalid PAN format");
+      } else if (result.errorCode === "NO_API_KEY") {
+        setPanVerifyStatus("no_key");
+        setPanVerifyMsg("API key not configured — format only");
+      } else if (result.success || result.errorCode === "CORS_BLOCKED") {
+        const verifiedName = result.panHolderName || "";
+        const shouldAutoFill =
+          !form.name || form.name.toLowerCase() === verifiedName.toLowerCase();
+        setForm((prev) => ({
+          ...prev,
+          ...(shouldAutoFill && verifiedName ? { name: verifiedName } : {}),
+          panVerified: true,
+          panVerifiedName: verifiedName,
+          panVerifiedAt: new Date().toISOString(),
+          panType: result.panType,
+        }));
+        setPanVerifyStatus("success");
+        setPanVerifyMsg(
+          verifiedName
+            ? `Verified: ${verifiedName} (${result.panType || "Individual"})`
+            : "PAN format valid",
+        );
+        if (result.errorCode === "CORS_BLOCKED") {
+          setPanVerifyMsg(
+            "Format verified (API requires backend proxy for live check)",
+          );
+        }
+      } else {
+        setPanVerifyStatus("error");
+        setPanVerifyMsg(result.error || "Verification failed");
+      }
+    } catch {
+      setPanVerifyStatus("error");
+      setPanVerifyMsg("Verification failed — please try again");
+    } finally {
+      setPanVerifying(false);
+    }
   };
 
   const handleSave = () => {
@@ -219,6 +282,7 @@ export function Employees() {
               <TableHead>Name</TableHead>
               <TableHead>Designation</TableHead>
               <TableHead>Department</TableHead>
+              <TableHead>PAN</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Basic (₹)</TableHead>
               <TableHead className="text-right">Gross CTC (₹)</TableHead>
@@ -230,7 +294,7 @@ export function Employees() {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="text-center text-muted-foreground py-8"
                   data-ocid="payroll.employees.empty_state"
                 >
@@ -249,6 +313,18 @@ export function Employees() {
                 <TableCell className="font-medium">{emp.name}</TableCell>
                 <TableCell>{emp.designation}</TableCell>
                 <TableCell>{emp.department}</TableCell>
+                <TableCell>
+                  {emp.panVerified ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                      <ShieldCheck className="w-3 h-3" />
+                      Verified
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs font-mono">
+                      {emp.pan || "—"}
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell>{TYPE_LABELS[emp.employeeType]}</TableCell>
                 <TableCell className="text-right font-mono">
                   {fmt(emp.basicSalary)}
@@ -399,18 +475,61 @@ export function Employees() {
                   }
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 col-span-2">
                 <Label>PAN</Label>
-                <Input
-                  value={form.pan}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      pan: e.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="ABCDE1234F"
-                />
+                <div className="flex gap-2 items-start">
+                  <div className="flex-1">
+                    <Input
+                      value={form.pan}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          pan: e.target.value.toUpperCase(),
+                          panVerified: false,
+                          panVerifiedName: undefined,
+                          panVerifiedAt: undefined,
+                          panType: undefined,
+                        }))
+                      }
+                      placeholder="ABCDE1234F"
+                      className="font-mono"
+                      data-ocid="payroll.employees.pan_input"
+                    />
+                    {panVerifyStatus === "success" && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {panVerifyMsg}
+                      </div>
+                    )}
+                    {panVerifyStatus === "no_key" && (
+                      <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                        ⚠ {panVerifyMsg}
+                      </div>
+                    )}
+                    {(panVerifyStatus === "error" ||
+                      panVerifyStatus === "format_error") && (
+                      <div className="mt-1.5 text-xs text-destructive">
+                        {panVerifyMsg}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleVerifyPAN}
+                    disabled={panVerifying || !form.pan}
+                    className="shrink-0 mt-0"
+                    data-ocid="payroll.employees.pan_verify_button"
+                  >
+                    {panVerifying ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                    )}
+                    {panVerifying ? "Verifying..." : "Verify"}
+                  </Button>
+                </div>
               </div>
             </div>
 

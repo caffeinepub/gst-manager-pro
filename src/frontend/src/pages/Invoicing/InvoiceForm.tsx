@@ -411,7 +411,6 @@ export function InvoiceForm({
             <Button
               variant="outline"
               onClick={() => {
-                // biome-ignore lint/suspicious/noExplicitAny: Web Speech API not in standard TS lib types
                 const w = window as any;
                 const SpeechRecognitionAPI =
                   w.SpeechRecognition || w.webkitSpeechRecognition;

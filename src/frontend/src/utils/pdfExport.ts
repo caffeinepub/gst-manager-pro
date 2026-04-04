@@ -36,10 +36,7 @@ export interface PDFExportOptions {
   declaration?: string;
   termsConditions?: string;
 }
-
-// biome-ignore lint/suspicious/noExplicitAny: jsPDF CDN types
 type JsPDFDoc = any;
-// biome-ignore lint/suspicious/noExplicitAny: jsPDF CDN types
 type AutoTableFn = (doc: JsPDFDoc, opts: any) => void;
 
 function loadScript(src: string): Promise<void> {
@@ -60,7 +57,6 @@ async function getJsPDF(): Promise<{
   JsPDF: new (opts: object) => JsPDFDoc;
   autoTable: AutoTableFn;
 }> {
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global check
   const w = window as any;
   if (!w.jspdf) {
     await loadScript(
@@ -74,8 +70,6 @@ async function getJsPDF(): Promise<{
       "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
     );
   }
-
-  // biome-ignore lint/suspicious/noExplicitAny: CDN global
   const autoTableFn: AutoTableFn = (doc: JsPDFDoc, opts: any) => {
     doc.autoTable(opts);
   };
