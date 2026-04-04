@@ -45,14 +45,18 @@ import {
   useParties,
   useUpdateParty,
 } from "@/hooks/useQueries";
+import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
 import { INDIAN_STATES } from "@/types/gst";
 import {
   CheckCircle2,
   Edit,
+  Info,
   Loader2,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
+  User,
   Users,
   XCircle,
 } from "lucide-react";
@@ -72,8 +76,6 @@ const emptyParty: Omit<Party, "id"> = {
   isActive: true,
 };
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-
 export function Parties() {
   const { data: parties = [], isLoading } = useParties();
   const { mutate: addParty, isPending: isAdding } = useAddParty();
@@ -88,9 +90,19 @@ export function Parties() {
   const [deleteId, setDeleteId] = useState<bigint | null>(null);
   const [form, setForm] = useState<Omit<Party, "id">>({ ...emptyParty });
   const [filterType, setFilterType] = useState("all");
+
+  // GSTIN verification state
   const [gstinValidating, setGstinValidating] = useState(false);
   const [gstinValidResult, setGstinValidResult] = useState<{
-    status: "success" | "error";
+    status: "success" | "error" | "cors" | "format_only";
+    message: string;
+    detail?: string;
+  } | null>(null);
+
+  // PAN verification state
+  const [panValidating, setPanValidating] = useState(false);
+  const [panValidResult, setPanValidResult] = useState<{
+    status: "success" | "error" | "cors" | "format_only";
     message: string;
   } | null>(null);
 
@@ -106,6 +118,7 @@ export function Parties() {
     setEditingParty(null);
     setForm({ ...emptyParty });
     setGstinValidResult(null);
+    setPanValidResult(null);
     setShowDialog(true);
   };
 
@@ -113,46 +126,135 @@ export function Parties() {
     setEditingParty(party);
     setForm({ ...party });
     setGstinValidResult(null);
+    setPanValidResult(null);
     setShowDialog(true);
   };
 
-  const validateGstin = () => {
+  const validateGstin = async () => {
     if (!form.gstin) {
       toast.error("Enter a GSTIN to validate");
       return;
     }
-    if (!GSTIN_REGEX.test(form.gstin)) {
-      setGstinValidResult({ status: "error", message: "Invalid GSTIN format" });
-      toast.error(
-        "Invalid GSTIN format. Should be 15 characters like: 27AABCU9603R1ZX",
-      );
-      return;
-    }
     setGstinValidating(true);
     setGstinValidResult(null);
-    setTimeout(() => {
-      const alphaChars = form.gstin.slice(2, 7);
-      const legalName = `${alphaChars.split("").reverse().join("")} ENTERPRISES PVT LTD`;
-      setGstinValidating(false);
+    const result = await verifyGSTIN(form.gstin);
+    setGstinValidating(false);
+
+    if (result.success) {
+      const detail = [
+        result.legalName ?? result.tradeName,
+        result.status,
+        result.taxpayerType,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
       setGstinValidResult({
         status: "success",
-        message: `Taxpayer: ${legalName} | Status: Active | Type: Regular`,
+        message:
+          result.source === "live"
+            ? `✓ Verified from Government Database: ${detail}`
+            : `Format valid: ${detail || "Valid GSTIN format"}`,
+        detail: result.legalName ?? result.tradeName,
       });
-      toast.success("GSTIN validated successfully");
-    }, 1000);
+
+      // Auto-populate name if blank
+      if (!form.name && (result.legalName || result.tradeName)) {
+        setForm((p) => ({
+          ...p,
+          name: result.legalName ?? result.tradeName ?? p.name,
+        }));
+      }
+
+      // Auto-populate state code if available
+      if (result.stateCode) {
+        const numCode = Number.parseInt(result.stateCode, 10);
+        if (!Number.isNaN(numCode)) {
+          setForm((p) => ({ ...p, stateCode: BigInt(numCode) }));
+        }
+      }
+
+      toast.success(
+        result.source === "live"
+          ? "GSTIN verified from Government Database"
+          : "GSTIN format valid",
+      );
+    } else if (result.errorCode === "CORS_BLOCKED") {
+      setGstinValidResult({
+        status: "cors",
+        message:
+          "Format valid — live lookup CORS blocked (expected in browser)",
+      });
+      toast.warning("Live API CORS blocked — format validated");
+    } else if (result.errorCode === "NO_API_KEY") {
+      setGstinValidResult({
+        status: "format_only",
+        message:
+          "Format valid — live lookup unavailable (no API key configured)",
+      });
+      toast.success("GSTIN format is valid");
+    } else {
+      setGstinValidResult({
+        status: "error",
+        message: result.error ?? "Validation failed",
+      });
+      toast.error(result.error ?? "Validation failed");
+    }
+  };
+
+  const validatePan = async () => {
+    if (!form.pan) {
+      toast.error("Enter a PAN to validate");
+      return;
+    }
+    setPanValidating(true);
+    setPanValidResult(null);
+    const result = await verifyPAN(form.pan);
+    setPanValidating(false);
+
+    if (result.success) {
+      const detail = [result.panHolderName, result.panType, result.status]
+        .filter(Boolean)
+        .join(" | ");
+      setPanValidResult({
+        status: "success",
+        message:
+          result.source === "live"
+            ? `✓ Verified: ${detail}`
+            : `Format valid: ${detail || "Valid PAN format"}`,
+      });
+      toast.success(
+        result.source === "live"
+          ? "PAN verified from Government Database"
+          : "PAN format valid",
+      );
+    } else if (result.errorCode === "CORS_BLOCKED") {
+      setPanValidResult({
+        status: "cors",
+        message:
+          "Format valid — live lookup CORS blocked (expected in browser)",
+      });
+      toast.warning("Live API CORS blocked — format validated");
+    } else if (result.errorCode === "NO_API_KEY") {
+      setPanValidResult({
+        status: "format_only",
+        message:
+          "Format valid — live lookup unavailable (no API key configured)",
+      });
+      toast.success("PAN format is valid");
+    } else {
+      setPanValidResult({
+        status: "error",
+        message: result.error ?? "Validation failed",
+      });
+      toast.error(result.error ?? "Validation failed");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) {
       toast.error("Party name is required");
-      return;
-    }
-
-    if (form.gstin && !GSTIN_REGEX.test(form.gstin)) {
-      toast.error(
-        "Invalid GSTIN format. Should be 15 characters like: 27AABCU9603R1ZX",
-      );
       return;
     }
 
@@ -211,6 +313,22 @@ export function Parties() {
         Both
       </Badge>
     );
+  };
+
+  const inlineResultClass = (status: string) => {
+    if (status === "success")
+      return "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
+    if (status === "cors" || status === "format_only")
+      return "bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800";
+    return "bg-destructive/10 text-destructive border-destructive/20";
+  };
+
+  const inlineResultIcon = (status: string) => {
+    if (status === "success")
+      return <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0" />;
+    if (status === "cors" || status === "format_only")
+      return <Info className="w-3 h-3 mt-0.5 shrink-0" />;
+    return <XCircle className="w-3 h-3 mt-0.5 shrink-0" />;
   };
 
   if (isLoading) {
@@ -400,8 +518,13 @@ export function Parties() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>GSTIN</Label>
+
+              {/* GSTIN with inline verification */}
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                  GSTIN
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     value={form.gstin}
@@ -421,56 +544,97 @@ export function Parties() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={validateGstin}
-                    disabled={gstinValidating}
+                    onClick={() => void validateGstin()}
+                    disabled={gstinValidating || !form.gstin}
                     data-ocid="party.gstin_validate.button"
-                    className="shrink-0 text-xs"
+                    className="shrink-0 gap-1.5 text-xs"
                   >
                     {gstinValidating ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
-                      "Validate"
+                      <ShieldCheck className="w-3 h-3" />
                     )}
+                    Verify
                   </Button>
                 </div>
+                {gstinValidating && (
+                  <p
+                    className="text-xs text-muted-foreground flex items-center gap-1"
+                    data-ocid="party.gstin_validate.loading_state"
+                  >
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Querying GST Network...
+                  </p>
+                )}
                 {gstinValidResult && (
                   <div
-                    className={`flex items-start gap-1.5 text-xs p-2 rounded-md ${
-                      gstinValidResult.status === "success"
-                        ? "bg-chart-2/10 text-chart-2 border border-chart-2/20"
-                        : "bg-destructive/10 text-destructive border border-destructive/20"
-                    }`}
+                    className={`flex items-start gap-1.5 text-xs p-2 rounded-md border ${inlineResultClass(gstinValidResult.status)}`}
                     data-ocid="party.gstin_validate.success_state"
                   >
-                    {gstinValidResult.status === "success" ? (
-                      <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0" />
-                    ) : (
-                      <XCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                    )}
-                    {gstinValidResult.message}
+                    {inlineResultIcon(gstinValidResult.status)}
+                    <span>{gstinValidResult.message}</span>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  ⚠️ Format validation only. Live taxpayer lookup requires GSTN
-                  API key in Settings &gt; API Config.
-                </p>
               </div>
-              <div className="space-y-1.5">
-                <Label>PAN</Label>
-                <Input
-                  value={form.pan}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      pan: e.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="PAN (10 chars)"
-                  className="font-mono"
-                  maxLength={10}
-                  data-ocid="party.pan.input"
-                />
+
+              {/* PAN with inline verification */}
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  PAN
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.pan}
+                    onChange={(e) => {
+                      setForm((p) => ({
+                        ...p,
+                        pan: e.target.value.toUpperCase(),
+                      }));
+                      setPanValidResult(null);
+                    }}
+                    placeholder="PAN (10 chars)"
+                    className="font-mono flex-1"
+                    maxLength={10}
+                    data-ocid="party.pan.input"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void validatePan()}
+                    disabled={panValidating || !form.pan}
+                    data-ocid="party.pan_validate.button"
+                    className="shrink-0 gap-1.5 text-xs"
+                  >
+                    {panValidating ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <User className="w-3 h-3" />
+                    )}
+                    Verify
+                  </Button>
+                </div>
+                {panValidating && (
+                  <p
+                    className="text-xs text-muted-foreground flex items-center gap-1"
+                    data-ocid="party.pan_validate.loading_state"
+                  >
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Querying Income Tax e-Filing...
+                  </p>
+                )}
+                {panValidResult && (
+                  <div
+                    className={`flex items-start gap-1.5 text-xs p-2 rounded-md border ${inlineResultClass(panValidResult.status)}`}
+                    data-ocid="party.pan_validate.success_state"
+                  >
+                    {inlineResultIcon(panValidResult.status)}
+                    <span>{panValidResult.message}</span>
+                  </div>
+                )}
               </div>
+
               <div className="space-y-1.5">
                 <Label>State</Label>
                 <Select

@@ -13,6 +13,7 @@ import { Purchases } from "@/pages/Accounting/Purchases";
 import { Dashboard } from "@/pages/Dashboard";
 import { AuditTrail } from "@/pages/GSTCompliance/AuditTrail";
 import { GSTAPIIntegration } from "@/pages/GSTCompliance/GSTAPIIntegration";
+import { GSTINPANVerification } from "@/pages/GSTCompliance/GSTINPANVerification";
 import { GSTR1 } from "@/pages/GSTCompliance/GSTR1";
 import { GSTR3B } from "@/pages/GSTCompliance/GSTR3B";
 import { ITCReconciliation } from "@/pages/GSTCompliance/ITCReconciliation";
@@ -102,6 +103,8 @@ function PageContent({
       return <RCMTracker />;
     case "gst-audit":
       return <AuditTrail />;
+    case "gst-verification":
+      return <GSTINPANVerification onNavigate={onNavigate} />;
     case "accounting-reconciliation":
       return <BankReconciliation />;
     case "accounting-chart-of-accounts":

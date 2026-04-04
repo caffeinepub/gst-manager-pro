@@ -178,6 +178,12 @@ const navItems: NavItem[] = [
       { label: "ITC Reconciliation", page: "gst-itc", icon: RefreshCw },
       { label: "RCM Tracker", page: "gst-rcm", icon: PiggyBank },
       { label: "Audit Trail", page: "gst-audit", icon: History },
+      {
+        label: "GSTIN/PAN Verify",
+        page: "gst-verification",
+        icon: ShieldCheck,
+      },
+      { label: "API Integration", page: "gst-api-integration", icon: Shield },
     ],
   },
   {

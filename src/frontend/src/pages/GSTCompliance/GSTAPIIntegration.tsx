@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
 import {
   AlertCircle,
+  BadgeCheck,
   BanknoteIcon,
   CheckCircle2,
   Clock,
@@ -37,9 +39,6 @@ function formatRelativeTime(iso: string): string {
   return `${diffDays}d ago`;
 }
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-
 interface ApiResult {
   [key: string]: string | number | boolean;
 }
@@ -48,6 +47,7 @@ interface ApiCardState {
   loading: boolean;
   result: ApiResult | null;
   error: string | null;
+  source?: "live" | "format_only";
 }
 
 function generateIRN(): string {
@@ -147,93 +147,139 @@ export function GSTAPIIntegration() {
       ReturnType: "GSTR-1",
       Status: "Not Filed",
       "Due Date": `11/${String(now.getMonth() + 2).padStart(2, "0")}/${now.getFullYear()}`,
-      "Total Taxable Value": "₹2,45,000",
-      "Total Tax": "₹44,100",
+      "Total Taxable Value": "\u20b92,45,000",
+      "Total Tax": "\u20b944,100",
     });
     toast.success("GSTR data fetched (simulated)");
   };
 
-  const handleGSTINValidate = () => {
+  const handleGSTINValidate = async () => {
     if (!gstinInput) {
       toast.error("Enter a GSTIN to validate");
       return;
     }
-    if (!GSTIN_REGEX.test(gstinInput)) {
-      setGstinValidState({
-        loading: false,
-        result: null,
-        error: "Invalid GSTIN format",
-      });
-      toast.error("Invalid GSTIN format");
-      return;
-    }
-    // Generate fake legal name from GSTIN chars 2-7 (alpha part)
-    const alphaChars = gstinInput.slice(2, 7);
-    const legalName = `${alphaChars.split("").reverse().join("")} ENTERPRISES PVT LTD`;
     setGstinValidState({ loading: true, result: null, error: null });
-    setTimeout(() => {
+    const result = await verifyGSTIN(gstinInput);
+
+    if (result.success) {
+      const apiResult: ApiResult = {
+        GSTIN: result.gstin,
+      };
+      if (result.legalName) apiResult["Legal Name"] = result.legalName;
+      if (result.tradeName && result.tradeName !== result.legalName)
+        apiResult["Trade Name"] = result.tradeName;
+      if (result.status) apiResult.Status = result.status;
+      if (result.taxpayerType) apiResult["Taxpayer Type"] = result.taxpayerType;
+      if (result.stateCode)
+        apiResult.State = `${result.stateCode} — ${result.stateName ?? ""}`;
+      if (result.registrationDate)
+        apiResult["Registered On"] = result.registrationDate;
+      if (result.principalAddress) apiResult.Address = result.principalAddress;
+
       setGstinValidState({
         loading: false,
-        result: {
-          GSTIN: gstinInput,
-          "Legal Name": legalName,
-          Status: "Active",
-          "Registration Type": "Regular",
-          "State Code": gstinInput.slice(0, 2),
-          "Registration Date": "2018-04-01",
-        },
+        result: apiResult,
         error: null,
+        source: result.source,
       });
       setGstinHistory((prev) =>
         [
           {
-            gstin: gstinInput,
-            result: `${legalName} | Active`,
+            gstin: result.gstin,
+            result: `${result.legalName ?? result.tradeName ?? result.gstin} | ${result.status ?? ""} | ${result.source === "live" ? "Live ✓" : "Format Only"}`,
             time: new Date().toISOString(),
           },
-          ...prev,
+          ...prev.filter((h) => h.gstin !== result.gstin),
         ].slice(0, 5),
       );
-      toast.success("GSTIN validated successfully");
-    }, 1000);
+      toast.success(
+        result.source === "live"
+          ? "GSTIN verified from Government Database"
+          : "GSTIN format valid",
+      );
+    } else if (result.errorCode === "CORS_BLOCKED") {
+      setGstinValidState({
+        loading: false,
+        result: {
+          GSTIN: result.gstin,
+          Note: "Format valid — live API call blocked by CORS (backend proxy required)",
+        },
+        error: null,
+        source: result.source,
+      });
+      toast.warning("Live API CORS blocked — format validated");
+    } else {
+      setGstinValidState({
+        loading: false,
+        result: null,
+        error: result.error ?? "Verification failed",
+        source: result.source,
+      });
+      if (result.errorCode !== "INVALID_FORMAT") {
+        toast.error(result.error ?? "Verification failed");
+      } else {
+        toast.error("Invalid GSTIN format");
+      }
+    }
   };
 
-  const handlePANValidate = () => {
+  const handlePANValidate = async () => {
     if (!panInput) {
       toast.error("Enter a PAN to validate");
       return;
     }
-    if (!PAN_REGEX.test(panInput)) {
+    setPanValidState({ loading: true, result: null, error: null });
+    const result = await verifyPAN(panInput);
+
+    if (result.success) {
+      const apiResult: ApiResult = { PAN: result.pan };
+      if (result.panHolderName) apiResult["Holder Name"] = result.panHolderName;
+      if (result.panType) apiResult["PAN Type"] = result.panType;
+      if (result.status) apiResult.Status = result.status;
+      if (result.assessingOfficerCode)
+        apiResult["AO Code"] = result.assessingOfficerCode;
+
       setPanValidState({
         loading: false,
-        result: null,
-        error: "Invalid PAN format (e.g. ABCDE1234F)",
+        result: apiResult,
+        error: null,
+        source: result.source,
       });
-      toast.error("Invalid PAN format");
-      return;
-    }
-    const name = `${panInput.slice(0, 3).split("").reverse().join("")}U ${panInput.slice(3, 5)}HA ENTERPRISES`;
-    setPanValidState({ loading: true, result: null, error: null });
-    setTimeout(() => {
+      toast.success(
+        result.source === "live"
+          ? "PAN verified from Government Database"
+          : "PAN format valid",
+      );
+    } else if (result.errorCode === "CORS_BLOCKED") {
       setPanValidState({
         loading: false,
         result: {
-          PAN: panInput,
-          Name: name,
-          Status: "Active",
-          Type: panInput[3] === "P" ? "Individual" : "Company",
-          "Last Updated": "2024-01-15",
+          PAN: result.pan,
+          Note: "Format valid — live API call blocked by CORS (backend proxy required)",
         },
         error: null,
+        source: result.source,
       });
-      toast.success("PAN validated successfully");
-    }, 1000);
+      toast.warning("Live API CORS blocked — format validated");
+    } else {
+      setPanValidState({
+        loading: false,
+        result: null,
+        error: result.error ?? "Verification failed",
+        source: result.source,
+      });
+      if (result.errorCode !== "INVALID_FORMAT") {
+        toast.error(result.error ?? "Verification failed");
+      } else {
+        toast.error("Invalid PAN format (e.g. ABCDE1234F)");
+      }
+    }
   };
 
   const handleBankSync = () => {
     simulateApi(setBankSyncState, 2000, {
-      "Account Balance": "₹12,34,567.89",
-      "Available Balance": "₹11,00,000.00",
+      "Account Balance": "\u20b912,34,567.89",
+      "Available Balance": "\u20b911,00,000.00",
       "Last Sync": new Date().toLocaleString("en-IN"),
       "Transactions Fetched": 25,
       "Pending Reconciliation": 8,
@@ -242,7 +288,33 @@ export function GSTAPIIntegration() {
     toast.success("Bank sync completed (simulated)");
   };
 
-  const renderResult = (result: ApiResult | null, error: string | null) => {
+  const getSourceBadge = (state: ApiCardState) => {
+    if (!state.result && !state.error) return null;
+    if (state.source === "live") {
+      return (
+        <Badge
+          variant="default"
+          className="text-xs gap-1 bg-emerald-600 hover:bg-emerald-600 shrink-0"
+        >
+          <BadgeCheck className="w-3 h-3" /> Live ✓
+        </Badge>
+      );
+    }
+    if (state.source === "format_only") {
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs text-blue-600 border-blue-400 shrink-0"
+        >
+          Format Only
+        </Badge>
+      );
+    }
+    return null;
+  };
+
+  const renderResult = (state: ApiCardState, showSource = false) => {
+    const { result, error } = state;
     if (error) {
       return (
         <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
@@ -253,20 +325,25 @@ export function GSTAPIIntegration() {
     }
     if (!result) return null;
     return (
-      <div className="mt-3 p-3 rounded-lg bg-chart-2/10 border border-chart-2/20 space-y-1.5">
-        {Object.entries(result).map(([key, val]) => (
-          <div
-            key={key}
-            className="flex justify-between items-start gap-2 text-xs"
-          >
-            <span className="text-muted-foreground font-medium shrink-0">
-              {key}:
-            </span>
-            <span className="text-foreground text-right font-mono break-all">
-              {String(val)}
-            </span>
-          </div>
-        ))}
+      <div className="mt-3 space-y-1.5">
+        {showSource && (
+          <div className="flex justify-end">{getSourceBadge(state)}</div>
+        )}
+        <div className="p-3 rounded-lg bg-chart-2/10 border border-chart-2/20 space-y-1.5">
+          {Object.entries(result).map(([key, val]) => (
+            <div
+              key={key}
+              className="flex justify-between items-start gap-2 text-xs"
+            >
+              <span className="text-muted-foreground font-medium shrink-0">
+                {key}:
+              </span>
+              <span className="text-foreground text-right font-mono break-all">
+                {String(val)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -282,10 +359,9 @@ export function GSTAPIIntegration() {
               Demo / Simulation Mode
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-              All API calls on this page are simulated with sample data. To
-              enable real API integration, configure your credentials in
-              Settings &gt; API Config. Real GSTN, IRP, and e-Way Bill APIs
-              require valid credentials from the respective portals.
+              GSTIN and PAN validation use real government APIs when credentials
+              are configured. Other APIs (e-Invoice, e-Way Bill, Bank Sync) are
+              simulated. Configure credentials in Settings &gt; API Config.
             </p>
           </div>
         </div>
@@ -300,16 +376,9 @@ export function GSTAPIIntegration() {
             GST API Integration
           </h1>
           <p className="text-sm text-muted-foreground">
-            Format validation &amp; simulation mode — configure API keys for
-            live calls
+            GSTIN/PAN: live when API key configured — other APIs simulated
           </p>
         </div>
-        <Badge
-          variant="outline"
-          className="ml-auto text-xs text-amber-600 border-amber-400"
-        >
-          Simulated
-        </Badge>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -358,7 +427,7 @@ export function GSTAPIIntegration() {
               )}
               Generate IRN
             </Button>
-            {renderResult(eInvoiceState.result, eInvoiceState.error)}
+            {renderResult(eInvoiceState)}
           </CardContent>
         </Card>
 
@@ -405,7 +474,7 @@ export function GSTAPIIntegration() {
               )}
               Generate e-Way Bill
             </Button>
-            {renderResult(eWayBillState.result, eWayBillState.error)}
+            {renderResult(eWayBillState)}
           </CardContent>
         </Card>
 
@@ -452,7 +521,7 @@ export function GSTAPIIntegration() {
               )}
               Fetch GSTR Data
             </Button>
-            {renderResult(gstReturnState.result, gstReturnState.error)}
+            {renderResult(gstReturnState)}
           </CardContent>
         </Card>
 
@@ -472,22 +541,33 @@ export function GSTAPIIntegration() {
                     GSTIN Validation API
                   </CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/validate/gstin
+                    api.gst.gov.in
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {gstinValidState.source === "live" && gstinValidState.result ? (
+                <Badge
+                  variant="default"
+                  className="text-xs gap-1 bg-emerald-600 hover:bg-emerald-600 shrink-0"
+                >
+                  <BadgeCheck className="w-3 h-3" /> Live ✓
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="text-xs text-blue-600 border-blue-400 shrink-0"
+                >
+                  {gstinValidState.source === "format_only"
+                    ? "Format Only"
+                    : "Direct API"}
+                </Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Format validation (simulation mode) — returns legal name,
-              registration type, and status.
+              Queries GST Network directly. Returns legal name, registration
+              type, and filing status. Requires GSTN API key.
             </p>
             <div className="space-y-2">
               <Label className="text-xs">GSTIN to Validate</Label>
@@ -503,7 +583,7 @@ export function GSTAPIIntegration() {
             <Button
               size="sm"
               className="w-full gap-2"
-              onClick={handleGSTINValidate}
+              onClick={() => void handleGSTINValidate()}
               disabled={gstinValidState.loading}
               data-ocid="api.gstin_valid.primary_button"
             >
@@ -514,7 +594,7 @@ export function GSTAPIIntegration() {
               )}
               Validate GSTIN
             </Button>
-            {renderResult(gstinValidState.result, gstinValidState.error)}
+            {renderResult(gstinValidState, true)}
 
             {gstinHistory.length > 0 && (
               <div className="mt-3 space-y-1.5">
@@ -560,22 +640,33 @@ export function GSTAPIIntegration() {
                 <div>
                   <CardTitle className="text-sm">PAN Validation API</CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/validate/pan
+                    api.incometax.gov.in
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {panValidState.source === "live" && panValidState.result ? (
+                <Badge
+                  variant="default"
+                  className="text-xs gap-1 bg-emerald-600 hover:bg-emerald-600 shrink-0"
+                >
+                  <BadgeCheck className="w-3 h-3" /> Live ✓
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="text-xs text-blue-600 border-blue-400 shrink-0"
+                >
+                  {panValidState.source === "format_only"
+                    ? "Format Only"
+                    : "Direct API"}
+                </Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Validate PAN numbers and retrieve taxpayer name and status from
-              the Income Tax database.
+              Queries Income Tax e-Filing API directly. Returns PAN holder name,
+              type, and status. Requires IT Dept API key.
             </p>
             <div className="space-y-2">
               <Label className="text-xs">PAN to Validate</Label>
@@ -592,7 +683,7 @@ export function GSTAPIIntegration() {
               size="sm"
               className="w-full gap-2"
               variant="outline"
-              onClick={handlePANValidate}
+              onClick={() => void handlePANValidate()}
               disabled={panValidState.loading}
               data-ocid="api.pan_valid.secondary_button"
             >
@@ -603,7 +694,7 @@ export function GSTAPIIntegration() {
               )}
               Validate PAN
             </Button>
-            {renderResult(panValidState.result, panValidState.error)}
+            {renderResult(panValidState, true)}
           </CardContent>
         </Card>
 
@@ -652,7 +743,7 @@ export function GSTAPIIntegration() {
               )}
               Sync Transactions
             </Button>
-            {renderResult(bankSyncState.result, bankSyncState.error)}
+            {renderResult(bankSyncState)}
           </CardContent>
         </Card>
       </div>

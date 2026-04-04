@@ -193,8 +193,14 @@ export interface ApiSettings {
     clientId: string;
     clientSecret: string;
     enabled: boolean;
+    sandboxMode?: boolean;
   };
-  pan: { key: string; url: string; enabled: boolean };
+  pan: {
+    key: string;
+    url: string;
+    enabled: boolean;
+    sandboxMode?: boolean;
+  };
   banking: {
     key: string;
     url: string;
@@ -343,6 +349,7 @@ export type AppPage =
   | "gst-itc"
   | "gst-rcm"
   | "gst-audit"
+  | "gst-verification"
   | "reports-sales"
   | "reports-purchase"
   | "reports-gst-summary"
@@ -372,7 +379,7 @@ export type AppPage =
   | "payroll-reports"
   | "payroll-statutory";
 
-// ─── Payroll Types ───────────────────────────────────────────────────────────
+// ─── Payroll Types ────────────────────────────────────────────────
 
 export type EmployeeType = "salaried" | "daily_wage" | "contract";
 export type EmployeeStatus = "active" | "inactive" | "terminated";

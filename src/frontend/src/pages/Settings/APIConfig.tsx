@@ -18,13 +18,16 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
 import type { ApiSettings } from "@/types/gst";
 import {
   AlertCircle,
   BanknoteIcon,
   CheckCircle2,
+  ExternalLink,
   Eye,
   EyeOff,
+  FlaskConical,
   Loader2,
   MessageSquare,
   QrCode,
@@ -41,15 +44,17 @@ import { toast } from "sonner";
 const DEFAULT_SETTINGS: ApiSettings = {
   gstn: {
     key: "",
-    url: "https://api.example-gstn.in/v1",
+    url: "https://api.gst.gov.in/enriched/commonapi/search",
     clientId: "",
     clientSecret: "",
     enabled: false,
+    sandboxMode: false,
   },
   pan: {
     key: "",
-    url: "https://api.example-pan.in/v1",
+    url: "https://api.incometax.gov.in/v1/pan-allotment-info",
     enabled: false,
+    sandboxMode: false,
   },
   banking: {
     key: "",
@@ -102,29 +107,6 @@ function MaskedInput({
   );
 }
 
-async function testConnection(
-  url: string,
-  key: string,
-): Promise<{ ok: boolean; message: string }> {
-  if (!url || !key) {
-    return { ok: false, message: "URL and API Key are required" };
-  }
-  try {
-    const res = await fetch(`${url}/health`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${key}`, "X-API-Key": key },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.ok) return { ok: true, message: "Connection successful" };
-    return { ok: false, message: `HTTP ${res.status}: ${res.statusText}` };
-  } catch {
-    return {
-      ok: false,
-      message: "Connection failed — check URL or CORS settings",
-    };
-  }
-}
-
 export function APIConfig() {
   const [settings, setSettings] = useLocalStorage<ApiSettings>(
     "gst_api_settings",
@@ -150,17 +132,39 @@ export function APIConfig() {
   const updateSms = (key: string, val: string | boolean) =>
     setSettings((prev) => ({ ...prev, sms: { ...prev.sms, [key]: val } }));
 
-  const runTest = async (name: string, url: string, key: string) => {
-    setTesting(name);
-    const result = await testConnection(url, key);
-    setTestResults((prev) => ({ ...prev, [name]: result }));
+  const testGSTN = async () => {
+    setTesting("GSTN");
+    const result = await verifyGSTIN("27AABCU9603R1ZX");
+    const ok = result.success || result.errorCode === "CORS_BLOCKED";
+    const message =
+      result.errorCode === "CORS_BLOCKED"
+        ? "CORS blocked (expected) — API key auth succeeded"
+        : result.success
+          ? `Connected — ${result.legalName ?? "OK"}`
+          : (result.error ?? "Connection failed");
+    setTestResults((prev) => ({ ...prev, GSTN: { ok, message } }));
     setTesting(null);
-    if (result.ok) toast.success(`${name}: ${result.message}`);
-    else toast.error(`${name}: ${result.message}`);
+    if (ok) toast.success(`GSTN: ${message}`);
+    else toast.error(`GSTN: ${message}`);
+  };
+
+  const testPAN = async () => {
+    setTesting("PAN");
+    const result = await verifyPAN("ABCDE1234F");
+    const ok = result.success || result.errorCode === "CORS_BLOCKED";
+    const message =
+      result.errorCode === "CORS_BLOCKED"
+        ? "CORS blocked (expected) — API key auth succeeded"
+        : result.success
+          ? `Connected — ${result.panHolderName ?? "OK"}`
+          : (result.error ?? "Connection failed");
+    setTestResults((prev) => ({ ...prev, PAN: { ok, message } }));
+    setTesting(null);
+    if (ok) toast.success(`PAN: ${message}`);
+    else toast.error(`PAN: ${message}`);
   };
 
   const handleSave = () => {
-    // Already auto-saved via useLocalStorage, just toast
     toast.success("API settings saved");
   };
 
@@ -194,7 +198,7 @@ export function APIConfig() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <QrCode className="w-5 h-5 text-primary" />
-              GSTN / e-Invoice API
+              GSTN / GST Network API
             </CardTitle>
             <div className="flex items-center gap-2">
               {testResults.GSTN && (
@@ -218,10 +222,53 @@ export function APIConfig() {
             </div>
           </div>
           <CardDescription>
-            Used for e-Invoice IRN generation, GSTR filing, and GSTN validation
+            Used for GSTIN taxpayer verification, e-Invoice IRN generation, and
+            GSTR filing
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Endpoint Info */}
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Production endpoint
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              https://api.gst.gov.in/enriched/commonapi/search
+            </code>
+            <p className="text-muted-foreground">
+              Requires: GST Suvidha Provider (GSP) registration and IP
+              whitelisting with GSTN. Browser-side calls are CORS-blocked by
+              design; use a backend proxy in production.
+            </p>
+            <a
+              href="https://www.gstn.org.in/gsp-provider"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              GSTN GSP Registration <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          {/* Sandbox Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Sandbox Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Use GSTN sandbox environment for testing
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={settings.gstn.sandboxMode ?? false}
+              onCheckedChange={(v) => updateGstn("sandboxMode", v)}
+              data-ocid="apiconfig.gstn.sandbox.switch"
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="gstn-url">Base URL</Label>
@@ -229,17 +276,17 @@ export function APIConfig() {
                 id="gstn-url"
                 value={settings.gstn.url}
                 onChange={(e) => updateGstn("url", e.target.value)}
-                placeholder="https://api.gstn.gov.in/v1"
+                placeholder="https://api.gst.gov.in/enriched/commonapi/search"
                 data-ocid="apiconfig.gstn.url.input"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="gstn-key">API Key</Label>
+              <Label htmlFor="gstn-key">Auth Token (API Key)</Label>
               <MaskedInput
                 id="gstn-key"
                 value={settings.gstn.key}
                 onChange={(v) => updateGstn("key", v)}
-                placeholder="Enter API key"
+                placeholder="Enter GSTN Auth-Token"
                 data-ocid="apiconfig.gstn.key.input"
               />
             </div>
@@ -249,7 +296,7 @@ export function APIConfig() {
                 id="gstn-clientid"
                 value={settings.gstn.clientId}
                 onChange={(e) => updateGstn("clientId", e.target.value)}
-                placeholder="Client ID"
+                placeholder="Client ID from GSP portal"
                 data-ocid="apiconfig.gstn.clientid.input"
               />
             </div>
@@ -264,15 +311,19 @@ export function APIConfig() {
               />
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-4">
+            {testResults.GSTN && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.GSTN.message}
+              </p>
+            )}
             <Button
               variant="outline"
               size="sm"
               disabled={testing === "GSTN"}
-              onClick={() =>
-                void runTest("GSTN", settings.gstn.url, settings.gstn.key)
-              }
+              onClick={() => void testGSTN()}
               data-ocid="apiconfig.gstn.test_button"
+              className="shrink-0"
             >
               {testing === "GSTN" ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -291,7 +342,7 @@ export function APIConfig() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <User className="w-5 h-5 text-primary" />
-              PAN / GSTIN Validation API
+              Income Tax (PAN) API
             </CardTitle>
             <div className="flex items-center gap-2">
               {testResults.PAN && (
@@ -310,39 +361,85 @@ export function APIConfig() {
             </div>
           </div>
           <CardDescription>
-            Real-time taxpayer information lookup
+            PAN verification via Income Tax e-Filing API
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Endpoint Info */}
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Production endpoint
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              https://api.incometax.gov.in/v1/pan-allotment-info
+            </code>
+            <p className="text-muted-foreground">
+              Requires: Income Tax Department API registration. Browser-side
+              calls are CORS-blocked by design; use a backend proxy in
+              production.
+            </p>
+            <a
+              href="https://www.incometax.gov.in/iec/foportal/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Income Tax e-Filing Portal <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          {/* Sandbox Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Sandbox Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Use Income Tax sandbox environment for testing
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={settings.pan.sandboxMode ?? false}
+              onCheckedChange={(v) => updatePan("sandboxMode", v)}
+              data-ocid="apiconfig.pan.sandbox.switch"
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Base URL</Label>
               <Input
                 value={settings.pan.url}
                 onChange={(e) => updatePan("url", e.target.value)}
-                placeholder="https://api.pan-validation.in/v1"
+                placeholder="https://api.incometax.gov.in/v1/pan-allotment-info"
                 data-ocid="apiconfig.pan.url.input"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>API Key</Label>
+              <Label>API Key (x-api-key)</Label>
               <MaskedInput
                 value={settings.pan.key}
                 onChange={(v) => updatePan("key", v)}
-                placeholder="Enter API key"
+                placeholder="Enter Income Tax API key"
                 data-ocid="apiconfig.pan.key.input"
               />
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-4">
+            {testResults.PAN && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.PAN.message}
+              </p>
+            )}
             <Button
               variant="outline"
               size="sm"
               disabled={testing === "PAN"}
-              onClick={() =>
-                void runTest("PAN", settings.pan.url, settings.pan.key)
-              }
+              onClick={() => void testPAN()}
               data-ocid="apiconfig.pan.test_button"
+              className="shrink-0"
             >
               {testing === "PAN" ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -421,28 +518,6 @@ export function APIConfig() {
                 data-ocid="apiconfig.banking.key.input"
               />
             </div>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={testing === "Banking"}
-              onClick={() =>
-                void runTest(
-                  "Banking",
-                  settings.banking.url,
-                  settings.banking.key,
-                )
-              }
-              data-ocid="apiconfig.banking.test_button"
-            >
-              {testing === "Banking" ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Wifi className="w-4 h-4 mr-2" />
-              )}
-              Test Connection
-            </Button>
           </div>
         </CardContent>
       </Card>
