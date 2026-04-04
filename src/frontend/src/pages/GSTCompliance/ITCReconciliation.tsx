@@ -12,7 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePurchases } from "@/hooks/useGSTStore";
 import { formatDate, formatINR } from "@/utils/formatting";
-import { Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -88,6 +88,24 @@ const SYNTHETIC_PORTAL_DATA: GSTR2BEntry[] = [
   },
 ];
 
+// Section 17(5) CGST Act — Blocked ITC Categories
+const BLOCKED_CREDIT_CATEGORIES = [
+  "Motor vehicles & conveyances (for personal use / non-business)",
+  "Food, beverages, outdoor catering",
+  "Beauty treatment, health services, cosmetic surgery",
+  "Membership of club, health & fitness center",
+  "Rent-a-cab, life insurance, health insurance (except statutory obligation)",
+  "Travel benefits to employees (leave / home travel)",
+  "Works contract services for construction of immovable property",
+  "Goods / services for construction of immovable property",
+  "Goods / services received by non-resident taxable person",
+  "Goods / services used for personal consumption",
+  "Goods lost, stolen, destroyed, written off, or disposed as gift / samples",
+  "Tax paid under composition scheme",
+  "Tax paid for fraudulent / willful misstatement supplies",
+  "Goods / services used for exempt supplies",
+];
+
 function getMatchBadge(status: MatchStatus) {
   switch (status) {
     case "Matched":
@@ -114,6 +132,54 @@ function getMatchBadge(status: MatchStatus) {
   }
 }
 
+function getRule37Status(
+  billDate: string,
+  paymentDate?: string,
+): {
+  label: string;
+  variant: "default" | "secondary" | "destructive";
+  days: number | null;
+} {
+  const today = new Date();
+  const bill = new Date(billDate);
+  const daysFromBill = Math.floor(
+    (today.getTime() - bill.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (!paymentDate) {
+    return {
+      label: "High Risk — Payment date missing",
+      variant: "destructive",
+      days: null,
+    };
+  }
+
+  const payment = new Date(paymentDate);
+  const daysToPay = Math.floor(
+    (payment.getTime() - bill.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (daysToPay >= 180 || daysFromBill >= 180) {
+    return {
+      label: `${daysFromBill}d — ITC reversal due`,
+      variant: "destructive",
+      days: daysFromBill,
+    };
+  }
+  if (daysFromBill >= 150) {
+    return {
+      label: `${daysFromBill}d — Approaching limit`,
+      variant: "secondary",
+      days: daysFromBill,
+    };
+  }
+  return {
+    label: `${daysFromBill}d — OK`,
+    variant: "default",
+    days: daysFromBill,
+  };
+}
+
 export function ITCReconciliation() {
   const { purchases } = usePurchases();
   const [portalDataVisible, setPortalDataVisible] = useState(false);
@@ -138,6 +204,23 @@ export function ITCReconciliation() {
         0,
       ),
     };
+  }, [purchases]);
+
+  // Rule 37 watch: purchases without paymentDate or >150 days outstanding
+  const rule37Watch = useMemo(() => {
+    return purchases
+      .filter((p) => p.itcEligible && p.status === "confirmed")
+      .map((p) => {
+        const status = getRule37Status(p.billDate, p.paymentDate);
+        const itcAmount = p.totalCgst + p.totalSgst + p.totalIgst;
+        return { ...p, rule37Status: status, itcAmount };
+      })
+      .filter(
+        (p) =>
+          !p.paymentDate ||
+          p.rule37Status.days === null ||
+          (p.rule37Status.days !== null && p.rule37Status.days >= 150),
+      );
   }, [purchases]);
 
   const portalSummary = useMemo(() => {
@@ -207,6 +290,12 @@ export function ITCReconciliation() {
           </TabsTrigger>
           <TabsTrigger value="purchases" data-ocid="itc.purchases.tab">
             Eligible Purchases ({data.eligible.length})
+          </TabsTrigger>
+          <TabsTrigger value="blocked" data-ocid="itc.blocked.tab">
+            Blocked Credits (Sec 17(5))
+          </TabsTrigger>
+          <TabsTrigger value="rule37" data-ocid="itc.rule37.tab">
+            Rule 37 Watch
           </TabsTrigger>
           <TabsTrigger value="gstr2b" data-ocid="itc.gstr2b.tab">
             GSTR-2B Match
@@ -289,7 +378,172 @@ export function ITCReconciliation() {
           </Card>
         </TabsContent>
 
-        {/* Tab 3: GSTR-2B Match */}
+        {/* Tab 3: Blocked Credits (Section 17(5)) */}
+        <TabsContent value="blocked" className="space-y-4">
+          <Card className="bg-amber-50/60 border-amber-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-amber-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Section 17(5) CGST Act — Blocked Input Tax Credit (Reference)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-amber-700 mb-3">
+                ITC is NOT available on the following categories of
+                goods/services under Section 17(5) of the CGST Act, 2017:
+              </p>
+              <ol className="list-decimal pl-5 space-y-1.5">
+                {BLOCKED_CREDIT_CATEGORIES.map((cat) => (
+                  <li key={cat} className="text-xs text-amber-900">
+                    {cat}
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-amber-600 mt-3 italic">
+                Reference: Section 17(5) CGST Act, 2017 and subsequent
+                notifications. Consult your CA for specific applicability.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Blocked purchases in books */}
+          <Card className="bg-card border-border/70">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                Purchases Marked as ITC Ineligible ({data.blocked.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {data.blocked.length === 0 ? (
+                <div
+                  className="p-6 text-center text-sm text-muted-foreground"
+                  data-ocid="itc.blocked.empty_state"
+                >
+                  No ITC-ineligible purchases found. Toggle "Eligible ITC" off
+                  in Accounting &gt; Purchases to mark blocked purchases.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">Bill #</TableHead>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Total GST</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.blocked.map((p, idx) => (
+                        <TableRow
+                          key={p.id}
+                          data-ocid={`itc.blocked.item.${idx + 1}`}
+                        >
+                          <TableCell className="pl-4 font-mono text-xs text-primary">
+                            {p.billNumber}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.vendorName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(p.billDate)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric font-bold text-destructive">
+                            {formatINR(p.totalCgst + p.totalSgst + p.totalIgst)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="destructive" className="text-xs">
+                              Blocked
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 4: Rule 37 Watch */}
+        <TabsContent value="rule37" className="space-y-4">
+          <Card className="bg-red-50/50 border-red-200">
+            <CardContent className="pt-4">
+              <p className="text-xs text-red-800">
+                <span className="font-semibold">
+                  Rule 37 — ITC Reversal Watch:
+                </span>{" "}
+                ITC must be reversed if payment to the supplier is not made
+                within <strong>180 days</strong> from the invoice date.
+                Purchases below are at risk or have exceeded the limit.
+              </p>
+            </CardContent>
+          </Card>
+
+          {rule37Watch.length === 0 ? (
+            <div
+              className="p-8 text-center text-sm text-muted-foreground bg-card rounded-lg border"
+              data-ocid="itc.rule37.empty_state"
+            >
+              No Rule 37 risk detected. All payments are within 180 days.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <Table data-ocid="itc.rule37.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Bill #</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead>Bill Date</TableHead>
+                    <TableHead>Payment Date</TableHead>
+                    <TableHead className="text-right">ITC Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rule37Watch.map((p, idx) => (
+                    <TableRow
+                      key={p.id}
+                      data-ocid={`itc.rule37.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-mono text-xs text-primary">
+                        {p.billNumber}
+                      </TableCell>
+                      <TableCell className="text-sm">{p.vendorName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(p.billDate)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.paymentDate ? (
+                          formatDate(p.paymentDate)
+                        ) : (
+                          <span className="text-destructive font-medium">
+                            Not recorded
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-bold">
+                        {formatINR(p.itcAmount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={p.rule37Status.variant}
+                          className="text-xs whitespace-nowrap"
+                        >
+                          {p.rule37Status.label}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Tab 5: GSTR-2B Match */}
         <TabsContent value="gstr2b" className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -348,8 +602,14 @@ export function ITCReconciliation() {
               {/* Portal Data Table */}
               <Card className="bg-card border-border/70">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    GSTR-2B Portal Data (Simulated)
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    GSTR-2B Portal Data
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-amber-600 border-amber-400"
+                    >
+                      ⚠ Simulation — Connect API for live data
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">

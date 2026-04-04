@@ -35,13 +35,81 @@ function monthLabel(m: string) {
   return `${MONTH_NAMES[Number.parseInt(mo) - 1]} ${y}`;
 }
 
-const PT_SLABS = [
-  { from: 0, to: 10000, pt: 0 },
-  { from: 10001, to: 15000, pt: 110 },
-  { from: 15001, to: 25000, pt: 130 },
-  { from: 25001, to: 40000, pt: 150 },
-  { from: 40001, to: Number.POSITIVE_INFINITY, pt: 200 },
+// ─── State-wise PT Reference Table ─────────────────────────────────────────
+const STATE_PT_REFERENCE = [
+  {
+    state: "Maharashtra (27)",
+    slabs: "₹0 (up to ₹7,500) | ₹175 (7,501–10,000) | ₹200 (>10,000)",
+  },
+  {
+    state: "Karnataka (29)",
+    slabs: "₹0 (up to ₹14,999) | ₹200 (>₹15,000)",
+  },
+  {
+    state: "Tamil Nadu (33)",
+    slabs: "₹0 (up to ₹21,000) | ₹208 (>₹21,000)",
+  },
+  {
+    state: "West Bengal (19)",
+    slabs:
+      "₹0 (≤8,500) | ₹90 (8,501–10,000) | ₹110 (10,001–15,000) | ₹130 (15,001–25,000) | ₹150 (25,001–40,000) | ₹200 (>40,000)",
+  },
+  {
+    state: "Telangana (36)",
+    slabs: "₹0 (≤15,000) | ₹150 (15,001–20,000) | ₹200 (>20,000)",
+  },
+  {
+    state: "Andhra Pradesh (37)",
+    slabs: "₹0 (≤15,000) | ₹150 (15,001–20,000) | ₹200 (>20,000)",
+  },
+  {
+    state: "Gujarat (24)",
+    slabs:
+      "₹0 (≤5,999) | ₹80 (6,000–8,999) | ₹150 (9,000–11,999) | ₹200 (>12,000)",
+  },
+  {
+    state: "Kerala (32)",
+    slabs: "₹0 (≤19,999) | ₹208 (≥20,000)",
+  },
+  {
+    state: "Madhya Pradesh (23)",
+    slabs: "₹0 (≤18,750) | ₹208 (>18,750)",
+  },
+  { state: "Delhi (07)", slabs: "Nil — No PT in Delhi" },
+  { state: "Other States", slabs: "₹0 (≤10,000) | ₹200 (>10,000) [generic]" },
 ];
+
+// ─── TDS Section 192 (reuse from ProcessPayroll) ───────────────────────────
+function calculateTDS(
+  annualProjection: number,
+  taxRegime: "old" | "new",
+  stdDeduction: number,
+): number {
+  const afterStd = Math.max(0, annualProjection - stdDeduction);
+
+  let taxOld = 0;
+  if (afterStd <= 250000) taxOld = 0;
+  else if (afterStd <= 500000) taxOld = Math.round((afterStd - 250000) * 0.05);
+  else if (afterStd <= 1000000)
+    taxOld = 12500 + Math.round((afterStd - 500000) * 0.2);
+  else taxOld = 112500 + Math.round((afterStd - 1000000) * 0.3);
+  if (afterStd <= 500000) taxOld = 0;
+
+  let taxNew = 0;
+  if (afterStd <= 300000) taxNew = 0;
+  else if (afterStd <= 600000) taxNew = Math.round((afterStd - 300000) * 0.05);
+  else if (afterStd <= 900000)
+    taxNew = 15000 + Math.round((afterStd - 600000) * 0.1);
+  else if (afterStd <= 1200000)
+    taxNew = 45000 + Math.round((afterStd - 900000) * 0.15);
+  else if (afterStd <= 1500000)
+    taxNew = 90000 + Math.round((afterStd - 1200000) * 0.2);
+  else taxNew = 150000 + Math.round((afterStd - 1500000) * 0.3);
+  if (afterStd <= 700000) taxNew = 0;
+
+  const baseTax = taxRegime === "new" ? taxNew : taxOld;
+  return Math.round(baseTax * 1.04);
+}
 
 export function StatutoryCompliance() {
   const { runs } = usePayrollRuns();
@@ -50,22 +118,44 @@ export function StatutoryCompliance() {
   const finalizedRuns = runs.filter((r) => r.status === "finalized");
   const latestRun = finalizedRuns[0];
 
+  // ─── PF Data: EPF, EPS, EDLI correctly split ──────────────────────────────
   const pfData = finalizedRuns.map((run) => {
     const empPF = run.lines.reduce((s, l) => s + l.employeePF, 0);
     const emplrPF = run.totalEmployerPF;
     const basicTotal = run.lines.reduce((s, l) => s + l.basicSalary, 0);
     const adminCharges = Math.round(basicTotal * 0.005);
-    const edli = Math.min(
-      Math.round(basicTotal * 0.005),
-      75 * run.lines.length,
+    // EDLI cap is ₹75 PER employee, then summed — not applied on total
+    const edli = run.lines.reduce((s, l) => {
+      const pfBase = Math.min(l.basicSalary + (l.da ?? 0), 15000);
+      return s + Math.min(Math.round(pfBase * 0.005), 75);
+    }, 0);
+    // EPF and EPS split for display
+    const epf = run.lines.reduce(
+      (s, l) =>
+        s +
+        (l.employerEPF ??
+          Math.round(Math.min(l.basicSalary + (l.da ?? 0), 15000) * 0.0367)),
+      0,
+    );
+    const eps = run.lines.reduce(
+      (s, l) =>
+        s +
+        (l.employerEPS ??
+          Math.min(
+            Math.round(Math.min(l.basicSalary + (l.da ?? 0), 15000) * 0.0833),
+            1250,
+          )),
+      0,
     );
     return {
       month: run.month,
       empPF,
       emplrPF,
+      epf,
+      eps,
+      edli,
       totalPF: empPF + emplrPF,
       adminCharges,
-      edli,
       challan: empPF + emplrPF + adminCharges + edli,
     };
   });
@@ -81,7 +171,7 @@ export function StatutoryCompliance() {
     return { month: run.month, ptTotal, count: run.lines.length };
   });
 
-  // TDS projection per employee
+  // ─── TDS projection: correct slabs per regime ───────────────────────────────
   const tdsData = employees
     .map((emp) => {
       const empLines = finalizedRuns.flatMap((r) =>
@@ -91,28 +181,28 @@ export function StatutoryCompliance() {
       const grossYTD = empLines.reduce((s, l) => s + l.grossSalary, 0);
       const avgMonthly = grossYTD / empLines.length;
       const annualProj = avgMonthly * 12;
-      const stdDeduction = 50000;
-      const taxableIncome = Math.max(0, annualProj - stdDeduction);
-      const estimatedTax =
-        taxableIncome > 500000 ? Math.round((taxableIncome - 250000) * 0.1) : 0;
+      const regime: "old" | "new" = emp.taxRegime ?? "new";
+      const estimatedTax = calculateTDS(annualProj, regime, 50000);
       const monthlyTDS = Math.round(estimatedTax / 12);
       const tdsYTD = empLines.reduce((s, l) => s + l.tdsDeduction, 0);
+      const afterStd = Math.max(0, annualProj - 50000);
       return {
         emp,
         grossYTD,
         annualProj,
-        taxableIncome,
+        taxableIncome: afterStd,
         estimatedTax,
         monthlyTDS,
         tdsYTD,
+        regime,
       };
     })
     .filter(Boolean);
 
   const generateChallan = (type: string, month: string) => {
-    const data =
-      pfData.find((d) => d.month === month) ||
-      esiData.find((d) => d.month === month);
+    const pfRow = pfData.find((d) => d.month === month);
+    const esiRow = esiData.find((d) => d.month === month);
+    const data = pfRow || esiRow;
     if (!data) {
       toast.error("No data for selected month");
       return;
@@ -139,25 +229,28 @@ th{background:#1e3a5f;color:white;}
 @page{size:A4;margin:0.5in;}</style></head><body>
 <div class="header">
 <div class="company">${businessName}</div>
-<div class="payslip-title" style="font-size:13pt;font-weight:bold;margin:8px 0;">${type} CHALLAN - ${monthLabel(month)}</div>
+<div style="font-size:13pt;font-weight:bold;margin:8px 0;">${type} CHALLAN - ${monthLabel(month)}</div>
 <span class="demo-badge">⚠ SIMULATION ONLY — NOT FOR SUBMISSION</span>
 </div>
 <p>This challan is generated for demonstration purposes only. Do not submit to ${type === "PF" ? "EPFO" : type === "ESI" ? "ESIC" : "State Government"} without verification.</p>
 <table><tr><th>Description</th><th>Amount (₹)</th></tr>
 ${
-  type === "PF"
+  type === "PF" && pfRow
     ? `
-<tr><td>Employee PF (12% of Basic)</td><td>${fmt(pfData.find((d) => d.month === month)?.empPF ?? 0)}</td></tr>
-<tr><td>Employer PF (12% of Basic)</td><td>${fmt(pfData.find((d) => d.month === month)?.emplrPF ?? 0)}</td></tr>
-<tr><td>Admin Charges (0.5%)</td><td>${fmt(pfData.find((d) => d.month === month)?.adminCharges ?? 0)}</td></tr>
-<tr><td>EDLI Charges (0.5%, max ₹75/emp)</td><td>${fmt(pfData.find((d) => d.month === month)?.edli ?? 0)}</td></tr>
-<tr style="font-weight:bold;"><td>Total PF Challan</td><td>${fmt(pfData.find((d) => d.month === month)?.challan ?? 0)}</td></tr>
+<tr><td>Employee PF (12% of capped basic)</td><td>${fmt(pfRow.empPF)}</td></tr>
+<tr><td>Employer EPF (3.67% of capped basic)</td><td>${fmt(pfRow.epf)}</td></tr>
+<tr><td>Employer EPS (8.33%, max ₹1,250)</td><td>${fmt(pfRow.eps)}</td></tr>
+<tr><td>EDLI Charges (0.5%, max ₹75/emp)</td><td>${fmt(pfRow.edli)}</td></tr>
+<tr><td>Admin Charges (0.5%)</td><td>${fmt(pfRow.adminCharges)}</td></tr>
+<tr style="font-weight:bold;"><td>Total PF Challan</td><td>${fmt(pfRow.challan)}</td></tr>
 `
-    : `
-<tr><td>Employee ESI (0.75%)</td><td>${fmt(esiData.find((d) => d.month === month)?.empESI ?? 0)}</td></tr>
-<tr><td>Employer ESI (3.25%)</td><td>${fmt(esiData.find((d) => d.month === month)?.emplrESI ?? 0)}</td></tr>
-<tr style="font-weight:bold;"><td>Total ESI Challan</td><td>${fmt(esiData.find((d) => d.month === month)?.totalESI ?? 0)}</td></tr>
+    : esiRow
+      ? `
+<tr><td>Employee ESI (0.75%)</td><td>${fmt(esiRow.empESI)}</td></tr>
+<tr><td>Employer ESI (3.25%)</td><td>${fmt(esiRow.emplrESI)}</td></tr>
+<tr style="font-weight:bold;"><td>Total ESI Challan</td><td>${fmt(esiRow.totalESI)}</td></tr>
 `
+      : ""
 }
 </table>
 <p style="font-size:9pt;color:#888;margin-top:20px;">Generated on ${new Date().toLocaleString("en-IN")}</p>
@@ -189,10 +282,10 @@ ${
         </Badge>
       </div>
 
-      {/* PF Compliance */}
+      {/* Section 1: PF with EPF / EPS / EDLI split */}
       <section className="space-y-3">
         <h2 className="font-semibold text-base border-b pb-2">
-          Section 1: Provident Fund (PF)
+          Section 1: Provident Fund (EPF Act, 1952)
         </h2>
         {pfData.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -204,10 +297,11 @@ ${
               <TableHeader>
                 <TableRow>
                   <TableHead>Month</TableHead>
-                  <TableHead className="text-right">Emp PF</TableHead>
-                  <TableHead className="text-right">Employer PF</TableHead>
+                  <TableHead className="text-right">Emp PF (12%)</TableHead>
+                  <TableHead className="text-right">EPF (3.67%)</TableHead>
+                  <TableHead className="text-right">EPS (8.33%)</TableHead>
+                  <TableHead className="text-right">EDLI (0.5%)</TableHead>
                   <TableHead className="text-right">Admin (0.5%)</TableHead>
-                  <TableHead className="text-right">EDLI</TableHead>
                   <TableHead className="text-right font-bold">
                     Challan Total
                   </TableHead>
@@ -225,13 +319,16 @@ ${
                       ₹{fmt(d.empPF)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      ₹{fmt(d.emplrPF)}
+                      ₹{fmt(d.epf)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      ₹{fmt(d.adminCharges)}
+                      ₹{fmt(d.eps)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       ₹{fmt(d.edli)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      ₹{fmt(d.adminCharges)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">
                       ₹{fmt(d.challan)}
@@ -252,12 +349,16 @@ ${
             </Table>
           </div>
         )}
+        <p className="text-xs text-muted-foreground">
+          * PF wage base capped at ₹15,000/month (EPF & MP Act, 1952). EPF =
+          3.67%, EPS = 8.33% (max ₹1,250), EDLI = 0.5% (max ₹75/employee).
+        </p>
       </section>
 
-      {/* ESI Compliance */}
+      {/* Section 2: ESI */}
       <section className="space-y-3">
         <h2 className="font-semibold text-base border-b pb-2">
-          Section 2: ESI Contributions
+          Section 2: ESI Contributions (ESIC Act, 1948)
         </h2>
         {esiData.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -311,17 +412,21 @@ ${
             </Table>
           </div>
         )}
+        <p className="text-xs text-muted-foreground">
+          * ESI applicable when gross (fixed components) ≤ ₹21,000/month.
+          Computed on fixed salary (Basic + HRA + DA + Special Allowance).
+        </p>
       </section>
 
-      {/* Professional Tax */}
+      {/* Section 3: Professional Tax — multi-state table */}
       <section className="space-y-3">
         <h2 className="font-semibold text-base border-b pb-2">
-          Section 3: Professional Tax
+          Section 3: Professional Tax (State-wise)
         </h2>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
-              State-Wise PT Slabs (Standard)
+              State-wise PT Slabs Reference (FY 2025-26)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -329,23 +434,18 @@ ${
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Gross Salary Range</TableHead>
-                    <TableHead className="text-right">
-                      PT Per Month (₹)
-                    </TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>PT Slabs (Monthly Gross)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {PT_SLABS.map((slab) => (
-                    <TableRow key={`slab-${slab.from}`}>
-                      <TableCell>
-                        ₹{fmt(slab.from)} –{" "}
-                        {slab.to === Number.POSITIVE_INFINITY
-                          ? "Above"
-                          : `₹${fmt(slab.to)}`}
+                  {STATE_PT_REFERENCE.map((row) => (
+                    <TableRow key={row.state}>
+                      <TableCell className="font-medium text-sm">
+                        {row.state}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {slab.pt === 0 ? "Nil" : `₹${slab.pt}`}
+                      <TableCell className="text-xs text-muted-foreground">
+                        {row.slabs}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -383,10 +483,10 @@ ${
         )}
       </section>
 
-      {/* TDS Section 192 */}
+      {/* Section 4: TDS Section 192 with correct regime display */}
       <section className="space-y-3">
         <h2 className="font-semibold text-base border-b pb-2">
-          Section 4: TDS (Section 192)
+          Section 4: TDS — Section 192 (FY 2025-26)
         </h2>
         {tdsData.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -400,6 +500,7 @@ ${
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>PAN</TableHead>
+                  <TableHead>Regime</TableHead>
                   <TableHead className="text-right">
                     Annual Projection
                   </TableHead>
@@ -427,6 +528,16 @@ ${
                         <TableCell className="font-mono text-sm">
                           {r.emp.pan || "-"}
                         </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              r.regime === "new" ? "default" : "secondary"
+                            }
+                            className="text-xs"
+                          >
+                            {r.regime === "new" ? "New" : "Old"}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right font-mono">
                           ₹{fmt(Math.round(r.annualProj))}
                         </TableCell>
@@ -452,10 +563,15 @@ ${
             </Table>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          * Standard deduction ₹50,000 applied. Basic exemption limit ₹2,50,000.
-          Tax rate 10% on income above exemption. This is a simplified
-          calculation for reference only.
+        <p className="text-xs text-muted-foreground bg-muted/40 rounded p-2">
+          <span className="font-semibold">
+            Section 192 TDS — FY 2025-26 Slab Rates:
+          </span>{" "}
+          Standard deduction ₹50,000 applied to both regimes.{" "}
+          <strong>Old Regime:</strong> 5%/20%/30% slabs; 87A rebate (₹12,500) if
+          income ≤05L. <strong>New Regime (default):</strong> 5%/10%/15%/20%/30%
+          slabs; 87A rebate (₹25,000) if income ≤07L. 4% Health & Education Cess
+          included in both.
         </p>
       </section>
 

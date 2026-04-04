@@ -5,6 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -39,6 +47,35 @@ export function GSTR3B() {
   >("gst_gstr3b_status", {});
 
   const periodStatus = filingStatus[currentPeriod] ?? { status: "not_filed" };
+
+  // Business profile
+  const businessStateCode = (() => {
+    try {
+      const p = JSON.parse(
+        localStorage.getItem("gst_business_profile") || "{}",
+      );
+      return String(p.stateCode || p.state_code || "27").padStart(2, "0");
+    } catch {
+      return "27";
+    }
+  })();
+
+  const businessGstin = (() => {
+    try {
+      const p = JSON.parse(
+        localStorage.getItem("gst_business_profile") || "{}",
+      );
+      return p.gstin || p.gstNumber || "";
+    } catch {
+      return "";
+    }
+  })();
+
+  // Derive ret_period from selected date range
+  const retPeriod = (() => {
+    const [year, month] = dateFrom.split("-");
+    return `${month}${year}`; // e.g. "032026"
+  })();
 
   const handleFile = () => {
     const arn = randomArn3b();
@@ -81,36 +118,51 @@ export function GSTR3B() {
       sgst: itcEligible.reduce((s, p) => s + p.totalSgst, 0),
       igst: itcEligible.reduce((s, p) => s + p.totalIgst, 0),
       cess: itcEligible.reduce((s, p) => s + p.totalCess, 0),
+      taxable: itcEligible.reduce(
+        (s, p) => s + (p.subtotal - p.totalDiscount),
+        0,
+      ),
     };
 
     const rcm = inward.filter((p) => p.isRcm);
     const rcmSum = {
       cgst: rcm.reduce((s, p) => s + p.totalCgst, 0),
       sgst: rcm.reduce((s, p) => s + p.totalSgst, 0),
-      igst: rcm.reduce((s, p) => s + p.totalIgst, 0), // Include IGST for interstate RCM
+      igst: rcm.reduce((s, p) => s + p.totalIgst, 0),
+      taxable: rcm.reduce((s, p) => s + (p.subtotal - p.totalDiscount), 0),
     };
 
-    // GST ITC set-off in correct statutory order (Section 49 & 49A of CGST Act)
+    // Table 3.2: Inter-state B2C by place of supply
+    const table32 = outward
+      .filter(
+        (inv) => !inv.partyGstin && inv.placeOfSupply !== businessStateCode,
+      )
+      .reduce(
+        (acc, inv) => {
+          const pos = inv.placeOfSupply || "00";
+          if (!acc[pos]) acc[pos] = { pos, taxable: 0, igst: 0 };
+          acc[pos].taxable += inv.subtotal - inv.totalDiscount;
+          acc[pos].igst += inv.totalIgst;
+          return acc;
+        },
+        {} as Record<string, { pos: string; taxable: number; igst: number }>,
+      );
+
+    // GST ITC set-off (Section 49A & 49B)
     const rawCgstLiability = outSum.cgst + rcmSum.cgst;
     const rawSgstLiability = outSum.sgst + rcmSum.sgst;
     const rawIgstLiability = outSum.igst + rcmSum.igst;
 
-    // Step 1: IGST ITC offsets IGST liability first
     let remainingIgstItc = itcSum.igst;
-    let igstAfterItc = Math.max(0, rawIgstLiability - remainingIgstItc);
+    const igstAfterItc = Math.max(0, rawIgstLiability - remainingIgstItc);
     remainingIgstItc = Math.max(0, remainingIgstItc - rawIgstLiability);
 
-    // Step 2: Remaining IGST ITC offsets CGST liability
-    let cgstAfterIgstItc = Math.max(0, rawCgstLiability - remainingIgstItc);
+    const cgstAfterIgstItc = Math.max(0, rawCgstLiability - remainingIgstItc);
     remainingIgstItc = Math.max(0, remainingIgstItc - rawCgstLiability);
 
-    // Step 3: Remaining IGST ITC offsets SGST liability
-    let sgstAfterIgstItc = Math.max(0, rawSgstLiability - remainingIgstItc);
+    const sgstAfterIgstItc = Math.max(0, rawSgstLiability - remainingIgstItc);
 
-    // Step 4: CGST ITC offsets remaining CGST liability
     const cgstAfterAllItc = Math.max(0, cgstAfterIgstItc - itcSum.cgst);
-
-    // Step 5: SGST ITC offsets remaining SGST liability
     const sgstAfterAllItc = Math.max(0, sgstAfterIgstItc - itcSum.sgst);
 
     const netPayable = {
@@ -120,8 +172,8 @@ export function GSTR3B() {
       cess: Math.max(0, outSum.cess - itcSum.cess),
     };
 
-    return { outSum, itcSum, rcmSum, netPayable };
-  }, [invoices, purchases, dateFrom, dateTo]);
+    return { outSum, itcSum, rcmSum, netPayable, table32 };
+  }, [invoices, purchases, dateFrom, dateTo, businessStateCode]);
 
   const Row = ({
     label,
@@ -139,7 +191,9 @@ export function GSTR3B() {
     bold?: boolean;
   }) => (
     <div
-      className={`grid grid-cols-5 gap-2 py-2 text-sm min-w-[480px] ${bold ? "font-bold border-t border-border" : ""}`}
+      className={`grid grid-cols-5 gap-2 py-2 text-sm min-w-[480px] ${
+        bold ? "font-bold border-t border-border" : ""
+      }`}
     >
       <span className={`${bold ? "" : "text-muted-foreground"}`}>{label}</span>
       <span className="font-numeric text-right">{formatINR(cgst)}</span>
@@ -267,10 +321,74 @@ export function GSTR3B() {
                 data-ocid="gstr3b.to.input"
               />
             </div>
+            {/* JSON Export: proper GSTN schema */}
             <Button
               variant="outline"
               onClick={() => {
-                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                const gstr3bSchema = {
+                  gstin: businessGstin,
+                  ret_period: retPeriod,
+                  sup_details: {
+                    osup_det: {
+                      txval: data.outSum.taxable,
+                      iamt: data.outSum.igst,
+                      camt: data.outSum.cgst,
+                      samt: data.outSum.sgst,
+                      csamt: data.outSum.cess,
+                    },
+                    osup_zero: {
+                      txval: 0,
+                      iamt: 0,
+                      camt: 0,
+                      samt: 0,
+                      csamt: 0,
+                    },
+                    osup_nil_exmp: { txval: 0 },
+                    isup_rev: {
+                      txval: data.rcmSum.taxable,
+                      iamt: data.rcmSum.igst,
+                      camt: data.rcmSum.cgst,
+                      samt: data.rcmSum.sgst,
+                      csamt: 0,
+                    },
+                  },
+                  itc_elg: {
+                    itc_avl: [
+                      { ty: "IMPG", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                      { ty: "IMPS", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                      {
+                        ty: "ISRC",
+                        iamt: data.rcmSum.igst,
+                        camt: data.rcmSum.cgst,
+                        samt: data.rcmSum.sgst,
+                        csamt: 0,
+                      },
+                      { ty: "ISD", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                      {
+                        ty: "OTH",
+                        iamt: data.itcSum.igst,
+                        camt: data.itcSum.cgst,
+                        samt: data.itcSum.sgst,
+                        csamt: data.itcSum.cess,
+                      },
+                    ],
+                    itc_rev: [
+                      { ty: "RUL", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                      { ty: "OTH", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                    ],
+                    itc_net: {
+                      iamt: data.itcSum.igst + data.rcmSum.igst,
+                      camt: data.itcSum.cgst + data.rcmSum.cgst,
+                      samt: data.itcSum.sgst + data.rcmSum.sgst,
+                      csamt: data.itcSum.cess,
+                    },
+                  },
+                  intr_ltfee: {
+                    intr_details: { iamt: 0, camt: 0, samt: 0, csamt: 0 },
+                    ltfee_details: { camt: 0, samt: 0 },
+                  },
+                };
+                const blob = new Blob([JSON.stringify(gstr3bSchema, null, 2)], {
                   type: "application/json",
                 });
                 const url = URL.createObjectURL(blob);
@@ -285,6 +403,7 @@ export function GSTR3B() {
             >
               <Download className="w-4 h-4" /> Export JSON
             </Button>
+            {/* CSV Export: fix RCM IGST hardcoded 0.00 */}
             <Button
               variant="outline"
               onClick={() => {
@@ -301,7 +420,7 @@ export function GSTR3B() {
                     "RCM Liability",
                     data.rcmSum.cgst.toFixed(2),
                     data.rcmSum.sgst.toFixed(2),
-                    "0.00",
+                    data.rcmSum.igst.toFixed(2), // was hardcoded "0.00" — FIXED
                     "0.00",
                   ],
                   [
@@ -337,6 +456,7 @@ export function GSTR3B() {
         </CardContent>
       </Card>
 
+      {/* Main GSTR-3B Summary Table */}
       <Card className="bg-card border-border/70">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -346,7 +466,6 @@ export function GSTR3B() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            {/* Column Headers */}
             <div className="grid grid-cols-5 gap-2 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border mb-2 min-w-[480px]">
               <span>Description</span>
               <span className="text-right">CGST</span>
@@ -377,7 +496,7 @@ export function GSTR3B() {
 
               <Separator className="my-3" />
               <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-                3.2 - RCM Liability
+                3.2 - Inter-State B2C Supplies by State
               </p>
               <Row
                 label="Inward supplies (RCM)"
@@ -405,6 +524,50 @@ export function GSTR3B() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Table 3.2: Inter-state B2C by place of supply */}
+      {Object.keys(data.table32).length > 0 && (
+        <Card className="bg-card border-border/70">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              Table 3.2 — Inter-State B2C Supplies by Place of Supply
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">
+                      Place of Supply (State Code)
+                    </TableHead>
+                    <TableHead className="text-right">Taxable Value</TableHead>
+                    <TableHead className="text-right">IGST</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.values(data.table32).map((row, idx) => (
+                    <TableRow
+                      key={row.pos}
+                      data-ocid={`gstr3b.table32.item.${idx + 1}`}
+                    >
+                      <TableCell className="pl-4 font-mono text-sm">
+                        {row.pos}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric">
+                        {formatINR(row.taxable)}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric">
+                        {formatINR(row.igst)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

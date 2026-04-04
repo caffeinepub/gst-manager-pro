@@ -156,6 +156,8 @@ export function InvoiceForm({
   const [linkedInvoiceId, setLinkedInvoiceId] = useState("");
   const [showVoiceDialog, setShowVoiceDialog] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [isReverseCharge, setIsReverseCharge] = useState(false);
+  const [authorizedSignatory, setAuthorizedSignatory] = useState("");
 
   const businessStateCode = businessProfile
     ? String(businessProfile.stateCode).padStart(2, "0")
@@ -180,6 +182,13 @@ export function InvoiceForm({
       );
       setStatus(editingInvoice.status);
       setLinkedInvoiceId(editingInvoice.linkedInvoiceId || "");
+      setIsReverseCharge(
+        !!(editingInvoice as import("@/types/gst").Invoice).isReverseCharge,
+      );
+      setAuthorizedSignatory(
+        (editingInvoice as import("@/types/gst").Invoice).authorizedSignatory ||
+          "",
+      );
     } else {
       setInvoiceNumber(getNextNumber(type, TYPE_PREFIXES[type]));
     }
@@ -313,6 +322,8 @@ export function InvoiceForm({
       status: newStatus,
       linkedInvoiceId,
       linkedInvoiceNumber: resolvedLinkedInvoiceNumber,
+      isReverseCharge,
+      authorizedSignatory,
     };
 
     if (editingInvoice) {
@@ -650,6 +661,33 @@ export function InvoiceForm({
                       : "CGST + SGST (Intrastate)"}
                   </span>
                 </div>
+                {/* Rule 46(k) CGST Rules - Reverse Charge */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="reverse-charge"
+                    checked={isReverseCharge}
+                    onChange={(e) => setIsReverseCharge(e.target.checked)}
+                    disabled={viewOnly}
+                    className="h-4 w-4 rounded border-border cursor-pointer"
+                    data-ocid="invoice.reverse_charge.checkbox"
+                  />
+                  <label
+                    htmlFor="reverse-charge"
+                    className="text-sm cursor-pointer select-none"
+                  >
+                    Reverse Charge Applicable (Rule 46(k))
+                  </label>
+                </div>
+                {isReverseCharge && (
+                  <div className="flex items-center gap-2 rounded bg-amber-50 border border-amber-300 p-2 text-xs text-amber-800">
+                    <span>⚠</span>
+                    <span>
+                      This invoice is subject to Reverse Charge Mechanism. Tax
+                      to be paid by recipient.
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label>IRN Number</Label>
                   <div className="flex gap-2">
@@ -1031,6 +1069,18 @@ export function InvoiceForm({
                     className="text-xs"
                   />
                 </div>
+                {/* Rule 46(p) CGST Rules - Authorized Signatory */}
+                <div className="space-y-1.5">
+                  <Label>Authorized Signatory (Rule 46(p))</Label>
+                  <Input
+                    value={authorizedSignatory}
+                    onChange={(e) => setAuthorizedSignatory(e.target.value)}
+                    placeholder="Name of authorized signatory..."
+                    data-ocid="invoice.authorized_signatory.input"
+                    disabled={viewOnly}
+                    className="text-sm"
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1135,6 +1185,11 @@ export function InvoiceForm({
                 {irnNumber && (
                   <p className="text-xs text-gray-500 font-mono mt-1">
                     IRN: {irnNumber.slice(0, 32)}...
+                  </p>
+                )}
+                {isReverseCharge && (
+                  <p className="text-xs font-bold text-red-700 mt-1 uppercase">
+                    ⚠ Reverse Charge: Yes
                   </p>
                 )}
               </div>
@@ -1277,6 +1332,15 @@ export function InvoiceForm({
                 <div className="text-sm text-gray-700 whitespace-pre-line">
                   {termsConditions}
                 </div>
+              </div>
+            )}
+            {authorizedSignatory && (
+              <div className="mt-6 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500">Authorized Signatory</p>
+                <p className="font-medium text-sm">{authorizedSignatory}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  For {resolvedBusinessName}
+                </p>
               </div>
             )}
           </div>

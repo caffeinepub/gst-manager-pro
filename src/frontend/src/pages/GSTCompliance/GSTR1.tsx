@@ -23,6 +23,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
   FileSpreadsheet,
@@ -61,6 +62,32 @@ export function GSTR1() {
     status: "not_filed" as FilingStatus,
   };
 
+  // Get business state code from profile for B2CS sply_ty determination
+  const businessStateCode = (() => {
+    try {
+      const profile = JSON.parse(
+        localStorage.getItem("gst_business_profile") || "{}",
+      );
+      return String(profile.stateCode || profile.state_code || "27").padStart(
+        2,
+        "0",
+      );
+    } catch {
+      return "27";
+    }
+  })();
+
+  const businessGstin = (() => {
+    try {
+      const profile = JSON.parse(
+        localStorage.getItem("gst_business_profile") || "{}",
+      );
+      return profile.gstin || profile.gstNumber || "";
+    } catch {
+      return "";
+    }
+  })();
+
   const handleFilingAction = () => {
     if (periodStatus.status === "not_filed") {
       const arn = randomArn();
@@ -85,7 +112,8 @@ export function GSTR1() {
     toast.success("GSTR-1 marked as Acknowledged");
   };
 
-  const filtered = invoices.filter(
+  // ─── Invoice Classification ────────────────────────────────────────────────
+  const invoicesInPeriod = invoices.filter(
     (inv) =>
       ["sales", "service"].includes(inv.type) &&
       inv.status === "confirmed" &&
@@ -93,8 +121,20 @@ export function GSTR1() {
       inv.date <= dateTo,
   );
 
-  const b2b = filtered.filter((inv) => inv.partyGstin);
-  const b2c = filtered.filter((inv) => !inv.partyGstin);
+  // B2B: registered buyers (with GSTIN)
+  const b2b = invoicesInPeriod.filter((inv) => inv.partyGstin);
+
+  // B2CL: unregistered buyers with invoice > ₹2.5 lakh (Table 5)
+  const b2cl = invoicesInPeriod.filter(
+    (inv) => !inv.partyGstin?.trim() && inv.grandTotal > 250000,
+  );
+
+  // B2CS: unregistered buyers with invoice ≤ ₹2.5 lakh
+  const b2cs = invoicesInPeriod.filter(
+    (inv) => !inv.partyGstin?.trim() && inv.grandTotal <= 250000,
+  );
+
+  // All credit & debit notes in period
   const creditNotes = invoices.filter(
     (inv) =>
       inv.type === "credit_note" &&
@@ -110,8 +150,20 @@ export function GSTR1() {
       inv.date <= dateTo,
   );
 
+  // CDNR: credit/debit notes for registered buyers
+  const cdnr = [...creditNotes, ...debitNotes].filter((inv) => inv.partyGstin);
+  // CDNUR: credit/debit notes for unregistered buyers
+  const cdnur = [...creditNotes, ...debitNotes].filter(
+    (inv) => !inv.partyGstin?.trim(),
+  );
+
+  const allInvoices = useMemo(
+    () => [...b2b, ...b2cl, ...b2cs],
+    [b2b, b2cl, b2cs],
+  );
+
   const summary = useMemo(() => {
-    const calc = (list: typeof filtered) => ({
+    const calc = (list: typeof invoicesInPeriod) => ({
       taxable: list.reduce(
         (s, inv) => s + (inv.subtotal - inv.totalDiscount),
         0,
@@ -121,8 +173,217 @@ export function GSTR1() {
       igst: list.reduce((s, inv) => s + inv.totalIgst, 0),
       cess: list.reduce((s, inv) => s + inv.totalCess, 0),
     });
-    return { b2b: calc(b2b), b2c: calc(b2c), total: calc(filtered) };
-  }, [b2b, b2c, filtered]);
+    return {
+      b2b: calc(b2b),
+      b2cl: calc(b2cl),
+      b2cs: calc(b2cs),
+      total: calc(invoicesInPeriod),
+    };
+  }, [b2b, b2cl, b2cs, invoicesInPeriod]);
+
+  // ─── HSN summary with digit warning ──────────────────────────────────────────
+  const hsnMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        hsn: string;
+        desc: string;
+        qty: number;
+        taxable: number;
+        igst: number;
+        cgst: number;
+        sgst: number;
+        shortDigit: boolean;
+      }
+    >();
+    for (const inv of allInvoices) {
+      for (const li of inv.lineItems) {
+        const hsn = li.hsnSacCode || "0000";
+        const existing = map.get(hsn);
+        const taxable = li.qty * li.unitPrice * (1 - li.discountPercent / 100);
+        if (existing) {
+          existing.qty += li.qty;
+          existing.taxable += taxable;
+          existing.igst += li.igst;
+          existing.cgst += li.cgst;
+          existing.sgst += li.sgst;
+        } else {
+          map.set(hsn, {
+            hsn,
+            desc: li.description || hsn,
+            qty: li.qty,
+            taxable,
+            igst: li.igst,
+            cgst: li.cgst,
+            sgst: li.sgst,
+            shortDigit: hsn.replace(/\D/g, "").length < 4,
+          });
+        }
+      }
+    }
+    return map;
+  }, [allInvoices]);
+
+  // ─── Export helpers ───────────────────────────────────────────────────────
+  const buildGSTR1JSON = () => {
+    // B2B grouped by buyer GSTIN
+    const b2bGrouped = b2b.reduce<Record<string, object[]>>((acc, inv) => {
+      const gstin = inv.partyGstin;
+      if (!acc[gstin]) acc[gstin] = [];
+      acc[gstin].push({
+        inum: inv.invoiceNumber,
+        idt: inv.date,
+        val: inv.grandTotal,
+        pos: inv.placeOfSupply,
+        rchrg: (inv as import("@/types/gst").Invoice).isReverseCharge
+          ? "Y"
+          : "N", // Rule 46(k) fix
+        inv: inv.lineItems.map((li) => ({
+          num: 1,
+          itm_det: {
+            txval: li.qty * li.unitPrice * (1 - li.discountPercent / 100),
+            rt: li.gstRate,
+            camt: li.cgst,
+            samt: li.sgst,
+            iamt: li.igst,
+            csamt: li.cess,
+          },
+        })),
+      });
+      return acc;
+    }, {});
+    const b2bSchema = Object.entries(b2bGrouped).map(([ctin, inv]) => ({
+      ctin,
+      inv,
+    }));
+
+    // B2CL: large unregistered (>2.5L)
+    const b2clSchema = b2cl.map((inv) => ({
+      inum: inv.invoiceNumber,
+      idt: inv.date,
+      val: inv.grandTotal,
+      pos: inv.placeOfSupply,
+      inv: inv.lineItems.map((li) => ({
+        num: 1,
+        itm_det: {
+          txval: li.qty * li.unitPrice * (1 - li.discountPercent / 100),
+          rt: li.gstRate,
+          iamt: li.igst,
+          csamt: li.cess,
+        },
+      })),
+    }));
+
+    // B2CS: group by (placeOfSupply, rate, supply type)
+    const b2csGrouped = b2cs.reduce<
+      Record<
+        string,
+        {
+          txval: number;
+          rt: number;
+          iamt: number;
+          camt: number;
+          samt: number;
+          csamt: number;
+          isIgst: boolean;
+          pos: string;
+        }
+      >
+    >((acc, inv) => {
+      const isIgst = inv.totalIgst > 0;
+      for (const li of inv.lineItems) {
+        const rate = li.gstRate ?? 0;
+        const pos = inv.placeOfSupply;
+        const key = `${pos}-${rate}-${isIgst ? "I" : "C"}`;
+        if (!acc[key])
+          acc[key] = {
+            txval: 0,
+            rt: rate,
+            iamt: 0,
+            camt: 0,
+            samt: 0,
+            csamt: 0,
+            isIgst,
+            pos,
+          };
+        const taxable = li.qty * li.unitPrice * (1 - li.discountPercent / 100);
+        acc[key].txval += taxable;
+        acc[key].iamt += li.igst;
+        acc[key].camt += li.cgst;
+        acc[key].samt += li.sgst;
+        acc[key].csamt += li.cess;
+      }
+      return acc;
+    }, {});
+    const b2csSchema = Object.values(b2csGrouped).map((val) => ({
+      sply_ty: val.pos === businessStateCode ? "INTRA" : "INTER", // B2CS sply_ty fix
+      pos: val.pos,
+      typ: "OE",
+      txval: val.txval,
+      rt: val.rt,
+      iamt: val.iamt,
+      camt: val.camt,
+      samt: val.samt,
+      csamt: val.csamt,
+    }));
+
+    // CDNR: credit/debit notes for registered
+    const cdnrMap = cdnr.reduce<Record<string, object[]>>((acc, inv) => {
+      if (!acc[inv.partyGstin]) acc[inv.partyGstin] = [];
+      acc[inv.partyGstin].push({
+        ntNum: inv.invoiceNumber,
+        ntdt: inv.date,
+        ntty: inv.type === "credit_note" ? "C" : "D",
+        rsn: inv.creditDebitReason || "01",
+        val: inv.grandTotal,
+        nt: inv.lineItems.map((li) => ({
+          num: 1,
+          itm_det: {
+            txval: li.qty * li.unitPrice * (1 - li.discountPercent / 100),
+            rt: li.gstRate,
+            camt: li.cgst,
+            samt: li.sgst,
+            iamt: li.igst,
+            csamt: li.cess,
+          },
+        })),
+      });
+      return acc;
+    }, {});
+
+    // CDNUR: credit/debit notes for unregistered
+    const cdnurSchema = cdnur.map((inv) => ({
+      ntNum: inv.invoiceNumber,
+      ntdt: inv.date,
+      ntty: inv.type === "credit_note" ? "C" : "D",
+      val: inv.grandTotal,
+      nt: inv.lineItems.map((li) => ({
+        num: 1,
+        itm_det: {
+          txval: li.qty * li.unitPrice * (1 - li.discountPercent / 100),
+          rt: li.gstRate,
+          iamt: li.igst,
+          csamt: li.cess,
+        },
+      })),
+    }));
+
+    const [year, month] = dateFrom.split("-");
+    return {
+      version: "GST3.0.4",
+      hash: "hash",
+      gstin: businessGstin,
+      fp: `${month}${year}`,
+      gt: allInvoices.reduce((s, i) => s + i.grandTotal, 0),
+      cur_gt: allInvoices.reduce((s, i) => s + i.grandTotal, 0),
+      b2b: b2bSchema,
+      b2cl: b2clSchema,
+      b2cs: b2csSchema,
+      hsn: { data: Array.from(hsnMap.values()) },
+      cdnr: Object.entries(cdnrMap).map(([ctin, nt]) => ({ ctin, nt })),
+      cdnur: cdnurSchema,
+    };
+  };
 
   return (
     <div className="space-y-4" data-ocid="gstr1.section">
@@ -207,7 +468,7 @@ export function GSTR1() {
         </CardContent>
       </Card>
 
-      {/* Filters */}
+      {/* Filters & Export */}
       <Card className="bg-card border-border/70">
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-4 items-end">
@@ -234,190 +495,7 @@ export function GSTR1() {
             <Button
               variant="outline"
               onClick={() => {
-                // Build proper GSTN GSTR-1 schema
-                // B2B: grouped by buyer GSTIN
-                const b2bGrouped = b2b.reduce<Record<string, object[]>>(
-                  (acc, inv) => {
-                    const gstin = inv.partyGstin;
-                    if (!acc[gstin]) acc[gstin] = [];
-                    acc[gstin].push({
-                      inum: inv.invoiceNumber,
-                      idt: inv.date,
-                      val: inv.grandTotal,
-                      pos: inv.placeOfSupply,
-                      rchrg: "N",
-                      inv: inv.lineItems.map((li) => ({
-                        num: 1,
-                        itm_det: {
-                          txval:
-                            li.qty *
-                            li.unitPrice *
-                            (1 - li.discountPercent / 100),
-                          rt: li.gstRate,
-                          camt: li.cgst,
-                          samt: li.sgst,
-                          iamt: li.igst,
-                          csamt: li.cess,
-                        },
-                      })),
-                    });
-                    return acc;
-                  },
-                  {},
-                );
-                const b2bSchema = Object.entries(b2bGrouped).map(
-                  ([ctin, inv]) => ({
-                    ctin,
-                    inv,
-                  }),
-                );
-
-                // B2CS: small B2C supplies — group by (placeOfSupply, gstRate, isIgst)
-                // Iterate ALL line items to create separate entry per unique GST rate
-                const b2csGrouped = b2c.reduce<
-                  Record<
-                    string,
-                    {
-                      txval: number;
-                      rt: number;
-                      iamt: number;
-                      camt: number;
-                      samt: number;
-                      csamt: number;
-                      isIgst: boolean;
-                    }
-                  >
-                >((acc, inv) => {
-                  const isIgst = inv.totalIgst > 0;
-                  for (const li of inv.lineItems) {
-                    const rate = li.gstRate ?? 0;
-                    const key = `${inv.placeOfSupply}-${rate}-${isIgst ? "I" : "C"}`;
-                    if (!acc[key])
-                      acc[key] = {
-                        txval: 0,
-                        rt: rate,
-                        iamt: 0,
-                        camt: 0,
-                        samt: 0,
-                        csamt: 0,
-                        isIgst,
-                      };
-                    const taxable =
-                      li.qty * li.unitPrice * (1 - li.discountPercent / 100);
-                    acc[key].txval += taxable;
-                    acc[key].iamt += li.igst;
-                    acc[key].camt += li.cgst;
-                    acc[key].samt += li.sgst;
-                    acc[key].csamt += li.cess;
-                  }
-                  return acc;
-                }, {});
-                const b2csSchema = Object.entries(b2csGrouped).map(
-                  ([key, val]) => ({
-                    sply_ty: "INTRA",
-                    pos: key.split("-")[0],
-                    typ: "OE",
-                    ...val,
-                  }),
-                );
-
-                // HSN Summary: aggregated by HSN code
-                const hsnMap = new Map<
-                  string,
-                  {
-                    hsn_sc: string;
-                    desc: string;
-                    uqc: string;
-                    qty: number;
-                    val: number;
-                    txval: number;
-                    iamt: number;
-                    camt: number;
-                    samt: number;
-                    csamt: number;
-                  }
-                >();
-                for (const inv of [...b2b, ...b2c]) {
-                  for (const li of inv.lineItems) {
-                    const hsn = li.hsnSacCode || "0000";
-                    const existing = hsnMap.get(hsn);
-                    const taxable =
-                      li.qty * li.unitPrice * (1 - li.discountPercent / 100);
-                    if (existing) {
-                      existing.qty += li.qty;
-                      existing.val += li.lineTotal;
-                      existing.txval += taxable;
-                      existing.iamt += li.igst;
-                      existing.camt += li.cgst;
-                      existing.samt += li.sgst;
-                      existing.csamt += li.cess;
-                    } else {
-                      hsnMap.set(hsn, {
-                        hsn_sc: hsn,
-                        desc: li.description || hsn,
-                        uqc: li.unit || "NOS",
-                        qty: li.qty,
-                        val: li.lineTotal,
-                        txval: taxable,
-                        iamt: li.igst,
-                        camt: li.cgst,
-                        samt: li.sgst,
-                        csamt: li.cess,
-                      });
-                    }
-                  }
-                }
-
-                // CDNR: Credit/Debit notes for registered buyers
-                const cdnrSchema = [...creditNotes, ...debitNotes]
-                  .filter((inv) => inv.partyGstin)
-                  .reduce<Record<string, object[]>>((acc, inv) => {
-                    if (!acc[inv.partyGstin]) acc[inv.partyGstin] = [];
-                    acc[inv.partyGstin].push({
-                      ntNum: inv.invoiceNumber,
-                      ntdt: inv.date,
-                      ntty: inv.type === "credit_note" ? "C" : "D",
-                      rsn: inv.creditDebitReason || "01",
-                      val: inv.grandTotal,
-                      nt: inv.lineItems.map((li) => ({
-                        num: 1,
-                        itm_det: {
-                          txval:
-                            li.qty *
-                            li.unitPrice *
-                            (1 - li.discountPercent / 100),
-                          rt: li.gstRate,
-                          camt: li.cgst,
-                          samt: li.sgst,
-                          iamt: li.igst,
-                          csamt: li.cess,
-                        },
-                      })),
-                    });
-                    return acc;
-                  }, {});
-
-                const exportData = {
-                  version: "GST3.0.4",
-                  hash: "hash",
-                  gstin: "",
-                  fp: (() => {
-                    const [year, month] = dateFrom.split("-");
-                    return `${month}${year}`;
-                  })(),
-                  gt: [...b2b, ...b2c].reduce((s, i) => s + i.grandTotal, 0),
-                  cur_gt: [...b2b, ...b2c].reduce(
-                    (s, i) => s + i.grandTotal,
-                    0,
-                  ),
-                  b2b: b2bSchema,
-                  b2cs: b2csSchema,
-                  hsn: { data: Array.from(hsnMap.values()) },
-                  cdnr: Object.entries(cdnrSchema).map(([ctin, nt]) => ({
-                    ctin,
-                    nt,
-                  })),
-                };
+                const exportData = buildGSTR1JSON();
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], {
                   type: "application/json",
                 });
@@ -436,9 +514,10 @@ export function GSTR1() {
             <Button
               variant="outline"
               onClick={() => {
-                const allInvoices = [
+                const allRecs = [
                   ...b2b,
-                  ...b2c,
+                  ...b2cl,
+                  ...b2cs,
                   ...creditNotes,
                   ...debitNotes,
                 ];
@@ -454,8 +533,9 @@ export function GSTR1() {
                   "IGST",
                   "Cess",
                   "Grand Total",
+                  "Type",
                 ].join(",");
-                const rows = allInvoices.map((inv) =>
+                const rows = allRecs.map((inv) =>
                   [
                     inv.invoiceNumber,
                     inv.date,
@@ -468,6 +548,7 @@ export function GSTR1() {
                     inv.totalIgst.toFixed(2),
                     inv.totalCess.toFixed(2),
                     inv.grandTotal.toFixed(2),
+                    inv.type,
                   ].join(","),
                 );
                 const csv = [header, ...rows].join("\n");
@@ -487,7 +568,6 @@ export function GSTR1() {
             <Button
               variant="outline"
               onClick={async () => {
-                // Excel export using SheetJS CDN
                 try {
                   const w = window as typeof window & {
                     XLSX?: {
@@ -530,8 +610,22 @@ export function GSTR1() {
                     SGST: inv.totalSgst,
                     IGST: inv.totalIgst,
                     "Grand Total": inv.grandTotal,
+                    "Reverse Charge": (inv as import("@/types/gst").Invoice)
+                      .isReverseCharge
+                      ? "Y"
+                      : "N",
                   }));
-                  const b2cData = b2c.map((inv) => ({
+                  const b2clData = b2cl.map((inv) => ({
+                    "Invoice #": inv.invoiceNumber,
+                    Date: inv.date,
+                    Party: inv.partyName,
+                    "Place of Supply": inv.placeOfSupplyName,
+                    Taxable: inv.subtotal - inv.totalDiscount,
+                    IGST: inv.totalIgst,
+                    Cess: inv.totalCess,
+                    "Grand Total": inv.grandTotal,
+                  }));
+                  const b2csData = b2cs.map((inv) => ({
                     "Invoice #": inv.invoiceNumber,
                     Date: inv.date,
                     Party: inv.partyName,
@@ -542,19 +636,25 @@ export function GSTR1() {
                     IGST: inv.totalIgst,
                     "Grand Total": inv.grandTotal,
                   }));
-                  const cdnrData = [...creditNotes, ...debitNotes].map(
-                    (inv) => ({
-                      "Note #": inv.invoiceNumber,
-                      Date: inv.date,
-                      Type: inv.type,
-                      Party: inv.partyName,
-                      GSTIN: inv.partyGstin,
-                      Taxable: inv.subtotal - inv.totalDiscount,
-                      CGST: inv.totalCgst,
-                      SGST: inv.totalSgst,
-                      IGST: inv.totalIgst,
-                    }),
-                  );
+                  const cdnrData = cdnr.map((inv) => ({
+                    "Note #": inv.invoiceNumber,
+                    Date: inv.date,
+                    Type: inv.type,
+                    Party: inv.partyName,
+                    GSTIN: inv.partyGstin,
+                    Taxable: inv.subtotal - inv.totalDiscount,
+                    CGST: inv.totalCgst,
+                    SGST: inv.totalSgst,
+                    IGST: inv.totalIgst,
+                  }));
+                  const cdnurData = cdnur.map((inv) => ({
+                    "Note #": inv.invoiceNumber,
+                    Date: inv.date,
+                    Type: inv.type,
+                    Party: inv.partyName,
+                    Taxable: inv.subtotal - inv.totalDiscount,
+                    IGST: inv.totalIgst,
+                  }));
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(
                     wb,
@@ -563,13 +663,23 @@ export function GSTR1() {
                   );
                   XLSX.utils.book_append_sheet(
                     wb,
-                    XLSX.utils.json_to_sheet(b2cData),
+                    XLSX.utils.json_to_sheet(b2clData),
+                    "B2CL",
+                  );
+                  XLSX.utils.book_append_sheet(
+                    wb,
+                    XLSX.utils.json_to_sheet(b2csData),
                     "B2CS",
                   );
                   XLSX.utils.book_append_sheet(
                     wb,
                     XLSX.utils.json_to_sheet(cdnrData),
                     "CDNR",
+                  );
+                  XLSX.utils.book_append_sheet(
+                    wb,
+                    XLSX.utils.json_to_sheet(cdnurData),
+                    "CDNUR",
                   );
                   XLSX.writeFile(wb, `GSTR1_${dateFrom}_${dateTo}.xlsx`);
                 } catch {
@@ -594,14 +704,18 @@ export function GSTR1() {
             taxable: summary.b2b.taxable,
           },
           {
-            label: "B2C Invoices",
-            count: b2c.length,
-            taxable: summary.b2c.taxable,
+            label: "B2CL (>\u20b92.5L)",
+            count: b2cl.length,
+            taxable: summary.b2cl.taxable,
           },
-          { label: "Credit Notes", count: creditNotes.length, taxable: 0 },
+          {
+            label: "B2CS (₹2.5L)",
+            count: b2cs.length,
+            taxable: summary.b2cs.taxable,
+          },
           {
             label: "Total GST",
-            count: filtered.length,
+            count: invoicesInPeriod.length,
             taxable:
               summary.total.cgst + summary.total.sgst + summary.total.igst,
           },
@@ -624,11 +738,20 @@ export function GSTR1() {
           <TabsTrigger value="b2b" data-ocid="gstr1.b2b.tab">
             B2B ({b2b.length})
           </TabsTrigger>
-          <TabsTrigger value="b2c" data-ocid="gstr1.b2c.tab">
-            B2C ({b2c.length})
+          <TabsTrigger value="b2cl" data-ocid="gstr1.b2cl.tab">
+            B2CL ({b2cl.length})
+          </TabsTrigger>
+          <TabsTrigger value="b2cs" data-ocid="gstr1.b2cs.tab">
+            B2CS ({b2cs.length})
           </TabsTrigger>
           <TabsTrigger value="cdnr" data-ocid="gstr1.cdnr.tab">
-            CDNR ({creditNotes.length + debitNotes.length})
+            CDNR ({cdnr.length})
+          </TabsTrigger>
+          <TabsTrigger value="cdnur" data-ocid="gstr1.cdnur.tab">
+            CDNUR ({cdnur.length})
+          </TabsTrigger>
+          <TabsTrigger value="hsn" data-ocid="gstr1.hsn.tab">
+            HSN Summary
           </TabsTrigger>
         </TabsList>
 
@@ -646,15 +769,34 @@ export function GSTR1() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="b2c">
+        <TabsContent value="b2cl">
           <Card className="bg-card border-border/70">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
-                B2C Invoices (Unregistered Buyers)
+                B2CL — Unregistered Buyers (Invoice &gt; ₹2,50,000)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <GSTTable invoices={b2c} />
+              {b2cl.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No B2CL invoices in this period
+                </div>
+              ) : (
+                <GSTTable invoices={b2cl} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="b2cs">
+          <Card className="bg-card border-border/70">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                B2CS — Unregistered Buyers (Invoice ≤ ₹2,50,000)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <GSTTable invoices={b2cs} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -662,10 +804,101 @@ export function GSTR1() {
         <TabsContent value="cdnr">
           <Card className="bg-card border-border/70">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Credit/Debit Notes</CardTitle>
+              <CardTitle className="text-sm">
+                CDNR — Credit/Debit Notes (Registered Buyers)
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <GSTTable invoices={[...creditNotes, ...debitNotes]} />
+              <GSTTable invoices={cdnr} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cdnur">
+          <Card className="bg-card border-border/70">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                CDNUR — Credit/Debit Notes (Unregistered Buyers)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <GSTTable invoices={cdnur} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="hsn">
+          <Card className="bg-card border-border/70">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">HSN/SAC Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {hsnMap.size === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No HSN data
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">HSN/SAC</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Taxable</TableHead>
+                        <TableHead className="text-right">CGST</TableHead>
+                        <TableHead className="text-right">SGST</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Array.from(hsnMap.values()).map((row, idx) => (
+                        <TableRow
+                          key={row.hsn}
+                          data-ocid={`gstr1.hsn.item.${idx + 1}`}
+                        >
+                          <TableCell className="pl-4 font-mono text-sm">
+                            <div className="flex items-center gap-1">
+                              {row.hsn}
+                              {row.shortDigit && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs max-w-xs">
+                                      Minimum 4-digit HSN required (Notification
+                                      78/2020-CT). Please update this HSN code.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">
+                            {row.desc}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {row.qty}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {formatINR(row.taxable)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {formatINR(row.cgst)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {formatINR(row.sgst)}
+                          </TableCell>
+                          <TableCell className="text-right font-numeric text-sm">
+                            {formatINR(row.igst)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

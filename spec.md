@@ -1,74 +1,93 @@
-# GST Manager Pro
+# GST Manager Pro — Best Practices, Industry Standards & Compliance Overhaul
 
 ## Current State
-
-- Payroll module is fully implemented with: Employees, Attendance, Process Payroll, Payslips, Reports (Salary Register, PF/ESI, TDS, CTC), and Statutory Compliance pages.
-- Employee records include a `pan` field (string) but no `panVerified`, `panVerifiedName`, `panVerifiedAt`, or `panType` fields.
-- GSTIN/PAN Verification is implemented under GST Compliance > GSTINPANVerification.tsx, using `gstVerificationService.ts` which exports `verifyPAN()` and the `PANVerificationResult` interface. The service calls the Income Tax e-Filing API with graceful fallback to format-only validation.
-- AppPage type includes `payroll-employees` through `payroll-statutory` but no `payroll-pan-verification` page.
-- Payslips render PAN on the payslip HTML but no verified badge.
-- PayrollReports TDS Summary shows PAN column but no verified badge.
-- Employees list table has no PAN verified status column.
+Version 44 of GST Manager Pro has all major modules built: Masters, Invoicing, Accounting, GST Compliance (GSTR-1, GSTR-3B, ITC, RCM), Reporting, Payroll (Employees, Attendance, ProcessPayroll, StatutoryCompliance), and Settings (OCR, Import, UAT, API Config). A full audit against Indian GST law (CGST Act 2017 + Rules) and Payroll statutory law (EPF Act, ESI Act, Income Tax Act Section 192, State PT Acts) has identified 40+ critical compliance gaps and calculation errors.
 
 ## Requested Changes (Diff)
 
 ### Add
-1. **`panVerified` fields on Employee type** in `src/frontend/src/types/gst.ts`:
-   - `panVerified?: boolean`
-   - `panVerifiedName?: string`
-   - `panVerifiedAt?: string` (ISO timestamp)
-   - `panType?: string`
 
-2. **Inline PAN verification in Add/Edit Employee dialog** (`Employees.tsx`):
-   - Next to the PAN input field, add a "Verify" button that calls `verifyPAN()` from `gstVerificationService.ts`
-   - Show loading spinner while verifying
-   - On success: auto-fill employee name if name field is empty or matches; store `panVerified: true`, `panVerifiedName`, `panVerifiedAt`, `panType` on the form state
-   - On failure/format-only: show error message inline, do not set panVerified
-   - Show a green "PAN Verified" badge next to PAN field when panVerified is true on the form
-   - If API key not configured, show a small amber note inline (same pattern as GSTINPANVerification.tsx)
+**Payroll**
+- TDS Section 192: correct slab rates for both Old Regime (nil/5%/20%/30%) and New Regime (nil/5%/10%/15%/20%/30%) with Finance Act 2023 slabs. Per-employee tax regime toggle (`old` / `new`).
+- HRA exemption calculation under Section 10(13A): min(actual HRA, 50%/40% of basic depending on metro/non-metro, actual rent paid - 10% of basic).
+- 80C deduction in TDS projection: employee PF contribution + Form 12BB declared investments (up to ₹1.5L).
+- PF ceiling enforcement: cap Basic+DA at ₹15,000 for PF computation.
+- Employer PF split: EPF (3.67%) + EPS (8.33%, capped ₹1,250/month) + EDLI (0.5%, capped ₹75/employee) + Admin charges (0.5%).
+- ESI logic fix: apply only when gross ≤ ₹21,000 (not OR logic).
+- State-wise PT slabs for 10 major states: Maharashtra, Karnataka, Tamil Nadu, West Bengal, Andhra Pradesh, Telangana, Gujarat, Kerala, MP, Delhi (nil).
+- Labour Welfare Fund (LWF) field and deduction.
+- Employee statutory fields: UAN, ESIC IP Number, Aadhaar (masked), PF Account Number.
+- Payroll journal entry fix: add PT Payable Cr (2303) and TDS Payable Cr (2201) to balance the entry.
+- EDLI cap fix: apply ₹75/employee cap per individual, not on total wages.
 
-3. **"PAN Verified" badge on Employees list table**:
-   - Add a "PAN" column to the employees table showing either a green "Verified" badge (ShieldCheck icon) or the raw PAN string with no badge
-   - The badge should be compact (text-xs)
+**GSTR-1**
+- B2CL section (Table 5): invoice-level reporting for unregistered buyer invoices > ₹2.5 lakh.
+- CDNUR section (Table 9B): credit/debit notes issued to unregistered buyers.
+- Nil/Exempt/Zero-rated supply table (Table 8).
+- Export invoices section (Table 6A): EXPWP / EXPWOP flags.
+- B2CS `sply_ty`: correctly set to `INTER` for interstate B2C and `INTRA` for intrastate.
+- B2B `rchrg` flag: read from actual invoice RCM flag instead of hardcoded `N`.
+- Business GSTIN populated from Business Profile in all JSON exports.
+- HSN mandatory digit warning: flag HSN codes with fewer than 4 digits.
 
-4. **New standalone page: `PayrollPANVerification.tsx`** at `src/frontend/src/pages/Payroll/PayrollPANVerification.tsx`:
-   - Lists all employees with their PAN numbers in a table: Name, Emp Code, PAN, PAN Type, Verification Status, Last Verified, Actions
-   - Per-row "Verify" button that calls `verifyPAN()` and updates the employee record via `updateEmployee()`
-   - "Verify All" button at the top that runs verification sequentially for all employees with a PAN, with a progress indicator
-   - Verified employees show green "PAN Verified" badge with timestamp; unverified show "Not Verified" in muted text
-   - Auto-fills employee name if verified name differs (shows a confirmation prompt/toast)
-   - Uses the same `verifyPAN` service and API key awareness as existing GSTINPANVerification
+**GSTR-3B**
+- Table 3.1 sub-rows (b) zero-rated, (c) nil-rated/exempt, (d) non-GST — populated from invoice data.
+- Table 3.2: place-of-supply-wise inter-state supply breakup.
+- Table 4 sub-sections: ITC available by source (imports, RCM, ISD, others), ITC reversed (17(5) blocked), net ITC.
+- RCM ITC credit-back: once RCM is marked paid, add to eligible ITC pool.
+- GSTR-3B JSON export: use official GSTN schema (`ret_period`, `gstin`, `sup_details`, `itc_elg`, `inward_sup`).
+- CSV export fix: populate RCM IGST from computed value instead of hardcoded `"0.00"`.
 
-5. **"PAN Verified" badge on Payslips PDF**:
-   - In `Payslips.tsx`, update the `printPayslip` HTML generation to show "✓ PAN Verified" next to the PAN field if `emp.panVerified` is true
+**Invoice / Purchase Types**
+- `isReverseCharge` boolean on Invoice (Rule 46(k)).
+- `authorizedSignatory` field on Invoice (Rule 46(p)).
+- `dispatchFromAddress` / `shipToAddress` fields (Rule 46(e)).
+- `taxRegime` on Employee type.
+- `hraExemptionCity` (metro/non-metro) on Employee.
+- `uan`, `esicNumber`, `aadhaarNumber`, `pfAccountNumber` on Employee.
+- `lwfApplicable`, `lwfAmount` on Employee.
+- `paymentDate` on Purchase (for Rule 37 tracking).
+- `itcCategory` on Purchase (inputs / input services / capital goods).
+- `placeOfSupply` on Purchase.
 
-6. **"PAN Verified" badge in PayrollReports TDS Summary**:
-   - In `PayrollReports.tsx`, add a small "Verified" badge icon next to PAN in the TDS Summary table when `emp.panVerified` is true
+**ITC Reconciliation**
+- Section 17(5) blocked credit category dropdown with the 14 notified categories.
+- Rule 37 (180-day reversal) tracker: flag purchases where payment date is >180 days past or missing.
 
-7. **AppPage type update** in `types/gst.ts`:
-   - Add `"payroll-pan-verification"` to AppPage union
+**RCM Tracker**
+- IGST column and totals for interstate RCM.
+- Section 9(3) notified category reference list (GTA, legal services, director remuneration, etc.).
+- Mark Paid: post journal entry (RCM Tax Payable Dr / Bank Cr) and credit RCM ITC in GSTR-3B.
 
-8. **Navigation**: Add the new page to the Payroll section routing in `AppLayout.tsx` or wherever payroll page routing happens.
+**StatutoryCompliance**
+- Form 16 Part A/B data display (annual TDS summary per employee).
+- Form 24Q quarterly TDS return data.
+- EPF ECR format description and download.
+- New vs Old regime TDS calculation display.
 
 ### Modify
-- `src/frontend/src/types/gst.ts`: Add `panVerified?`, `panVerifiedName?`, `panVerifiedAt?`, `panType?` to `Employee` interface; add `"payroll-pan-verification"` to `AppPage`
-- `src/frontend/src/pages/Payroll/Employees.tsx`: Add inline PAN verify button, PAN verified badge in form and table
-- `src/frontend/src/pages/Payroll/Payslips.tsx`: Add PAN Verified indicator to payslip HTML
-- `src/frontend/src/pages/Payroll/PayrollReports.tsx`: Add PAN Verified badge to TDS Summary table
-- App routing file (AppLayout.tsx or equivalent): Register `payroll-pan-verification` page and add nav link under Payroll section
+- `ProcessPayroll.tsx`: all calculation fixes (PF ceiling, EPF/EPS/EDLI split, ESI logic, TDS slabs, PT state-wise, LOP, journal entry balance).
+- `StatutoryCompliance.tsx`: EDLI per-employee cap, TDS slab display, add Form 16 data.
+- `GSTR1.tsx`: add B2CL, CDNUR, nil/exempt, export sections; fix sply_ty, rchrg, business GSTIN.
+- `GSTR3B.tsx`: add Table 3.2, full Table 4, fix JSON export schema, fix CSV IGST RCM.
+- `ITCReconciliation.tsx`: Section 17(5) categories, Rule 37 tracker.
+- `RCMTracker.tsx`: IGST totals, Section 9(3) list, Mark Paid journal + ITC.
+- `gst.ts` types: add missing fields to Invoice, Purchase, Employee.
+- `InvoiceForm.tsx`: add isReverseCharge, authorizedSignatory, dispatchAddress fields.
 
 ### Remove
-- Nothing removed
+- Random 64-char hex IRN generation — replace with clear "Simulation Only" label + correct SHA-256 structure description.
+- Hardcoded `"0.00"` for RCM IGST in GSTR-3B CSV export.
+- Synthetic GSTR-2B portal data in ITCReconciliation (or clearly label it as mock data).
 
 ## Implementation Plan
 
-1. Update `Employee` interface in `types/gst.ts` to add panVerified fields; add `payroll-pan-verification` to AppPage.
-2. Update `Employees.tsx`:
-   - Add inline Verify button next to PAN input in Add/Edit dialog
-   - Wire to `verifyPAN()`, handle loading/success/error states
-   - Auto-fill name on success
-   - Show PAN Verified badge in dialog and in the table row
-3. Create `PayrollPANVerification.tsx` standalone page with employee list, per-row verify, and Verify All.
-4. Update `Payslips.tsx` to show PAN Verified text in payslip HTML.
-5. Update `PayrollReports.tsx` TDS Summary to show PAN Verified badge.
-6. Wire new page into app routing/navigation.
+1. Update `gst.ts` types with all missing fields (Invoice, Purchase, Employee).
+2. Fix `ProcessPayroll.tsx` — PF ceiling, EPF/EPS/EDLI split, ESI logic, TDS correct slabs (old/new regime), HRA exemption, 80C, PT state-wise, journal entry balance.
+3. Fix `StatutoryCompliance.tsx` — EDLI cap, Form 16 data display, tax regime selector.
+4. Fix `GSTR1.tsx` — B2CL, CDNUR, nil/exempt, export tables, sply_ty, rchrg, business GSTIN.
+5. Fix `GSTR3B.tsx` — Table 3.1 sub-rows, Table 3.2, Table 4 full, JSON schema, CSV RCM IGST.
+6. Fix `RCMTracker.tsx` — IGST totals, Section 9(3) list, Mark Paid journal entry + ITC feedback.
+7. Fix `ITCReconciliation.tsx` — Section 17(5) categories, Rule 37 tracker.
+8. Fix `InvoiceForm.tsx` — isReverseCharge, authorizedSignatory, dispatchAddress.
+9. Validate and deploy.

@@ -68,6 +68,11 @@ export interface Invoice {
   termsConditions: string;
   declaration?: string;
   status: InvoiceStatus;
+  // Rule 46 CGST Rules — mandatory fields
+  isReverseCharge?: boolean; // Rule 46(k)
+  authorizedSignatory?: string; // Rule 46(p)
+  dispatchFromAddress?: string; // Rule 46(e) — ship from different address
+  shipToAddress?: string; // Rule 46(e) — ship to different address
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +113,11 @@ export interface Purchase {
   status: InvoiceStatus;
   expenseCategory?: string;
   notes: string;
+  // Rule 37 / Rule 43 ITC tracking fields
+  placeOfSupply?: string; // needed for IGST vs CGST/SGST on purchase
+  itcCategory?: "inputs" | "input_services" | "capital_goods"; // Rule 43 tracking
+  paymentDate?: string; // for Rule 37 — 180-day ITC reversal tracking
+  itcReversalReason?: string; // if ITC reversed
   createdAt: string;
   updatedAt: string;
 }
@@ -415,6 +425,17 @@ export interface Employee {
   isEsiApplicable: boolean;
   professionalTaxState: string;
   tdsSectionApplicable: boolean;
+  // Finance Act 2023 — tax regime
+  taxRegime: "old" | "new"; // Old vs New tax regime toggle
+  hraExemptionCity: "metro" | "non-metro"; // for 10(13A) HRA exemption
+  // EPFO / ESIC registration numbers
+  uan?: string; // Universal Account Number (EPFO)
+  esicNumber?: string; // ESIC IP Number
+  pfAccountNumber?: string; // PF Account Number
+  aadhaarNumber?: string; // Aadhaar (last 4 digits only for display)
+  // Labour Welfare Fund
+  lwfApplicable?: boolean; // LWF applicability flag
+  lwfAmount?: number; // LWF deduction amount
   // Bank details
   bankName: string;
   accountNumber: string;
@@ -477,6 +498,11 @@ export interface PayrollRunLine {
   otherDeductions: number;
   totalDeductions: number;
   netPay: number;
+  // Employer statutory cost breakdown (Finance Act / EPF Act)
+  employerEPF: number; // 3.67% of capped basic (employer EPF portion)
+  employerEPS: number; // 8.33% of capped basic, capped ₹1,250/month
+  edli: number; // 0.5% of capped basic, capped ₹75/employee
+  lwfDeduction: number; // Labour Welfare Fund
 }
 
 export interface PayrollRun {

@@ -71,6 +71,13 @@ const EMPTY_EMPLOYEE: Omit<Employee, "id" | "createdAt" | "updatedAt"> = {
   isEsiApplicable: false,
   professionalTaxState: "27",
   tdsSectionApplicable: false,
+  taxRegime: "new" as const,
+  hraExemptionCity: "non-metro" as const,
+  uan: "",
+  esicNumber: "",
+  pfAccountNumber: "",
+  lwfApplicable: false,
+  lwfAmount: 0,
   bankName: "",
   accountNumber: "",
   ifsc: "",
@@ -722,6 +729,115 @@ export function Employees() {
                   <span className="text-xs text-muted-foreground">
                     ESI auto-applies if gross ≤ ₹21,000
                   </span>
+                </div>
+                {/* Tax Regime - Finance Act 2023 */}
+                <div className="space-y-1">
+                  <Label>Tax Regime (Sec 192)</Label>
+                  <Select
+                    value={form.taxRegime ?? "new"}
+                    onValueChange={(v) =>
+                      setForm((p) => ({ ...p, taxRegime: v as "old" | "new" }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">New Regime (Default)</SelectItem>
+                      <SelectItem value="old">Old Regime</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* HRA Exemption City */}
+                <div className="space-y-1">
+                  <Label>HRA City (Sec 10(13A))</Label>
+                  <Select
+                    value={form.hraExemptionCity ?? "non-metro"}
+                    onValueChange={(v) =>
+                      setForm((p) => ({
+                        ...p,
+                        hraExemptionCity: v as "metro" | "non-metro",
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="metro">
+                        Metro (Mumbai/Delhi/Kolkata/Chennai)
+                      </SelectItem>
+                      <SelectItem value="non-metro">Non-Metro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* LWF */}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="lwf"
+                    checked={!!form.lwfApplicable}
+                    onCheckedChange={(v) =>
+                      setForm((p) => ({ ...p, lwfApplicable: !!v }))
+                    }
+                  />
+                  <Label htmlFor="lwf">Labour Welfare Fund (LWF)</Label>
+                </div>
+                {form.lwfApplicable && (
+                  <div className="space-y-1">
+                    <Label>LWF Amount (₹/month)</Label>
+                    <Input
+                      type="number"
+                      value={form.lwfAmount ?? 0}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          lwfAmount: Number(e.target.value),
+                        }))
+                      }
+                      placeholder="e.g. 25"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* EPFO / ESIC Numbers */}
+            <div className="border rounded-lg p-3 space-y-3">
+              <h3 className="font-medium text-sm">EPFO / ESIC Registration</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>UAN (Universal Account Number)</Label>
+                  <Input
+                    value={form.uan ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, uan: e.target.value }))
+                    }
+                    placeholder="12-digit UAN"
+                    maxLength={12}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>ESIC IP Number</Label>
+                  <Input
+                    value={form.esicNumber ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, esicNumber: e.target.value }))
+                    }
+                    placeholder="ESIC Insurance Person No."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>PF Account Number</Label>
+                  <Input
+                    value={form.pfAccountNumber ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        pfAccountNumber: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. MH/BAN/12345/000/0000001"
+                  />
                 </div>
               </div>
             </div>
