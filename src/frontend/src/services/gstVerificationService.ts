@@ -59,6 +59,22 @@ function getApiSettings(): ApiSettings {
   return {
     gstn: { key: "", url: "", clientId: "", clientSecret: "", enabled: false },
     pan: { key: "", url: "", enabled: false },
+    einvoice: {
+      key: "",
+      url: "",
+      clientId: "",
+      clientSecret: "",
+      enabled: false,
+    },
+    ewaybill: { key: "", url: "", username: "", enabled: false },
+    gstnReturn: { key: "", url: "", clientId: "", enabled: false },
+    accountAggregator: {
+      clientId: "",
+      clientSecret: "",
+      url: "",
+      redirectUri: "",
+      enabled: false,
+    },
     banking: { key: "", url: "", bankName: "", accountId: "", enabled: false },
     sms: { provider: "msg91", key: "", senderId: "", enabled: false },
   };

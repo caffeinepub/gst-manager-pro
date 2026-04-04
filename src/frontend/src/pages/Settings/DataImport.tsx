@@ -327,6 +327,136 @@ const TEMPLATES: Record<
       ],
     ],
   },
+  service_invoices: {
+    headers: [
+      "InvoiceNumber",
+      "Date",
+      "PartyName",
+      "PartyGSTIN",
+      "ServiceDescription",
+      "SAC",
+      "Qty",
+      "Unit",
+      "UnitPrice",
+      "GSTRate",
+      "PlaceOfSupply",
+      "Notes",
+    ],
+    sample: [
+      [
+        "SINV-001",
+        "2026-01-15",
+        "Client Corp",
+        "27AABCU9603R1ZX",
+        "IT Consulting Services",
+        "998314",
+        1,
+        "Hrs",
+        10000,
+        18,
+        "Maharashtra",
+        "",
+      ],
+    ],
+  },
+  proforma_invoices: {
+    headers: [
+      "InvoiceNumber",
+      "Date",
+      "PartyName",
+      "PartyGSTIN",
+      "ItemDescription",
+      "HSN",
+      "Qty",
+      "Unit",
+      "UnitPrice",
+      "GSTRate",
+      "Notes",
+    ],
+    sample: [
+      [
+        "PRO-001",
+        "2026-01-15",
+        "Prospect Ltd",
+        "27AABCU9603R1ZX",
+        "Consulting Services",
+        "998314",
+        1,
+        "Hrs",
+        5000,
+        18,
+        "",
+      ],
+    ],
+  },
+  credit_notes: {
+    headers: [
+      "NoteNumber",
+      "Date",
+      "PartyName",
+      "PartyGSTIN",
+      "OriginalInvoiceNumber",
+      "Reason",
+      "ItemDescription",
+      "HSN",
+      "Qty",
+      "Unit",
+      "UnitPrice",
+      "GSTRate",
+      "Notes",
+    ],
+    sample: [
+      [
+        "CN-001",
+        "2026-01-20",
+        "Acme Corp",
+        "27AABCU9603R1ZX",
+        "INV-001",
+        "Goods returned",
+        "Widget A",
+        "8471",
+        2,
+        "Nos",
+        1000,
+        18,
+        "",
+      ],
+    ],
+  },
+  debit_notes: {
+    headers: [
+      "NoteNumber",
+      "Date",
+      "PartyName",
+      "PartyGSTIN",
+      "OriginalInvoiceNumber",
+      "Reason",
+      "ItemDescription",
+      "HSN",
+      "Qty",
+      "Unit",
+      "UnitPrice",
+      "GSTRate",
+      "Notes",
+    ],
+    sample: [
+      [
+        "DN-001",
+        "2026-01-20",
+        "Supplier Ltd",
+        "29AABCU9603R1ZX",
+        "BILL-001",
+        "Short supply",
+        "Office Supplies",
+        "4820",
+        5,
+        "Nos",
+        200,
+        12,
+        "",
+      ],
+    ],
+  },
   chart_of_accounts: {
     headers: ["Code", "Name", "Type", "ParentGroup", "OpeningBalance"],
     sample: [["6001", "Marketing Expense", "expense", "Expenses", 0]],
@@ -344,6 +474,10 @@ const MODULES = [
   { key: "parties", label: "Parties" },
   { key: "items", label: "Items" },
   { key: "sales_invoices", label: "Sales Invoices" },
+  { key: "service_invoices", label: "Service Invoices" },
+  { key: "proforma_invoices", label: "Proforma Invoices" },
+  { key: "credit_notes", label: "Credit Notes" },
+  { key: "debit_notes", label: "Debit Notes" },
   { key: "purchases", label: "Purchases" },
   { key: "chart_of_accounts", label: "Chart of Accounts" },
   { key: "cashbook", label: "CashBook" },
@@ -475,6 +609,22 @@ function useDuplicateDetectors() {
     sales_invoices: (row: Record<string, string>) =>
       invoices.some(
         (inv) => inv.invoiceNumber === (row.InvoiceNumber || row.invoicenumber),
+      ),
+    service_invoices: (row: Record<string, string>) =>
+      invoices.some(
+        (inv) => inv.invoiceNumber === (row.InvoiceNumber || row.invoicenumber),
+      ),
+    proforma_invoices: (row: Record<string, string>) =>
+      invoices.some(
+        (inv) => inv.invoiceNumber === (row.InvoiceNumber || row.invoicenumber),
+      ),
+    credit_notes: (row: Record<string, string>) =>
+      invoices.some(
+        (inv) => inv.invoiceNumber === (row.NoteNumber || row.notenumber),
+      ),
+    debit_notes: (row: Record<string, string>) =>
+      invoices.some(
+        (inv) => inv.invoiceNumber === (row.NoteNumber || row.notenumber),
       ),
     purchases: (row: Record<string, string>) =>
       purchases.some(
@@ -1113,6 +1263,160 @@ async function importRow(
         grandTotal: subtotal + cgstAmt + sgstAmt,
         irnNumber: "",
         eWayBillNumber: "",
+        notes: g("Notes"),
+        termsConditions: "",
+        status: "confirmed",
+      });
+      break;
+    }
+    case "service_invoices": {
+      const subtotal = lineItem.qty * lineItem.unitPrice;
+      const cgstAmt = (subtotal * lineItem.gstRate) / 200;
+      const sgstAmt = (subtotal * lineItem.gstRate) / 200;
+      hooks.addInvoice({
+        type: "service",
+        invoiceNumber: g("InvoiceNumber") || `SIMP-${Date.now()}`,
+        date: normaliseDate(g("Date")),
+        dueDate: normaliseDate(g("Date")),
+        partyId: "",
+        partyName: g("PartyName"),
+        partyGstin: g("PartyGSTIN"),
+        placeOfSupply: g("PlaceOfSupply") || "",
+        placeOfSupplyName: g("PlaceOfSupply") || "",
+        lineItems: [
+          {
+            ...lineItem,
+            description: g("ServiceDescription") || g("ItemDescription"),
+            hsnSacCode: g("SAC") || g("HSN"),
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            lineTotal: subtotal + cgstAmt + sgstAmt,
+          },
+        ],
+        subtotal,
+        totalDiscount: 0,
+        totalCgst: cgstAmt,
+        totalSgst: sgstAmt,
+        totalIgst: 0,
+        totalCess: 0,
+        grandTotal: subtotal + cgstAmt + sgstAmt,
+        irnNumber: "",
+        eWayBillNumber: "",
+        notes: g("Notes"),
+        termsConditions: "",
+        status: "confirmed",
+      });
+      break;
+    }
+    case "proforma_invoices": {
+      const subtotal = lineItem.qty * lineItem.unitPrice;
+      const cgstAmt = (subtotal * lineItem.gstRate) / 200;
+      const sgstAmt = (subtotal * lineItem.gstRate) / 200;
+      hooks.addInvoice({
+        type: "proforma",
+        invoiceNumber: g("InvoiceNumber") || `PIMP-${Date.now()}`,
+        date: normaliseDate(g("Date")),
+        dueDate: normaliseDate(g("Date")),
+        partyId: "",
+        partyName: g("PartyName"),
+        partyGstin: g("PartyGSTIN"),
+        placeOfSupply: "",
+        placeOfSupplyName: "",
+        lineItems: [
+          {
+            ...lineItem,
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            lineTotal: subtotal + cgstAmt + sgstAmt,
+          },
+        ],
+        subtotal,
+        totalDiscount: 0,
+        totalCgst: cgstAmt,
+        totalSgst: sgstAmt,
+        totalIgst: 0,
+        totalCess: 0,
+        grandTotal: subtotal + cgstAmt + sgstAmt,
+        irnNumber: "",
+        eWayBillNumber: "",
+        notes: g("Notes"),
+        termsConditions: "",
+        status: "draft",
+      });
+      break;
+    }
+    case "credit_notes": {
+      const subtotal = lineItem.qty * lineItem.unitPrice;
+      const cgstAmt = (subtotal * lineItem.gstRate) / 200;
+      const sgstAmt = (subtotal * lineItem.gstRate) / 200;
+      hooks.addInvoice({
+        type: "credit_note",
+        invoiceNumber: g("NoteNumber") || `CNIMP-${Date.now()}`,
+        date: normaliseDate(g("Date")),
+        dueDate: normaliseDate(g("Date")),
+        partyId: "",
+        partyName: g("PartyName"),
+        partyGstin: g("PartyGSTIN"),
+        placeOfSupply: "",
+        placeOfSupplyName: "",
+        lineItems: [
+          {
+            ...lineItem,
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            lineTotal: subtotal + cgstAmt + sgstAmt,
+          },
+        ],
+        subtotal,
+        totalDiscount: 0,
+        totalCgst: cgstAmt,
+        totalSgst: sgstAmt,
+        totalIgst: 0,
+        totalCess: 0,
+        grandTotal: subtotal + cgstAmt + sgstAmt,
+        irnNumber: "",
+        eWayBillNumber: "",
+        creditDebitReason: g("Reason"),
+        linkedInvoiceNumber: g("OriginalInvoiceNumber"),
+        notes: g("Notes"),
+        termsConditions: "",
+        status: "confirmed",
+      });
+      break;
+    }
+    case "debit_notes": {
+      const subtotal = lineItem.qty * lineItem.unitPrice;
+      const cgstAmt = (subtotal * lineItem.gstRate) / 200;
+      const sgstAmt = (subtotal * lineItem.gstRate) / 200;
+      hooks.addInvoice({
+        type: "debit_note",
+        invoiceNumber: g("NoteNumber") || `DNIMP-${Date.now()}`,
+        date: normaliseDate(g("Date")),
+        dueDate: normaliseDate(g("Date")),
+        partyId: "",
+        partyName: g("PartyName"),
+        partyGstin: g("PartyGSTIN"),
+        placeOfSupply: "",
+        placeOfSupplyName: "",
+        lineItems: [
+          {
+            ...lineItem,
+            cgst: cgstAmt,
+            sgst: sgstAmt,
+            lineTotal: subtotal + cgstAmt + sgstAmt,
+          },
+        ],
+        subtotal,
+        totalDiscount: 0,
+        totalCgst: cgstAmt,
+        totalSgst: sgstAmt,
+        totalIgst: 0,
+        totalCess: 0,
+        grandTotal: subtotal + cgstAmt + sgstAmt,
+        irnNumber: "",
+        eWayBillNumber: "",
+        creditDebitReason: g("Reason"),
+        linkedInvoiceNumber: g("OriginalInvoiceNumber"),
         notes: g("Notes"),
         termsConditions: "",
         status: "confirmed",

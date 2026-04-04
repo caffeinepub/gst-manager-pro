@@ -211,6 +211,35 @@ export interface ApiSettings {
     enabled: boolean;
     sandboxMode?: boolean;
   };
+  einvoice: {
+    key: string;
+    url: string;
+    clientId: string;
+    clientSecret: string;
+    enabled: boolean;
+    sandboxMode?: boolean;
+  };
+  ewaybill: {
+    key: string;
+    url: string;
+    username: string;
+    enabled: boolean;
+    sandboxMode?: boolean;
+  };
+  gstnReturn: {
+    key: string;
+    url: string;
+    clientId: string;
+    enabled: boolean;
+  };
+  accountAggregator: {
+    clientId: string;
+    clientSecret: string;
+    url: string;
+    redirectUri: string;
+    enabled: boolean;
+    sandboxMode?: boolean;
+  };
   banking: {
     key: string;
     url: string;

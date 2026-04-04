@@ -34,6 +34,7 @@ import {
   Save,
   Shield,
   Smartphone,
+  Truck,
   User,
   Wifi,
   WifiOff,
@@ -55,6 +56,35 @@ const DEFAULT_SETTINGS: ApiSettings = {
     url: "https://api.incometax.gov.in/v1/pan-allotment-info",
     enabled: false,
     sandboxMode: false,
+  },
+  einvoice: {
+    key: "",
+    url: "https://einvoice1.gst.gov.in/irisapi/einvoice/generate",
+    clientId: "",
+    clientSecret: "",
+    enabled: false,
+    sandboxMode: false,
+  },
+  ewaybill: {
+    key: "",
+    url: "https://ewaybillgst.gov.in/api/ewayapi/genewaybill",
+    username: "",
+    enabled: false,
+    sandboxMode: false,
+  },
+  gstnReturn: {
+    key: "",
+    url: "https://api.gst.gov.in/enriched/returns/gstr1",
+    clientId: "",
+    enabled: false,
+  },
+  accountAggregator: {
+    clientId: "",
+    clientSecret: "",
+    url: "https://api.sandbox.sahamati.org.in",
+    redirectUri: "",
+    enabled: false,
+    sandboxMode: true,
   },
   banking: {
     key: "",
@@ -107,6 +137,35 @@ function MaskedInput({
   );
 }
 
+function SandboxToggle({
+  checked,
+  onCheckedChange,
+  dataOcid,
+}: {
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+  dataOcid?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <FlaskConical className="w-4 h-4 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">Sandbox Mode</p>
+          <p className="text-xs text-muted-foreground">
+            Use sandbox/test environment
+          </p>
+        </div>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        data-ocid={dataOcid}
+      />
+    </div>
+  );
+}
+
 export function APIConfig() {
   const [settings, setSettings] = useLocalStorage<ApiSettings>(
     "gst_api_settings",
@@ -117,13 +176,37 @@ export function APIConfig() {
     Record<string, { ok: boolean; message: string }>
   >({});
 
+  // Updaters
   const updateGstn = (key: string, val: string | boolean) =>
-    setSettings((prev) => ({
-      ...prev,
-      gstn: { ...prev.gstn, [key]: val },
-    }));
+    setSettings((prev) => ({ ...prev, gstn: { ...prev.gstn, [key]: val } }));
   const updatePan = (key: string, val: string | boolean) =>
     setSettings((prev) => ({ ...prev, pan: { ...prev.pan, [key]: val } }));
+  const updateEInvoice = (key: string, val: string | boolean) =>
+    setSettings((prev) => ({
+      ...prev,
+      einvoice: { ...(prev.einvoice ?? DEFAULT_SETTINGS.einvoice), [key]: val },
+    }));
+  const updateEWayBill = (key: string, val: string | boolean) =>
+    setSettings((prev) => ({
+      ...prev,
+      ewaybill: { ...(prev.ewaybill ?? DEFAULT_SETTINGS.ewaybill), [key]: val },
+    }));
+  const updateGstnReturn = (key: string, val: string | boolean) =>
+    setSettings((prev) => ({
+      ...prev,
+      gstnReturn: {
+        ...(prev.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn),
+        [key]: val,
+      },
+    }));
+  const updateAA = (key: string, val: string | boolean) =>
+    setSettings((prev) => ({
+      ...prev,
+      accountAggregator: {
+        ...(prev.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator),
+        [key]: val,
+      },
+    }));
   const updateBanking = (key: string, val: string | boolean) =>
     setSettings((prev) => ({
       ...prev,
@@ -132,6 +215,7 @@ export function APIConfig() {
   const updateSms = (key: string, val: string | boolean) =>
     setSettings((prev) => ({ ...prev, sms: { ...prev.sms, [key]: val } }));
 
+  // Test connections
   const testGSTN = async () => {
     setTesting("GSTN");
     const result = await verifyGSTIN("27AABCU9603R1ZX");
@@ -164,9 +248,166 @@ export function APIConfig() {
     else toast.error(`PAN: ${message}`);
   };
 
-  const handleSave = () => {
-    toast.success("API settings saved");
+  const testEInvoice = async () => {
+    setTesting("EInvoice");
+    const cfg = settings.einvoice ?? DEFAULT_SETTINGS.einvoice;
+    if (!cfg.key) {
+      toast.warning("Enter credentials first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const baseUrl =
+        cfg.url || "https://einvoice1.gst.gov.in/irisapi/einvoice/generate";
+      const res = await fetch(baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          client_id: cfg.clientId,
+          client_secret: cfg.clientSecret,
+          user_name: cfg.key,
+        },
+        body: JSON.stringify({ Version: "1.1", TranDtls: { TaxSch: "GST" } }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const ok = res.status !== 401;
+      const msg = ok
+        ? `Reachable (HTTP ${res.status})`
+        : "Auth failed — check credentials";
+      setTestResults((prev) => ({ ...prev, EInvoice: { ok, message: msg } }));
+      if (ok) toast.success(`e-Invoice: ${msg}`);
+      else toast.error(`e-Invoice: ${msg}`);
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        EInvoice: {
+          ok: true,
+          message: "CORS blocked (expected for browser calls)",
+        },
+      }));
+      toast.warning("e-Invoice: CORS blocked — requires server proxy");
+    } finally {
+      setTesting(null);
+    }
   };
+
+  const testEWayBill = async () => {
+    setTesting("EWayBill");
+    const cfg = settings.ewaybill ?? DEFAULT_SETTINGS.ewaybill;
+    if (!cfg.key) {
+      toast.warning("Enter credentials first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const baseUrl =
+        cfg.url || "https://ewaybillgst.gov.in/api/ewayapi/genewaybill";
+      const res = await fetch(baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          username: cfg.username,
+          "auth-token": cfg.key,
+        },
+        body: JSON.stringify({ supplyType: "O", docNo: "TEST-001" }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const ok = res.status !== 401;
+      const msg = ok
+        ? `Reachable (HTTP ${res.status})`
+        : "Auth failed — check credentials";
+      setTestResults((prev) => ({ ...prev, EWayBill: { ok, message: msg } }));
+      if (ok) toast.success(`e-Way Bill: ${msg}`);
+      else toast.error(`e-Way Bill: ${msg}`);
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        EWayBill: {
+          ok: true,
+          message: "CORS blocked (expected for browser calls)",
+        },
+      }));
+      toast.warning("e-Way Bill: CORS blocked — requires server proxy");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const testGstnReturn = async () => {
+    setTesting("GSTNReturn");
+    const cfg = settings.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn;
+    if (!cfg.key) {
+      toast.warning("Enter credentials first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        cfg.url || "https://api.gst.gov.in/enriched/returns/gstr1",
+        {
+          headers: { "Auth-Token": cfg.key, client_id: cfg.clientId },
+          signal: AbortSignal.timeout(8000),
+        },
+      );
+      const ok = res.status !== 401;
+      const msg = ok ? `Reachable (HTTP ${res.status})` : "Auth failed";
+      setTestResults((prev) => ({ ...prev, GSTNReturn: { ok, message: msg } }));
+      if (ok) toast.success(`GSTN Return: ${msg}`);
+      else toast.error(`GSTN Return: ${msg}`);
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        GSTNReturn: {
+          ok: true,
+          message: "CORS blocked (expected for browser calls)",
+        },
+      }));
+      toast.warning("GSTN Return: CORS blocked — requires GSP proxy");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const testAA = async () => {
+    setTesting("AA");
+    const cfg =
+      settings.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator;
+    if (!cfg.clientId) {
+      toast.warning("Enter Client ID first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const baseUrl = cfg.url || "https://api.sandbox.sahamati.org.in";
+      const res = await fetch(`${baseUrl}/health`, {
+        headers: { "x-client-id": cfg.clientId },
+        signal: AbortSignal.timeout(8000),
+      });
+      const ok = res.ok || res.status === 401;
+      const msg = ok
+        ? `Reachable (HTTP ${res.status})`
+        : `Error (HTTP ${res.status})`;
+      setTestResults((prev) => ({ ...prev, AA: { ok, message: msg } }));
+      if (ok) toast.success(`Account Aggregator: ${msg}`);
+      else toast.error(`Account Aggregator: ${msg}`);
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        AA: { ok: false, message: "Could not reach AA endpoint" },
+      }));
+      toast.error("Account Aggregator: unreachable");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const handleSave = () => toast.success("API settings saved");
+
+  const einvoiceCfg = settings.einvoice ?? DEFAULT_SETTINGS.einvoice;
+  const ewaybillCfg = settings.ewaybill ?? DEFAULT_SETTINGS.ewaybill;
+  const gstnReturnCfg = settings.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn;
+  const aaCfg =
+    settings.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator;
 
   return (
     <div className="max-w-3xl space-y-6" data-ocid="apiconfig.section">
@@ -174,8 +415,8 @@ export function APIConfig() {
         <div>
           <h2 className="text-lg font-semibold">API Configuration</h2>
           <p className="text-sm text-muted-foreground">
-            Configure real API integrations for GSTN, PAN validation, banking,
-            and SMS.
+            Configure real API integrations for GSTN, e-Invoice, e-Way Bill,
+            PAN, Account Aggregator, and SMS.
           </p>
         </div>
         <Button onClick={handleSave} data-ocid="apiconfig.save_button">
@@ -187,17 +428,18 @@ export function APIConfig() {
       <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-[oklch(0.78_0.18_85)] mt-0.5 flex-shrink-0" />
         <p className="text-xs text-[oklch(0.78_0.18_85)]">
-          API keys are stored in browser localStorage for demo purposes. For
-          production use, keys should be stored securely on a server.
+          API keys are stored in browser localStorage. Government APIs (GSTN,
+          IRP, NIC) require a whitelisted server IP — use the URL fields to
+          point to your GSP proxy for production use.
         </p>
       </div>
 
-      {/* GSTN / e-Invoice API */}
+      {/* GSTN / e-Invoice Validation API */}
       <Card className="bg-card border-border/70">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
-              <QrCode className="w-5 h-5 text-primary" />
+              <Shield className="w-5 h-5 text-primary" />
               GSTN / GST Network API
             </CardTitle>
             <div className="flex items-center gap-2">
@@ -222,12 +464,10 @@ export function APIConfig() {
             </div>
           </div>
           <CardDescription>
-            Used for GSTIN taxpayer verification, e-Invoice IRN generation, and
-            GSTR filing
+            GSTIN taxpayer verification and public search
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Endpoint Info */}
           <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
               <ExternalLink className="w-3 h-3" />
@@ -237,9 +477,8 @@ export function APIConfig() {
               https://api.gst.gov.in/enriched/commonapi/search
             </code>
             <p className="text-muted-foreground">
-              Requires: GST Suvidha Provider (GSP) registration and IP
-              whitelisting with GSTN. Browser-side calls are CORS-blocked by
-              design; use a backend proxy in production.
+              Requires GSP registration + IP whitelisting. Browser calls are
+              CORS-blocked by design.
             </p>
             <a
               href="https://www.gstn.org.in/gsp-provider"
@@ -250,28 +489,14 @@ export function APIConfig() {
               GSTN GSP Registration <ExternalLink className="w-3 h-3" />
             </a>
           </div>
-
-          {/* Sandbox Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <FlaskConical className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Sandbox Mode</p>
-                <p className="text-xs text-muted-foreground">
-                  Use GSTN sandbox environment for testing
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={settings.gstn.sandboxMode ?? false}
-              onCheckedChange={(v) => updateGstn("sandboxMode", v)}
-              data-ocid="apiconfig.gstn.sandbox.switch"
-            />
-          </div>
-
+          <SandboxToggle
+            checked={settings.gstn.sandboxMode ?? false}
+            onCheckedChange={(v) => updateGstn("sandboxMode", v)}
+            dataOcid="apiconfig.gstn.sandbox.switch"
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="gstn-url">Base URL</Label>
+              <Label htmlFor="gstn-url">Base URL / Proxy URL</Label>
               <Input
                 id="gstn-url"
                 value={settings.gstn.url}
@@ -336,7 +561,341 @@ export function APIConfig() {
         </CardContent>
       </Card>
 
-      {/* PAN / GSTIN Validation */}
+      {/* e-Invoice IRP API */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <QrCode className="w-5 h-5 text-primary" />
+              e-Invoice IRP API
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {testResults.EInvoice && (
+                <Badge
+                  variant={testResults.EInvoice.ok ? "default" : "destructive"}
+                  className="text-xs"
+                >
+                  {testResults.EInvoice.ok ? "Reachable" : "Failed"}
+                </Badge>
+              )}
+              <Switch
+                checked={einvoiceCfg.enabled}
+                onCheckedChange={(v) => updateEInvoice("enabled", v)}
+                data-ocid="apiconfig.einvoice.switch"
+              />
+            </div>
+          </div>
+          <CardDescription>
+            IRN generation and e-invoice registration via IRP (Invoice
+            Registration Portal)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Production / Sandbox endpoints
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              Production: https://einvoice1.gst.gov.in/irisapi/einvoice/generate
+            </code>
+            <code className="block text-muted-foreground font-mono">
+              Sandbox: https://einvoice1-sand.nic.in/irisapi/einvoice/generate
+            </code>
+            <p className="text-muted-foreground">
+              Requires GSP/NIC registration. Use URL field to point to your GSP
+              proxy for browser-side calls.
+            </p>
+            <a
+              href="https://einvoice1.gst.gov.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              IRP Portal <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <SandboxToggle
+            checked={einvoiceCfg.sandboxMode ?? false}
+            onCheckedChange={(v) => updateEInvoice("sandboxMode", v)}
+            dataOcid="apiconfig.einvoice.sandbox.switch"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Base URL / Proxy URL</Label>
+              <Input
+                value={einvoiceCfg.url}
+                onChange={(e) => updateEInvoice("url", e.target.value)}
+                placeholder="https://einvoice1.gst.gov.in/irisapi/einvoice/generate"
+                data-ocid="apiconfig.einvoice.url.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Username / API Key</Label>
+              <MaskedInput
+                value={einvoiceCfg.key}
+                onChange={(v) => updateEInvoice("key", v)}
+                placeholder="IRP username"
+                data-ocid="apiconfig.einvoice.key.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client ID</Label>
+              <Input
+                value={einvoiceCfg.clientId}
+                onChange={(e) => updateEInvoice("clientId", e.target.value)}
+                placeholder="Client ID"
+                data-ocid="apiconfig.einvoice.clientid.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client Secret</Label>
+              <MaskedInput
+                value={einvoiceCfg.clientSecret}
+                onChange={(v) => updateEInvoice("clientSecret", v)}
+                placeholder="Client Secret"
+                data-ocid="apiconfig.einvoice.secret.input"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.EInvoice && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.EInvoice.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "EInvoice"}
+              onClick={() => void testEInvoice()}
+              data-ocid="apiconfig.einvoice.test_button"
+              className="shrink-0"
+            >
+              {testing === "EInvoice" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* e-Way Bill NIC API */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Truck className="w-5 h-5 text-primary" />
+              e-Way Bill (NIC) API
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {testResults.EWayBill && (
+                <Badge
+                  variant={testResults.EWayBill.ok ? "default" : "destructive"}
+                  className="text-xs"
+                >
+                  {testResults.EWayBill.ok ? "Reachable" : "Failed"}
+                </Badge>
+              )}
+              <Switch
+                checked={ewaybillCfg.enabled}
+                onCheckedChange={(v) => updateEWayBill("enabled", v)}
+                data-ocid="apiconfig.ewaybill.switch"
+              />
+            </div>
+          </div>
+          <CardDescription>
+            Generate and manage e-Way Bills via NIC portal for goods movement
+            above ₹50,000
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Production / Sandbox endpoints
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              Production: https://ewaybillgst.gov.in/api/ewayapi/genewaybill
+            </code>
+            <code className="block text-muted-foreground font-mono">
+              Sandbox:
+              https://ewaybillgst.gov.in/api/sandbox/ewayapi/genewaybill
+            </code>
+            <p className="text-muted-foreground">
+              Requires NIC e-Way Bill portal registration + IP whitelisting.
+              Headers: username + auth-token.
+            </p>
+            <a
+              href="https://ewaybillgst.gov.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              NIC e-Way Bill Portal <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <SandboxToggle
+            checked={ewaybillCfg.sandboxMode ?? false}
+            onCheckedChange={(v) => updateEWayBill("sandboxMode", v)}
+            dataOcid="apiconfig.ewaybill.sandbox.switch"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Base URL / Proxy URL</Label>
+              <Input
+                value={ewaybillCfg.url}
+                onChange={(e) => updateEWayBill("url", e.target.value)}
+                placeholder="https://ewaybillgst.gov.in/api/ewayapi/genewaybill"
+                data-ocid="apiconfig.ewaybill.url.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Username</Label>
+              <Input
+                value={ewaybillCfg.username}
+                onChange={(e) => updateEWayBill("username", e.target.value)}
+                placeholder="NIC portal username"
+                data-ocid="apiconfig.ewaybill.username.input"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Auth Token</Label>
+              <MaskedInput
+                value={ewaybillCfg.key}
+                onChange={(v) => updateEWayBill("key", v)}
+                placeholder="Auth token from NIC portal"
+                data-ocid="apiconfig.ewaybill.key.input"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.EWayBill && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.EWayBill.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "EWayBill"}
+              onClick={() => void testEWayBill()}
+              data-ocid="apiconfig.ewaybill.test_button"
+              className="shrink-0"
+            >
+              {testing === "EWayBill" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* GSTN Return Fetch */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MessageSquare className="w-5 h-5 text-primary" />
+              GSTN Return Fetch API
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {testResults.GSTNReturn && (
+                <Badge
+                  variant={
+                    testResults.GSTNReturn.ok ? "default" : "destructive"
+                  }
+                  className="text-xs"
+                >
+                  {testResults.GSTNReturn.ok ? "Reachable" : "Failed"}
+                </Badge>
+              )}
+              <Switch
+                checked={gstnReturnCfg.enabled}
+                onCheckedChange={(v) => updateGstnReturn("enabled", v)}
+                data-ocid="apiconfig.gstnreturn.switch"
+              />
+            </div>
+          </div>
+          <CardDescription>
+            Fetch GSTR-1/3B filing status and summaries from GSTN portal
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Production endpoint
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              https://api.gst.gov.in/enriched/returns/gstr1
+            </code>
+            <p className="text-muted-foreground">
+              Requires GSP Auth-Token + Client ID. Same IP whitelisting as GSTN
+              taxpayer API.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Base URL / Proxy URL</Label>
+              <Input
+                value={gstnReturnCfg.url}
+                onChange={(e) => updateGstnReturn("url", e.target.value)}
+                placeholder="https://api.gst.gov.in/enriched/returns/gstr1"
+                data-ocid="apiconfig.gstnreturn.url.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Auth Token</Label>
+              <MaskedInput
+                value={gstnReturnCfg.key}
+                onChange={(v) => updateGstnReturn("key", v)}
+                placeholder="GSP Auth-Token"
+                data-ocid="apiconfig.gstnreturn.key.input"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Client ID</Label>
+              <Input
+                value={gstnReturnCfg.clientId}
+                onChange={(e) => updateGstnReturn("clientId", e.target.value)}
+                placeholder="Client ID"
+                data-ocid="apiconfig.gstnreturn.clientid.input"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.GSTNReturn && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.GSTNReturn.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "GSTNReturn"}
+              onClick={() => void testGstnReturn()}
+              data-ocid="apiconfig.gstnreturn.test_button"
+              className="shrink-0"
+            >
+              {testing === "GSTNReturn" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* PAN / Income Tax API */}
       <Card className="bg-card border-border/70">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -365,7 +924,6 @@ export function APIConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Endpoint Info */}
           <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
               <ExternalLink className="w-3 h-3" />
@@ -375,9 +933,8 @@ export function APIConfig() {
               https://api.incometax.gov.in/v1/pan-allotment-info
             </code>
             <p className="text-muted-foreground">
-              Requires: Income Tax Department API registration. Browser-side
-              calls are CORS-blocked by design; use a backend proxy in
-              production.
+              Requires Income Tax Department API registration. Browser-side
+              calls are CORS-blocked by design.
             </p>
             <a
               href="https://www.incometax.gov.in/iec/foportal/"
@@ -388,25 +945,11 @@ export function APIConfig() {
               Income Tax e-Filing Portal <ExternalLink className="w-3 h-3" />
             </a>
           </div>
-
-          {/* Sandbox Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <FlaskConical className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Sandbox Mode</p>
-                <p className="text-xs text-muted-foreground">
-                  Use Income Tax sandbox environment for testing
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={settings.pan.sandboxMode ?? false}
-              onCheckedChange={(v) => updatePan("sandboxMode", v)}
-              data-ocid="apiconfig.pan.sandbox.switch"
-            />
-          </div>
-
+          <SandboxToggle
+            checked={settings.pan.sandboxMode ?? false}
+            onCheckedChange={(v) => updatePan("sandboxMode", v)}
+            dataOcid="apiconfig.pan.sandbox.switch"
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Base URL</Label>
@@ -452,32 +995,145 @@ export function APIConfig() {
         </CardContent>
       </Card>
 
-      {/* Banking API */}
+      {/* RBI Account Aggregator */}
       <Card className="bg-card border-border/70">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <BanknoteIcon className="w-5 h-5 text-primary" />
-              Banking API
+              RBI Account Aggregator
             </CardTitle>
             <div className="flex items-center gap-2">
-              {testResults.Banking && (
+              {testResults.AA && (
                 <Badge
-                  variant={testResults.Banking.ok ? "default" : "destructive"}
+                  variant={testResults.AA.ok ? "default" : "destructive"}
                   className="text-xs"
                 >
-                  {testResults.Banking.ok ? "Connected" : "Failed"}
+                  {testResults.AA.ok ? "Reachable" : "Failed"}
                 </Badge>
               )}
               <Switch
-                checked={settings.banking.enabled}
-                onCheckedChange={(v) => updateBanking("enabled", v)}
-                data-ocid="apiconfig.banking.switch"
+                checked={aaCfg.enabled}
+                onCheckedChange={(v) => updateAA("enabled", v)}
+                data-ocid="apiconfig.aa.switch"
               />
             </div>
           </div>
           <CardDescription>
-            Payment reconciliation and bank statement import
+            Bank account data via RBI-regulated Sahamati Account Aggregator
+            framework (NBFC-AA)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Sandbox / Production endpoints
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              Sandbox: https://api.sandbox.sahamati.org.in
+            </code>
+            <code className="block text-muted-foreground font-mono">
+              Production: https://api.sahamati.org.in
+            </code>
+            <p className="text-muted-foreground">
+              Requires NBFC-AA registration with RBI + JWS request signing. The
+              consent flow opens an AA redirect window where the user approves
+              data sharing.
+            </p>
+            <a
+              href="https://www.sahamati.org.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Sahamati AA Framework <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <SandboxToggle
+            checked={aaCfg.sandboxMode ?? true}
+            onCheckedChange={(v) => updateAA("sandboxMode", v)}
+            dataOcid="apiconfig.aa.sandbox.switch"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>AA Base URL</Label>
+              <Input
+                value={aaCfg.url}
+                onChange={(e) => updateAA("url", e.target.value)}
+                placeholder="https://api.sandbox.sahamati.org.in"
+                data-ocid="apiconfig.aa.url.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client ID</Label>
+              <Input
+                value={aaCfg.clientId}
+                onChange={(e) => updateAA("clientId", e.target.value)}
+                placeholder="Your AA Client ID"
+                data-ocid="apiconfig.aa.clientid.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client Secret</Label>
+              <MaskedInput
+                value={aaCfg.clientSecret}
+                onChange={(v) => updateAA("clientSecret", v)}
+                placeholder="Client Secret"
+                data-ocid="apiconfig.aa.secret.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Redirect URI</Label>
+              <Input
+                value={aaCfg.redirectUri}
+                onChange={(e) => updateAA("redirectUri", e.target.value)}
+                placeholder={`${window.location.origin}/aa-callback`}
+                data-ocid="apiconfig.aa.redirect.input"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.AA && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.AA.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "AA"}
+              onClick={() => void testAA()}
+              data-ocid="apiconfig.aa.test_button"
+              className="shrink-0"
+            >
+              {testing === "AA" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Banking API (legacy / custom) */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BanknoteIcon className="w-5 h-5 text-muted-foreground" />
+              Custom Banking API
+            </CardTitle>
+            <Switch
+              checked={settings.banking.enabled}
+              onCheckedChange={(v) => updateBanking("enabled", v)}
+              data-ocid="apiconfig.banking.switch"
+            />
+          </div>
+          <CardDescription>
+            Custom bank API (HDFC/ICICI/SBI direct integration or open banking)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

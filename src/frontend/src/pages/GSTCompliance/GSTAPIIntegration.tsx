@@ -5,16 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
+import type { ApiSettings } from "@/types/gst";
 import {
   AlertCircle,
   BadgeCheck,
   BanknoteIcon,
   CheckCircle2,
   Clock,
+  ExternalLink,
   FileText,
   Loader2,
   QrCode,
   RefreshCw,
+  Settings,
   Shield,
   Truck,
   User,
@@ -47,20 +50,495 @@ interface ApiCardState {
   loading: boolean;
   result: ApiResult | null;
   error: string | null;
-  source?: "live" | "format_only";
+  corsBlocked?: boolean;
+  source?: "live" | "format_only" | "no_key";
 }
 
-function generateIRN(): string {
-  return Array.from(
-    { length: 64 },
-    () => "0123456789abcdef"[Math.floor(Math.random() * 16)],
-  ).join("");
+function getApiSettings(): ApiSettings {
+  try {
+    const raw = localStorage.getItem("gst_api_settings");
+    if (raw) return JSON.parse(raw) as ApiSettings;
+  } catch {
+    // ignore
+  }
+  return {
+    gstn: { key: "", url: "", clientId: "", clientSecret: "", enabled: false },
+    pan: { key: "", url: "", enabled: false },
+    einvoice: {
+      key: "",
+      url: "",
+      clientId: "",
+      clientSecret: "",
+      enabled: false,
+    },
+    ewaybill: { key: "", url: "", username: "", enabled: false },
+    gstnReturn: { key: "", url: "", clientId: "", enabled: false },
+    accountAggregator: {
+      clientId: "",
+      clientSecret: "",
+      url: "",
+      redirectUri: "",
+      enabled: false,
+    },
+    banking: { key: "", url: "", bankName: "", accountId: "", enabled: false },
+    sms: { provider: "msg91", key: "", senderId: "", enabled: false },
+  };
 }
 
-function generateEWBNumber(): string {
-  return `EWB${Array.from({ length: 12 }, () =>
-    Math.floor(Math.random() * 10),
-  ).join("")}`;
+// ─── e-Invoice IRN API ────────────────────────────────────────────────────────
+
+async function callEInvoiceAPI(): Promise<ApiCardState> {
+  const settings = getApiSettings();
+  const cfg = settings.einvoice;
+
+  if (!cfg?.enabled || !cfg.key) {
+    return {
+      loading: false,
+      result: null,
+      error:
+        "e-Invoice API key not configured. Go to Settings > API Config to set up your IRP credentials.",
+      source: "no_key",
+    };
+  }
+
+  const baseUrl =
+    cfg.url ||
+    (cfg.sandboxMode
+      ? "https://einvoice1-sand.nic.in/irisapi/einvoice/generate"
+      : "https://einvoice1.gst.gov.in/irisapi/einvoice/generate");
+
+  const payload = {
+    Version: "1.1",
+    TranDtls: { TaxSch: "GST", SupTyp: "B2B", RegRev: "N" },
+    DocDtls: {
+      Typ: "INV",
+      No: `INV-${Date.now()}`,
+      Dt: new Date().toLocaleDateString("en-IN"),
+    },
+  };
+
+  try {
+    const res = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        client_id: cfg.clientId || "",
+        client_secret: cfg.clientSecret || "",
+        user_name: cfg.key,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (res.status === 401)
+      return {
+        loading: false,
+        result: null,
+        error:
+          "Authentication failed — check Client ID, Client Secret, and username.",
+        source: "live",
+      };
+    if (res.status === 429)
+      return {
+        loading: false,
+        result: null,
+        error: "Rate limit exceeded. Try again shortly.",
+        source: "live",
+      };
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        loading: false,
+        result: null,
+        error: `API error (HTTP ${res.status}): ${body || res.statusText}`,
+        source: "live",
+      };
+    }
+
+    const data = await res.json();
+    const info = data?.data ?? data?.Data ?? data;
+    return {
+      loading: false,
+      result: {
+        IRN: info?.Irn ?? info?.irn ?? "(see full response)",
+        AckNo: info?.AckNo ?? info?.ackNo ?? "",
+        AckDate: info?.AckDt ?? info?.ackDt ?? "",
+        Status: info?.Status ?? "Generated",
+        "Signed QR": info?.SignedQRCode
+          ? `${String(info.SignedQRCode).slice(0, 24)}...`
+          : "(in response)",
+      },
+      error: null,
+      source: "live",
+    };
+  } catch (err) {
+    const isTypeError =
+      err instanceof TypeError ||
+      (err as Error)?.name === "TypeError" ||
+      (err as Error)?.name === "AbortError";
+    return {
+      loading: false,
+      result: null,
+      error: isTypeError
+        ? "Network/CORS error — IRP APIs require a whitelisted server IP or GSP proxy. Configure your GSP proxy URL in Settings > API Config."
+        : `Error: ${(err as Error).message}`,
+      corsBlocked: isTypeError,
+      source: "live",
+    };
+  }
+}
+
+// ─── e-Way Bill API ───────────────────────────────────────────────────────────
+
+async function callEWayBillAPI(): Promise<ApiCardState> {
+  const settings = getApiSettings();
+  const cfg = settings.ewaybill;
+
+  if (!cfg?.enabled || !cfg.key) {
+    return {
+      loading: false,
+      result: null,
+      error:
+        "e-Way Bill API key not configured. Go to Settings > API Config to set up your NIC credentials.",
+      source: "no_key",
+    };
+  }
+
+  const baseUrl =
+    cfg.url ||
+    (cfg.sandboxMode
+      ? "https://ewaybillgst.gov.in/api/sandbox/ewayapi/genewaybill"
+      : "https://ewaybillgst.gov.in/api/ewayapi/genewaybill");
+
+  const payload = {
+    supplyType: "O",
+    subSupplyType: 1,
+    docType: "INV",
+    docNo: `EWB-${Date.now()}`,
+    docDate: new Date().toLocaleDateString("en-IN"),
+    fromGstin: "",
+    toGstin: "",
+    transDistance: "100",
+    transMode: "1",
+    vehicleType: "R",
+  };
+
+  try {
+    const res = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        username: cfg.username || "",
+        "auth-token": cfg.key,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (res.status === 401)
+      return {
+        loading: false,
+        result: null,
+        error: "Authentication failed — check username and auth-token.",
+        source: "live",
+      };
+    if (res.status === 429)
+      return {
+        loading: false,
+        result: null,
+        error: "Rate limit exceeded. Try again shortly.",
+        source: "live",
+      };
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        loading: false,
+        result: null,
+        error: `API error (HTTP ${res.status}): ${body || res.statusText}`,
+        source: "live",
+      };
+    }
+
+    const data = await res.json();
+    const info = data?.data ?? data;
+    return {
+      loading: false,
+      result: {
+        "EWB Number": info?.ewbNo ?? info?.EwbNo ?? "(see response)",
+        "Valid From":
+          info?.ewbDt ??
+          info?.validFrom ??
+          new Date().toLocaleDateString("en-IN"),
+        "Valid To": info?.ewbValidTill ?? info?.validTo ?? "",
+        Distance: `${info?.distance ?? 100} km`,
+        Status: "Generated",
+      },
+      error: null,
+      source: "live",
+    };
+  } catch (err) {
+    const isTypeError =
+      err instanceof TypeError ||
+      (err as Error)?.name === "TypeError" ||
+      (err as Error)?.name === "AbortError";
+    return {
+      loading: false,
+      result: null,
+      error: isTypeError
+        ? "Network/CORS error — NIC e-Way Bill API requires a whitelisted server IP. Configure your GSP proxy URL in Settings > API Config."
+        : `Error: ${(err as Error).message}`,
+      corsBlocked: isTypeError,
+      source: "live",
+    };
+  }
+}
+
+// ─── GSTN Return Fetch ────────────────────────────────────────────────────────
+
+async function callGSTNReturnAPI(): Promise<ApiCardState> {
+  const settings = getApiSettings();
+  const cfg = settings.gstnReturn;
+
+  if (!cfg?.enabled || !cfg.key) {
+    return {
+      loading: false,
+      result: null,
+      error: "GSTN Return API key not configured. Go to Settings > API Config.",
+      source: "no_key",
+    };
+  }
+
+  const gstnSettings = settings.gstn;
+  const gstin = (() => {
+    try {
+      return (
+        (
+          JSON.parse(
+            localStorage.getItem("gst_business_profile") || "{}",
+          ) as Record<string, string>
+        )?.gstin ?? ""
+      );
+    } catch {
+      return "";
+    }
+  })();
+
+  const now = new Date();
+  const period = `${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
+
+  const baseUrl =
+    cfg.url ||
+    `https://api.gst.gov.in/enriched/returns/gstr1?action=RETSUM&gstin=${gstin}&ret_period=${period}`;
+
+  try {
+    const res = await fetch(baseUrl, {
+      method: "GET",
+      headers: {
+        "Auth-Token": cfg.key,
+        client_id: cfg.clientId || gstnSettings?.clientId || "",
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (res.status === 401)
+      return {
+        loading: false,
+        result: null,
+        error: "Authentication failed — check Auth-Token and Client ID.",
+        source: "live",
+      };
+    if (res.status === 404)
+      return {
+        loading: false,
+        result: null,
+        error: "Return data not found for the current period.",
+        source: "live",
+      };
+    if (res.status === 429)
+      return {
+        loading: false,
+        result: null,
+        error: "Rate limit exceeded. Try again shortly.",
+        source: "live",
+      };
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        loading: false,
+        result: null,
+        error: `API error (HTTP ${res.status}): ${body || res.statusText}`,
+        source: "live",
+      };
+    }
+
+    const data = await res.json();
+    const info = data?.data ?? data?.returnDetails ?? data;
+    return {
+      loading: false,
+      result: {
+        Period: period,
+        ReturnType: info?.retType ?? "GSTR-1",
+        Status: info?.sts ?? info?.status ?? "Not Filed",
+        "Due Date":
+          info?.dueDate ??
+          `11/${String(now.getMonth() + 2).padStart(2, "0")}/${now.getFullYear()}`,
+        "Total Taxable Value": info?.totTxval
+          ? `₹${Number(info.totTxval).toLocaleString("en-IN")}`
+          : "(see portal)",
+        "Total Tax": info?.totTax
+          ? `₹${Number(info.totTax).toLocaleString("en-IN")}`
+          : "(see portal)",
+      },
+      error: null,
+      source: "live",
+    };
+  } catch (err) {
+    const isTypeError =
+      err instanceof TypeError ||
+      (err as Error)?.name === "TypeError" ||
+      (err as Error)?.name === "AbortError";
+    return {
+      loading: false,
+      result: null,
+      error: isTypeError
+        ? "Network/CORS error — GSTN API requires a GSP-registered whitelisted IP. Configure your proxy URL in Settings > API Config."
+        : `Error: ${(err as Error).message}`,
+      corsBlocked: isTypeError,
+      source: "live",
+    };
+  }
+}
+
+// ─── RBI Account Aggregator ───────────────────────────────────────────────────
+
+async function callAccountAggregatorAPI(): Promise<ApiCardState> {
+  const settings = getApiSettings();
+  const cfg = settings.accountAggregator;
+
+  if (!cfg?.enabled || !cfg.clientId) {
+    return {
+      loading: false,
+      result: null,
+      error:
+        "Account Aggregator not configured. Go to Settings > API Config to set up your AA client credentials.",
+      source: "no_key",
+    };
+  }
+
+  const baseUrl =
+    cfg.url ||
+    (cfg.sandboxMode
+      ? "https://api.sandbox.sahamati.org.in"
+      : "https://api.sahamati.org.in");
+
+  // Step 1: Ping the AA discovery/health endpoint
+  try {
+    const _healthRes = await fetch(`${baseUrl}/health`, {
+      method: "GET",
+      headers: {
+        "x-client-id": cfg.clientId,
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    // Step 2: Initiate a consent request session
+    const consentPayload = {
+      ver: "2.0.0",
+      timestamp: new Date().toISOString(),
+      txnid: `TXN-${Date.now()}`,
+      ConsentDetail: {
+        consentStart: new Date().toISOString(),
+        consentExpiry: new Date(Date.now() + 86400000).toISOString(),
+        consentMode: "VIEW",
+        fetchType: "ONETIME",
+        Purpose: {
+          code: "101",
+          refUri: "https://api.rebit.org.in/aa/purpose",
+          text: "Account aggregation",
+          Category: { type: "personal" },
+        },
+        FITypes: ["DEPOSIT"],
+        DataLife: { unit: "DAY", value: 1 },
+        Frequency: { unit: "DAY", value: 1 },
+        DataFilter: [{ type: "TRANSACTIONAMOUNT", operator: ">=", value: "0" }],
+      },
+      redirectUrl: cfg.redirectUri || window.location.origin,
+    };
+
+    const consentRes = await fetch(`${baseUrl}/Consent`, {
+      method: "POST",
+      headers: {
+        "x-client-id": cfg.clientId,
+        "x-client-secret": cfg.clientSecret,
+        "Content-Type": "application/json",
+        "x-jws-signature": "pending-signing",
+      },
+      body: JSON.stringify(consentPayload),
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (consentRes.status === 401) {
+      return {
+        loading: false,
+        result: null,
+        error:
+          "Authentication failed — check Client ID and Client Secret in Settings > API Config.",
+        source: "live",
+      };
+    }
+
+    if (consentRes.ok) {
+      const consentData = await consentRes.json();
+      const redirectUrl = consentData?.url ?? consentData?.redirectUrl;
+      if (redirectUrl) {
+        window.open(redirectUrl, "_blank", "width=600,height=700");
+      }
+      return {
+        loading: false,
+        result: {
+          Status: "Consent Request Initiated",
+          "Consent Handle":
+            consentData?.ConsentHandle ??
+            consentData?.consentHandle ??
+            "(returned in response)",
+          "AA Redirect": redirectUrl
+            ? "Opened in new window"
+            : "(check response for URL)",
+          Note: "User must approve consent on the AA app. Fetch FI data after approval.",
+          Environment: cfg.sandboxMode ? "Sandbox" : "Production",
+        },
+        error: null,
+        source: "live",
+      };
+    }
+
+    const body = await consentRes.text().catch(() => "");
+    return {
+      loading: false,
+      result: null,
+      error: `Consent API error (HTTP ${consentRes.status}): ${body || consentRes.statusText}`,
+      source: "live",
+    };
+  } catch (err) {
+    const isTypeError =
+      err instanceof TypeError ||
+      (err as Error)?.name === "TypeError" ||
+      (err as Error)?.name === "AbortError";
+    return {
+      loading: false,
+      result: null,
+      error: isTypeError
+        ? "Network/CORS error — Account Aggregator API requires backend JWS signing. Browser calls will be blocked. Use the ICP backend canister for production. Sandbox URL configured."
+        : `Error: ${(err as Error).message}`,
+      corsBlocked: isTypeError,
+      source: "live",
+    };
+  }
 }
 
 export function GSTAPIIntegration() {
@@ -102,55 +580,45 @@ export function GSTAPIIntegration() {
     error: null,
   });
 
-  const simulateApi = (
-    setState: (s: ApiCardState) => void,
-    delay: number,
-    result: ApiResult,
-  ) => {
-    setState({ loading: true, result: null, error: null });
-    setTimeout(() => {
-      setState({ loading: false, result, error: null });
-    }, delay);
+  const handleEInvoice = async () => {
+    setEInvoiceState({ loading: true, result: null, error: null });
+    const result = await callEInvoiceAPI();
+    setEInvoiceState(result);
+    if (result.source === "no_key")
+      toast.warning("Configure e-Invoice credentials in Settings > API Config");
+    else if (result.error && !result.corsBlocked) toast.error(result.error);
+    else if (result.corsBlocked)
+      toast.warning("CORS blocked — server proxy required");
+    else if (result.result) toast.success("e-Invoice IRN generated from IRP");
   };
 
-  const handleEInvoice = () => {
-    const irn = generateIRN();
-    simulateApi(setEInvoiceState, 1200, {
-      IRN: irn,
-      "IRN Preview": `${irn.slice(0, 16)}...`,
-      "QR Data": "GSTN:27AABCU9603R1ZX|INV:INV0001|DATE:2026-03-07",
-      AckNo: `ACK${Date.now()}`,
-      AckDate: new Date().toISOString().split("T")[0],
-      Status: "Active",
-    });
-    toast.success("e-Invoice IRN generated (simulated)");
+  const handleEWayBill = async () => {
+    setEWayBillState({ loading: true, result: null, error: null });
+    const result = await callEWayBillAPI();
+    setEWayBillState(result);
+    if (result.source === "no_key")
+      toast.warning(
+        "Configure e-Way Bill credentials in Settings > API Config",
+      );
+    else if (result.error && !result.corsBlocked) toast.error(result.error);
+    else if (result.corsBlocked)
+      toast.warning("CORS blocked — server proxy required");
+    else if (result.result)
+      toast.success("e-Way Bill generated from NIC portal");
   };
 
-  const handleEWayBill = () => {
-    const ewb = generateEWBNumber();
-    simulateApi(setEWayBillState, 1000, {
-      "EWB Number": ewb,
-      "Valid From": new Date().toISOString().split("T")[0],
-      "Valid To": new Date(Date.now() + 86400000).toISOString().split("T")[0],
-      Distance: "100 km",
-      Mode: "Road",
-      Status: "Active",
-    });
-    toast.success("e-Way Bill generated (simulated)");
-  };
-
-  const handleGSTRFetch = () => {
-    const now = new Date();
-    const period = `${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
-    simulateApi(setGstReturnState, 1500, {
-      Period: period,
-      ReturnType: "GSTR-1",
-      Status: "Not Filed",
-      "Due Date": `11/${String(now.getMonth() + 2).padStart(2, "0")}/${now.getFullYear()}`,
-      "Total Taxable Value": "\u20b92,45,000",
-      "Total Tax": "\u20b944,100",
-    });
-    toast.success("GSTR data fetched (simulated)");
+  const handleGSTRFetch = async () => {
+    setGstReturnState({ loading: true, result: null, error: null });
+    const result = await callGSTNReturnAPI();
+    setGstReturnState(result);
+    if (result.source === "no_key")
+      toast.warning(
+        "Configure GSTN Return credentials in Settings > API Config",
+      );
+    else if (result.error && !result.corsBlocked) toast.error(result.error);
+    else if (result.corsBlocked)
+      toast.warning("CORS blocked — GSP proxy required");
+    else if (result.result) toast.success("GSTR data fetched from GSTN");
   };
 
   const handleGSTINValidate = async () => {
@@ -160,11 +628,8 @@ export function GSTAPIIntegration() {
     }
     setGstinValidState({ loading: true, result: null, error: null });
     const result = await verifyGSTIN(gstinInput);
-
     if (result.success) {
-      const apiResult: ApiResult = {
-        GSTIN: result.gstin,
-      };
+      const apiResult: ApiResult = { GSTIN: result.gstin };
       if (result.legalName) apiResult["Legal Name"] = result.legalName;
       if (result.tradeName && result.tradeName !== result.legalName)
         apiResult["Trade Name"] = result.tradeName;
@@ -175,7 +640,6 @@ export function GSTAPIIntegration() {
       if (result.registrationDate)
         apiResult["Registered On"] = result.registrationDate;
       if (result.principalAddress) apiResult.Address = result.principalAddress;
-
       setGstinValidState({
         loading: false,
         result: apiResult,
@@ -215,11 +679,9 @@ export function GSTAPIIntegration() {
         error: result.error ?? "Verification failed",
         source: result.source,
       });
-      if (result.errorCode !== "INVALID_FORMAT") {
+      if (result.errorCode !== "INVALID_FORMAT")
         toast.error(result.error ?? "Verification failed");
-      } else {
-        toast.error("Invalid GSTIN format");
-      }
+      else toast.error("Invalid GSTIN format");
     }
   };
 
@@ -230,7 +692,6 @@ export function GSTAPIIntegration() {
     }
     setPanValidState({ loading: true, result: null, error: null });
     const result = await verifyPAN(panInput);
-
     if (result.success) {
       const apiResult: ApiResult = { PAN: result.pan };
       if (result.panHolderName) apiResult["Holder Name"] = result.panHolderName;
@@ -238,7 +699,6 @@ export function GSTAPIIntegration() {
       if (result.status) apiResult.Status = result.status;
       if (result.assessingOfficerCode)
         apiResult["AO Code"] = result.assessingOfficerCode;
-
       setPanValidState({
         loading: false,
         result: apiResult,
@@ -268,29 +728,29 @@ export function GSTAPIIntegration() {
         error: result.error ?? "Verification failed",
         source: result.source,
       });
-      if (result.errorCode !== "INVALID_FORMAT") {
+      if (result.errorCode !== "INVALID_FORMAT")
         toast.error(result.error ?? "Verification failed");
-      } else {
-        toast.error("Invalid PAN format (e.g. ABCDE1234F)");
-      }
+      else toast.error("Invalid PAN format (e.g. ABCDE1234F)");
     }
   };
 
-  const handleBankSync = () => {
-    simulateApi(setBankSyncState, 2000, {
-      "Account Balance": "\u20b912,34,567.89",
-      "Available Balance": "\u20b911,00,000.00",
-      "Last Sync": new Date().toLocaleString("en-IN"),
-      "Transactions Fetched": 25,
-      "Pending Reconciliation": 8,
-      Status: "Connected",
-    });
-    toast.success("Bank sync completed (simulated)");
+  const handleBankSync = async () => {
+    setBankSyncState({ loading: true, result: null, error: null });
+    const result = await callAccountAggregatorAPI();
+    setBankSyncState(result);
+    if (result.source === "no_key")
+      toast.warning(
+        "Configure Account Aggregator credentials in Settings > API Config",
+      );
+    else if (result.error && !result.corsBlocked) toast.error(result.error);
+    else if (result.corsBlocked)
+      toast.warning("CORS blocked — backend signing required");
+    else if (result.result)
+      toast.success("Account Aggregator consent initiated");
   };
 
-  const getSourceBadge = (state: ApiCardState) => {
-    if (!state.result && !state.error) return null;
-    if (state.source === "live") {
+  const getStatusBadge = (state: ApiCardState, defaultLabel = "Direct API") => {
+    if (state.source === "live" && state.result) {
       return (
         <Badge
           variant="default"
@@ -310,16 +770,53 @@ export function GSTAPIIntegration() {
         </Badge>
       );
     }
-    return null;
+    if (state.corsBlocked) {
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs text-amber-600 border-amber-400 shrink-0"
+        >
+          CORS Blocked
+        </Badge>
+      );
+    }
+    if (state.source === "no_key") {
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs text-muted-foreground border-border shrink-0"
+        >
+          Not Configured
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs text-blue-600 border-blue-400 shrink-0"
+      >
+        {defaultLabel}
+      </Badge>
+    );
   };
 
   const renderResult = (state: ApiCardState, showSource = false) => {
-    const { result, error } = state;
+    const { result, error, corsBlocked } = state;
     if (error) {
       return (
-        <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-          {error}
+        <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive space-y-1.5">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          {corsBlocked && (
+            <div className="flex items-center gap-1.5 text-muted-foreground border-t border-destructive/10 pt-1.5">
+              <Settings className="w-3 h-3" />
+              <a href="#api-config" className="underline hover:text-foreground">
+                Configure proxy URL in Settings &gt; API Config
+              </a>
+            </div>
+          )}
         </div>
       );
     }
@@ -327,7 +824,7 @@ export function GSTAPIIntegration() {
     return (
       <div className="mt-3 space-y-1.5">
         {showSource && (
-          <div className="flex justify-end">{getSourceBadge(state)}</div>
+          <div className="flex justify-end">{getStatusBadge(state)}</div>
         )}
         <div className="p-3 rounded-lg bg-chart-2/10 border border-chart-2/20 space-y-1.5">
           {Object.entries(result).map(([key, val]) => (
@@ -350,18 +847,23 @@ export function GSTAPIIntegration() {
 
   return (
     <div className="space-y-6" data-ocid="api.section">
-      {/* Simulation Disclaimer Banner */}
-      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+      {/* CORS Info Banner */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+          <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              Demo / Simulation Mode
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+              Direct API Mode
             </p>
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-              GSTIN and PAN validation use real government APIs when credentials
-              are configured. Other APIs (e-Invoice, e-Way Bill, Bank Sync) are
-              simulated. Configure credentials in Settings &gt; API Config.
+            <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+              All API calls are made directly from the browser. GSTIN and PAN
+              validation work when API keys are configured. e-Invoice, e-Way
+              Bill, GSTN Return, and Account Aggregator APIs require a
+              GSP-whitelisted server IP — configure a proxy URL in{" "}
+              <span className="underline font-medium cursor-pointer">
+                Settings &gt; API Config
+              </span>{" "}
+              for production use.
             </p>
           </div>
         </div>
@@ -376,7 +878,8 @@ export function GSTAPIIntegration() {
             GST API Integration
           </h1>
           <p className="text-sm text-muted-foreground">
-            GSTIN/PAN: live when API key configured — other APIs simulated
+            All APIs use direct calls — configure credentials in Settings &gt;
+            API Config
           </p>
         </div>
       </div>
@@ -396,27 +899,22 @@ export function GSTAPIIntegration() {
                 <div>
                   <CardTitle className="text-sm">e-Invoice IRN API</CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/einvoice/generate
+                    einvoice1.gst.gov.in
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {getStatusBadge(eInvoiceState)}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Generate Invoice Reference Number (IRN) and QR code data for
-              e-invoicing compliance.
+              Generate Invoice Reference Number (IRN) and QR code via IRP.
+              Requires IRP/GSP credentials.
             </p>
             <Button
               size="sm"
               className="w-full gap-2"
-              onClick={handleEInvoice}
+              onClick={() => void handleEInvoice()}
               disabled={eInvoiceState.loading}
               data-ocid="api.einvoice.primary_button"
             >
@@ -442,28 +940,23 @@ export function GSTAPIIntegration() {
                 <div>
                   <CardTitle className="text-sm">e-Way Bill API</CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/ewaybill/generate
+                    ewaybillgst.gov.in
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {getStatusBadge(eWayBillState)}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Auto-generate e-Way Bills for goods movement above ₹50,000.
-              Validates distance and vehicle details.
+              Generate e-Way Bills for goods movement above ₹50,000 via NIC
+              portal. Requires NIC credentials.
             </p>
             <Button
               size="sm"
               className="w-full gap-2"
               variant="outline"
-              onClick={handleEWayBill}
+              onClick={() => void handleEWayBill()}
               disabled={eWayBillState.loading}
               data-ocid="api.eway.secondary_button"
             >
@@ -489,28 +982,23 @@ export function GSTAPIIntegration() {
                 <div>
                   <CardTitle className="text-sm">GSTN Return Fetch</CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/gstn/returns/fetch
+                    api.gst.gov.in/returns
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {getStatusBadge(gstReturnState)}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Fetch GSTR-1/3B filing status and data from the GSTN portal for
-              the current period.
+              Fetch GSTR-1/3B filing status and summary from GSTN for the
+              current period. Requires GSP Auth-Token.
             </p>
             <Button
               size="sm"
               className="w-full gap-2"
               variant="outline"
-              onClick={handleGSTRFetch}
+              onClick={() => void handleGSTRFetch()}
               disabled={gstReturnState.loading}
               data-ocid="api.gstn.secondary_button"
             >
@@ -567,7 +1055,7 @@ export function GSTAPIIntegration() {
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Queries GST Network directly. Returns legal name, registration
-              type, and filing status. Requires GSTN API key.
+              type, and filing status.
             </p>
             <div className="space-y-2">
               <Label className="text-xs">GSTIN to Validate</Label>
@@ -595,7 +1083,6 @@ export function GSTAPIIntegration() {
               Validate GSTIN
             </Button>
             {renderResult(gstinValidState, true)}
-
             {gstinHistory.length > 0 && (
               <div className="mt-3 space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -666,7 +1153,7 @@ export function GSTAPIIntegration() {
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Queries Income Tax e-Filing API directly. Returns PAN holder name,
-              type, and status. Requires IT Dept API key.
+              type, and status.
             </p>
             <div className="space-y-2">
               <Label className="text-xs">PAN to Validate</Label>
@@ -698,7 +1185,7 @@ export function GSTAPIIntegration() {
           </CardContent>
         </Card>
 
-        {/* Banking Sync API */}
+        {/* RBI Account Aggregator */}
         <Card
           className="bg-card border-border/70"
           data-ocid="api.bank_sync.card"
@@ -710,29 +1197,35 @@ export function GSTAPIIntegration() {
                   <BanknoteIcon className="w-4 h-4 text-chart-2" />
                 </div>
                 <div>
-                  <CardTitle className="text-sm">Banking Sync API</CardTitle>
+                  <CardTitle className="text-sm">Account Aggregator</CardTitle>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                    /api/banking/sync
+                    sahamati.org.in (RBI AA)
                   </p>
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className="text-xs text-amber-600 border-amber-400 shrink-0"
-              >
-                Simulated
-              </Badge>
+              {getStatusBadge(bankSyncState)}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Sync bank transactions for payment reconciliation. Supports ICICI,
-              HDFC, SBI, Axis via Account Aggregator.
+              Initiate RBI Account Aggregator consent flow to fetch bank account
+              data. Opens AA redirect in a new window.
             </p>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ExternalLink className="w-3 h-3 shrink-0" />
+              <a
+                href="https://www.sahamati.org.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                Sahamati AA Framework
+              </a>
+            </div>
             <Button
               size="sm"
               className="w-full gap-2"
-              onClick={handleBankSync}
+              onClick={() => void handleBankSync()}
               disabled={bankSyncState.loading}
               data-ocid="api.bank_sync.primary_button"
             >
@@ -741,7 +1234,7 @@ export function GSTAPIIntegration() {
               ) : (
                 <BanknoteIcon className="w-3.5 h-3.5" />
               )}
-              Sync Transactions
+              Initiate AA Consent
             </Button>
             {renderResult(bankSyncState)}
           </CardContent>
