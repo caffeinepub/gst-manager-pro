@@ -417,7 +417,8 @@ export type AppPage =
   | "payroll-payslips"
   | "payroll-reports"
   | "payroll-statutory"
-  | "payroll-pan-verification";
+  | "payroll-pan-verification"
+  | "business-manager";
 
 // ─── Payroll Types ────────────────────────────────────────────────
 

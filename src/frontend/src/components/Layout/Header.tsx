@@ -83,6 +83,7 @@ const PAGE_TITLES: Record<AppPage, string> = {
   "payroll-reports": "Payroll Reports",
   "payroll-statutory": "Statutory Compliance",
   "payroll-pan-verification": "PAN Verification",
+  "business-manager": "Business Manager",
 };
 
 const PAGE_BREADCRUMBS: Partial<Record<AppPage, string[]>> = {

@@ -2,52 +2,51 @@
 
 ## Current State
 
-- **Import Data** (`DataImport.tsx`): Had `sales_invoices` and `purchases` only. Service Invoice, Proforma Invoice, Credit Note, Debit Note were absent from TEMPLATES, MODULES, duplicate detectors, and importRow logic. Fix already applied in this session.
-- **GSTAPIIntegration.tsx**: GSTIN and PAN validation already use real direct API calls via `gstVerificationService.ts`. e-Invoice IRN, e-Way Bill, GSTN Return Fetch, and Bank Sync all use `simulateApi` (a `setTimeout` fake), showing "Simulated" badges. No real HTTP calls made.
-- **APIConfig.tsx**: Has config sections for GSTN, PAN, Banking (generic), and SMS. No dedicated sections for e-Invoice IRP endpoint, e-Way Bill NIC endpoint, GSTN Return API, or RBI Account Aggregator.
-- **ApiSettings type** (`types/gst.ts`): Has `gstn`, `pan`, `banking`, `sms` only. Missing `einvoice`, `ewaybill`, `gstnReturn`, `accountAggregator` sections.
+GST Manager Pro is a fully-featured single-business GST compliance and accounting app. All data is stored in localStorage under flat keys (`gst_invoices`, `gst_purchases`, `gst_parties`, etc.) without any business-level namespace. Authentication is via Internet Identity. The app has:
+
+- Masters, Invoicing, Accounting, GST Compliance, Payroll, Reports, Settings modules
+- `useGSTStore.ts` hooks using `useLocalStorage` with hardcoded localStorage keys
+- `useCloudSync.ts` syncing all `gst_*` keys to the ICP backend
+- `AppSidebar.tsx` with a `BusinessHeader` component at the top
+- `Login.tsx` for Internet Identity auth
+- `App.tsx` for routing between all pages
 
 ## Requested Changes (Diff)
 
 ### Add
-- `einvoice` config block in `ApiSettings`: `url`, `key`, `clientId`, `clientSecret`, `enabled`, `sandboxMode`
-- `ewaybill` config block in `ApiSettings`: `url`, `key`, `username`, `enabled`, `sandboxMode`
-- `gstnReturn` config block in `ApiSettings`: `url`, `key`, `clientId`, `enabled`
-- `accountAggregator` config block in `ApiSettings`: `url`, `clientId`, `clientSecret`, `redirectUri`, `enabled`, `sandboxMode`
-- Config cards in `APIConfig.tsx` for each of the 4 new blocks with masked inputs, test connection buttons, endpoint info, and sandbox toggles
-- Real `fetch()` handler `handleEInvoice` in `GSTAPIIntegration.tsx` — POSTs to user-configured IRP endpoint with IRN generation payload
-- Real `fetch()` handler `handleEWayBill` — POSTs to user-configured NIC e-Way Bill endpoint
-- Real `fetch()` handler `handleGSTRFetch` — GETs from user-configured GSTN returns endpoint
-- Real `fetch()` handler `handleBankSync` — initiates RBI Account Aggregator OAuth flow (redirect or popup), fetches FI data on return, shows balance + recent transactions
-- CORS-blocked error handling for all 4 (same graceful degradation pattern as GSTIN/PAN)
-- "Direct API" badge replacing "Simulated" badge on all 4 cards; badge goes green "Live ✓" on success
-- Remove "Demo / Simulation Mode" disclaimer banner (or update it to reflect that all APIs are now direct)
+
+- **Business type definition** (`Business` interface in `gst.ts`): id, name, gstin, stateCode, logo, role (`admin`|`user`), ownerId, createdAt
+- **`useBusinessContext` hook**: manages active business ID in localStorage (`gst_active_business`), list of businesses (`gst_businesses`), CRUD for businesses
+- **`BusinessManager` page** (new page `business-manager`): grid of all businesses with name, GSTIN, last sync, outstanding invoices; "Add Business" button; "Switch" and "Delete" actions per card
+- **`BusinessSetupWizard` component**: shown on first launch (no businesses exist); 3-step wizard: (1) role selection admin vs user, (2) business name + GSTIN + state, (3) confirmation; creates first business and sets it as active
+- **`BusinessSwitcher` component**: dropdown in AppSidebar header showing active business name + logo; opens a panel listing all businesses; "Add New Business" and "Manage Businesses" options
+- **`AppPage` type extension**: add `"business-manager"` to the union
+- **`seedData.ts` update**: seed data uses active business prefix instead of flat keys
+- **New navbar entry**: "Businesses" link under Settings section or as a top-level sidebar item
 
 ### Modify
-- `ApiSettings` interface — extend with 4 new blocks
-- `DEFAULT_SETTINGS` in `APIConfig.tsx` — add defaults for 4 new blocks
-- `GSTAPIIntegration.tsx` — replace `simulateApi` calls with real `fetch` for all 4 APIs; update badge labels; update description text
-- Import Data fix already applied (Service Invoice, Proforma Invoice, Credit Note, Debit Note tabs live)
+
+- **`useLocalStorage.ts`**: no changes to the hook itself; business-namespacing is done at the call-site key level
+- **`useGSTStore.ts`**: all localStorage keys become dynamic: `gst_${bizId}_invoices`, `gst_${bizId}_purchases`, etc. All hooks read the active business ID from `useBusinessContext` to compute the namespaced key.
+- **`useCloudSync.ts`**: sync keys filtered to `gst_${bizId}_*` for the active business only
+- **`AppSidebar.tsx`**: replace static `BusinessHeader` in sidebar header area with `BusinessSwitcher` component
+- **`App.tsx`**: wrap `AuthenticatedApp` with business context check; if no businesses exist, show `BusinessSetupWizard` instead of normal app; add `"business-manager"` case in `PageContent`
+- **`Header.tsx`**: show active business name and sync status
 
 ### Remove
-- `simulateApi` helper function (no longer needed once all 4 are real calls)
-- Toast messages saying "(simulated)"
-- "Demo / Simulation Mode" amber banner (replace with factual CORS note)
+
+- Nothing removed; flat keys remain in localStorage for any legacy data but new data is written under business-namespaced keys
 
 ## Implementation Plan
 
-1. Extend `ApiSettings` type in `types/gst.ts` with `einvoice`, `ewaybill`, `gstnReturn`, `accountAggregator` blocks
-2. Rewrite `GSTAPIIntegration.tsx`:
-   - Remove `simulateApi` + `generateIRN` + `generateEWBNumber` random generators
-   - `handleEInvoice`: reads `einvoice` config, POSTs to configured IRP URL, handles 401/CORS/success
-   - `handleEWayBill`: reads `ewaybill` config, POSTs to configured NIC URL
-   - `handleGSTRFetch`: reads `gstnReturn` config, GETs from configured GSTN returns URL
-   - `handleBankSync`: reads `accountAggregator` config; if sandbox, calls `https://api.sandbox.sahamati.org.in`; opens consent URL in a new window; polls for FI data
-   - All 4 show "No API key configured" state when key is absent, "Direct API" badge when key present, "Live ✓" on success, CORS error with explanation on failure
-   - Update disclaimer banner to explain CORS reality and link to Settings > API Config
-3. Update `APIConfig.tsx`:
-   - Add `e-Invoice IRP` card: endpoint info (einvoice1.gst.gov.in), sandbox toggle, url/key/clientId/clientSecret fields, Test Connection
-   - Add `e-Way Bill (NIC)` card: endpoint info (ewaybillgst.gov.in), sandbox toggle, url/username/key fields, Test Connection
-   - Add `GSTN Return Fetch` card: endpoint info, url/clientId/key fields, Test Connection
-   - Add `RBI Account Aggregator` card: endpoint info (sahamati.org.in), sandbox toggle, clientId/clientSecret/redirectUri fields, Test Connection (ping sandbox health endpoint)
-4. Run frontend validate
+1. Add `Business` type and `"business-manager"` to `AppPage` in `types/gst.ts`
+2. Create `hooks/useBusinessContext.ts`: manages `gst_businesses` (array) and `gst_active_business` (string ID) in localStorage; exports `activeBizId`, `businesses`, `addBusiness`, `updateBusiness`, `deleteBusiness`, `switchBusiness`
+3. Update `hooks/useGSTStore.ts`: all hooks accept `bizId` from `useBusinessContext` and use it to namespace keys
+4. Update `hooks/useCloudSync.ts`: sync only `gst_${bizId}_*` keys
+5. Create `components/BusinessSwitcher/BusinessSwitcher.tsx`: dropdown showing active biz, list panel, add/switch actions
+6. Create `pages/Business/BusinessSetupWizard.tsx`: first-launch wizard (role + biz details + confirm)
+7. Create `pages/Business/BusinessManager.tsx`: full business management page
+8. Update `App.tsx`: add business context gating and `business-manager` route
+9. Update `AppSidebar.tsx`: use `BusinessSwitcher` in header
+10. Update `utils/seedData.ts`: use active biz ID prefix
+11. Add sidebar navigation entry for Business Manager

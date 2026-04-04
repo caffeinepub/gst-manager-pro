@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useCloudSync } from "@/hooks/useCloudSync";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { LanguageProvider } from "@/hooks/useLanguage";
@@ -10,6 +11,8 @@ import { CashBook } from "@/pages/Accounting/CashBook";
 import { ChartOfAccounts } from "@/pages/Accounting/ChartOfAccounts";
 import { JournalEntries } from "@/pages/Accounting/JournalEntries";
 import { Purchases } from "@/pages/Accounting/Purchases";
+import { BusinessManager } from "@/pages/Business/BusinessManager";
+import { BusinessSetupWizard } from "@/pages/Business/BusinessSetupWizard";
 import { Dashboard } from "@/pages/Dashboard";
 import { AuditTrail } from "@/pages/GSTCompliance/AuditTrail";
 import { GSTAPIIntegration } from "@/pages/GSTCompliance/GSTAPIIntegration";
@@ -157,6 +160,8 @@ function PageContent({
       return <StatutoryCompliance />;
     case "payroll-pan-verification":
       return <PayrollPANVerification />;
+    case "business-manager":
+      return <BusinessManager />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }
@@ -164,8 +169,19 @@ function PageContent({
 
 function AuthenticatedApp() {
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
+  const { businesses } = useBusinessContext();
   // Activate cloud sync globally for authenticated users
   useCloudSync();
+
+  // Show setup wizard if no businesses are configured yet
+  if (businesses.length === 0) {
+    return (
+      <>
+        <BusinessSetupWizard onComplete={setCurrentPage} />
+        <Toaster richColors />
+      </>
+    );
+  }
 
   return (
     <AppLayout currentPage={currentPage} onNavigate={setCurrentPage}>

@@ -25,13 +25,18 @@ interface CloudActor {
 const SYNC_ENABLED_KEY = "gst_cloud_sync_enabled";
 const DEBOUNCE_MS = 2000;
 
-function getGstKeys(): string[] {
+function getGstKeys(bizId: string | null): string[] {
+  const prefix = bizId ? `gst_${bizId}_` : "gst_";
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k?.startsWith("gst_") && k !== "gst_cloud_backups") {
+    if (k?.startsWith(prefix) && k !== "gst_cloud_backups") {
       keys.push(k);
     }
+  }
+  // Always include global keys
+  for (const k of ["gst_businesses", "gst_active_business"] as const) {
+    if (localStorage.getItem(k) !== null && !keys.includes(k)) keys.push(k);
   }
   return keys;
 }
@@ -97,7 +102,8 @@ export function useCloudSync(): CloudSyncResult {
 
   const syncNow = useCallback(async () => {
     if (!actor || !isAuthenticated) return;
-    const keys = getGstKeys();
+    const activeBizId = localStorage.getItem("gst_active_business") || null;
+    const keys = getGstKeys(activeBizId);
     await pushKeysToCloud(keys);
   }, [actor, isAuthenticated, pushKeysToCloud]);
 
@@ -148,9 +154,21 @@ export function useCloudSync(): CloudSyncResult {
       }, DEBOUNCE_MS);
     };
 
+    // Re-sync when business is switched
+    const handleBusinessSwitch = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        const activeBizId = localStorage.getItem("gst_active_business") || null;
+        const keys = getGstKeys(activeBizId);
+        await pushKeysToCloud(keys);
+      }, DEBOUNCE_MS);
+    };
+
     window.addEventListener("gst-data-changed", handleChange);
+    window.addEventListener("gst-business-switched", handleBusinessSwitch);
     return () => {
       window.removeEventListener("gst-data-changed", handleChange);
+      window.removeEventListener("gst-business-switched", handleBusinessSwitch);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [isAuthenticated, pushKeysToCloud]);

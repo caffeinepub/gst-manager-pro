@@ -12,6 +12,7 @@ import type {
   Purchase,
 } from "@/types/gst";
 import { useCallback } from "react";
+import { useBusinessContext } from "./useBusinessContext";
 import { useLocalStorage } from "./useLocalStorage";
 
 function generateId() {
@@ -29,11 +30,15 @@ function notifyChange(key: string) {
   );
 }
 
+/** Returns the namespaced localStorage key for the active business, falling back to flat key. */
+function bizKey(activeBizId: string | null, suffix: string): string {
+  return activeBizId ? `gst_${activeBizId}_${suffix}` : `gst_${suffix}`;
+}
+
 export function useInvoices() {
-  const [invoices, setInvoices] = useLocalStorage<Invoice[]>(
-    "gst_invoices",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "invoices");
+  const [invoices, setInvoices] = useLocalStorage<Invoice[]>(key, []);
 
   const addInvoice = useCallback(
     (inv: Omit<Invoice, "id" | "createdAt" | "updatedAt">) => {
@@ -44,10 +49,10 @@ export function useInvoices() {
         updatedAt: now(),
       };
       setInvoices((prev) => [newInv, ...prev]);
-      notifyChange("gst_invoices");
+      notifyChange(key);
       return newInv.id;
     },
-    [setInvoices],
+    [setInvoices, key],
   );
 
   const updateInvoice = useCallback(
@@ -57,36 +62,35 @@ export function useInvoices() {
           inv.id === id ? { ...inv, ...updates, updatedAt: now() } : inv,
         ),
       );
-      notifyChange("gst_invoices");
+      notifyChange(key);
     },
-    [setInvoices],
+    [setInvoices, key],
   );
 
   const deleteInvoice = useCallback(
     (id: string) => {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
-      notifyChange("gst_invoices");
+      notifyChange(key);
     },
-    [setInvoices],
+    [setInvoices, key],
   );
 
   return { invoices, addInvoice, updateInvoice, deleteInvoice };
 }
 
 export function usePayments() {
-  const [payments, setPayments] = useLocalStorage<Payment[]>(
-    "gst_payments",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "payments");
+  const [payments, setPayments] = useLocalStorage<Payment[]>(key, []);
 
   const addPayment = useCallback(
     (p: Omit<Payment, "id" | "createdAt">) => {
       const newP: Payment = { ...p, id: generateId(), createdAt: now() };
       setPayments((prev) => [newP, ...prev]);
-      notifyChange("gst_payments");
+      notifyChange(key);
       return newP.id;
     },
-    [setPayments],
+    [setPayments, key],
   );
 
   const updatePayment = useCallback(
@@ -96,27 +100,26 @@ export function usePayments() {
           p.id === id ? { ...p, ...updates, updatedAt: now() } : p,
         ),
       );
-      notifyChange("gst_payments");
+      notifyChange(key);
     },
-    [setPayments],
+    [setPayments, key],
   );
 
   const deletePayment = useCallback(
     (id: string) => {
       setPayments((prev) => prev.filter((p) => p.id !== id));
-      notifyChange("gst_payments");
+      notifyChange(key);
     },
-    [setPayments],
+    [setPayments, key],
   );
 
   return { payments, addPayment, updatePayment, deletePayment };
 }
 
 export function usePurchases() {
-  const [purchases, setPurchases] = useLocalStorage<Purchase[]>(
-    "gst_purchases",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "purchases");
+  const [purchases, setPurchases] = useLocalStorage<Purchase[]>(key, []);
 
   const addPurchase = useCallback(
     (p: Omit<Purchase, "id" | "createdAt" | "updatedAt">) => {
@@ -127,10 +130,10 @@ export function usePurchases() {
         updatedAt: now(),
       };
       setPurchases((prev) => [newP, ...prev]);
-      notifyChange("gst_purchases");
+      notifyChange(key);
       return newP.id;
     },
-    [setPurchases],
+    [setPurchases, key],
   );
 
   const updatePurchase = useCallback(
@@ -140,44 +143,43 @@ export function usePurchases() {
           p.id === id ? { ...p, ...updates, updatedAt: now() } : p,
         ),
       );
-      notifyChange("gst_purchases");
+      notifyChange(key);
     },
-    [setPurchases],
+    [setPurchases, key],
   );
 
   const deletePurchase = useCallback(
     (id: string) => {
       setPurchases((prev) => prev.filter((p) => p.id !== id));
-      notifyChange("gst_purchases");
+      notifyChange(key);
     },
-    [setPurchases],
+    [setPurchases, key],
   );
 
   return { purchases, addPurchase, updatePurchase, deletePurchase };
 }
 
 export function useJournalEntries() {
-  const [entries, setEntries] = useLocalStorage<JournalEntry[]>(
-    "gst_journal",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "journal");
+  const [entries, setEntries] = useLocalStorage<JournalEntry[]>(key, []);
 
   const addEntry = useCallback(
     (e: Omit<JournalEntry, "id" | "createdAt">) => {
       const newE: JournalEntry = { ...e, id: generateId(), createdAt: now() };
       setEntries((prev) => [newE, ...prev]);
-      notifyChange("gst_journal");
+      notifyChange(key);
       return newE.id;
     },
-    [setEntries],
+    [setEntries, key],
   );
 
   const deleteEntry = useCallback(
     (id: string) => {
       setEntries((prev) => prev.filter((e) => e.id !== id));
-      notifyChange("gst_journal");
+      notifyChange(key);
     },
-    [setEntries],
+    [setEntries, key],
   );
 
   const updateEntry = useCallback(
@@ -185,28 +187,27 @@ export function useJournalEntries() {
       setEntries((prev) =>
         prev.map((e) => (e.id === id ? { ...e, ...updates } : e)),
       );
-      notifyChange("gst_journal");
+      notifyChange(key);
     },
-    [setEntries],
+    [setEntries, key],
   );
 
   return { entries, addEntry, updateEntry, deleteEntry };
 }
 
 export function useBankAccounts() {
-  const [accounts, setAccounts] = useLocalStorage<BankAccount[]>(
-    "gst_bank_accounts",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "bank_accounts");
+  const [accounts, setAccounts] = useLocalStorage<BankAccount[]>(key, []);
 
   const addAccount = useCallback(
     (a: Omit<BankAccount, "id" | "createdAt">) => {
       const newA: BankAccount = { ...a, id: generateId(), createdAt: now() };
       setAccounts((prev) => [newA, ...prev]);
-      notifyChange("gst_bank_accounts");
+      notifyChange(key);
       return newA.id;
     },
-    [setAccounts],
+    [setAccounts, key],
   );
 
   const updateAccount = useCallback(
@@ -214,25 +215,27 @@ export function useBankAccounts() {
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
       );
-      notifyChange("gst_bank_accounts");
+      notifyChange(key);
     },
-    [setAccounts],
+    [setAccounts, key],
   );
 
   const deleteAccount = useCallback(
     (id: string) => {
       setAccounts((prev) => prev.filter((a) => a.id !== id));
-      notifyChange("gst_bank_accounts");
+      notifyChange(key);
     },
-    [setAccounts],
+    [setAccounts, key],
   );
 
   return { accounts, addAccount, updateAccount, deleteAccount };
 }
 
 export function useBankTransactions() {
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "bank_transactions");
   const [transactions, setTransactions] = useLocalStorage<BankTransaction[]>(
-    "gst_bank_transactions",
+    key,
     [],
   );
 
@@ -244,18 +247,18 @@ export function useBankTransactions() {
         createdAt: now(),
       };
       setTransactions((prev) => [newT, ...prev]);
-      notifyChange("gst_bank_transactions");
+      notifyChange(key);
       return newT.id;
     },
-    [setTransactions],
+    [setTransactions, key],
   );
 
   const deleteTransaction = useCallback(
     (id: string) => {
       setTransactions((prev) => prev.filter((t) => t.id !== id));
-      notifyChange("gst_bank_transactions");
+      notifyChange(key);
     },
-    [setTransactions],
+    [setTransactions, key],
   );
 
   const updateTransaction = useCallback(
@@ -263,24 +266,26 @@ export function useBankTransactions() {
       setTransactions((prev) =>
         prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
       );
-      notifyChange("gst_bank_transactions");
+      notifyChange(key);
     },
-    [setTransactions],
+    [setTransactions, key],
   );
 
   return { transactions, addTransaction, updateTransaction, deleteTransaction };
 }
 
 export function useAuditLogs() {
-  const [logs, setLogs] = useLocalStorage<AuditLog[]>("gst_audit_logs", []);
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "audit_logs");
+  const [logs, setLogs] = useLocalStorage<AuditLog[]>(key, []);
 
   const addLog = useCallback(
     (log: Omit<AuditLog, "id" | "timestamp">) => {
       const newLog: AuditLog = { ...log, id: generateId(), timestamp: now() };
       setLogs((prev) => [newLog, ...prev].slice(0, 500)); // Keep last 500 logs
-      notifyChange("gst_audit_logs");
+      notifyChange(key);
     },
-    [setLogs],
+    [setLogs, key],
   );
 
   return { logs, addLog };
@@ -296,8 +301,10 @@ export interface CustomAccount {
 }
 
 export function useCustomAccounts() {
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "custom_accounts");
   const [customAccounts, setCustomAccounts] = useLocalStorage<CustomAccount[]>(
-    "gst_custom_accounts",
+    key,
     [],
   );
 
@@ -310,17 +317,17 @@ export function useCustomAccounts() {
         createdAt: now(),
       };
       setCustomAccounts((prev) => [...prev, newA]);
-      notifyChange("gst_custom_accounts");
+      notifyChange(key);
     },
-    [setCustomAccounts],
+    [setCustomAccounts, key],
   );
 
   const deleteAccount = useCallback(
     (id: string) => {
       setCustomAccounts((prev) => prev.filter((a) => a.id !== id));
-      notifyChange("gst_custom_accounts");
+      notifyChange(key);
     },
-    [setCustomAccounts],
+    [setCustomAccounts, key],
   );
 
   const updateAccount = useCallback(
@@ -331,9 +338,9 @@ export function useCustomAccounts() {
       setCustomAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
       );
-      notifyChange("gst_custom_accounts");
+      notifyChange(key);
     },
-    [setCustomAccounts],
+    [setCustomAccounts, key],
   );
 
   return { customAccounts, addAccount, updateAccount, deleteAccount };
@@ -352,26 +359,25 @@ export interface StockMovement {
 }
 
 export function useStockMovements() {
-  const [movements, setMovements] = useLocalStorage<StockMovement[]>(
-    "gst_stock_movements",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "stock_movements");
+  const [movements, setMovements] = useLocalStorage<StockMovement[]>(key, []);
 
   const addMovement = useCallback(
     (m: Omit<StockMovement, "id" | "createdAt">) => {
       const newM: StockMovement = { ...m, id: generateId(), createdAt: now() };
       setMovements((prev) => [newM, ...prev]);
-      notifyChange("gst_stock_movements");
+      notifyChange(key);
     },
-    [setMovements],
+    [setMovements, key],
   );
 
   const deleteMovement = useCallback(
     (id: string) => {
       setMovements((prev) => prev.filter((m) => m.id !== id));
-      notifyChange("gst_stock_movements");
+      notifyChange(key);
     },
-    [setMovements],
+    [setMovements, key],
   );
 
   return { movements, addMovement, deleteMovement };
@@ -388,39 +394,43 @@ export interface InvoiceDefaults {
 }
 
 export function useInvoiceDefaults() {
-  const [defaults, setDefaults] = useLocalStorage<InvoiceDefaults>(
-    "gst_invoice_defaults",
-    { declaration: DEFAULT_DECLARATION, termsConditions: DEFAULT_TERMS },
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "invoice_defaults");
+  const [defaults, setDefaults] = useLocalStorage<InvoiceDefaults>(key, {
+    declaration: DEFAULT_DECLARATION,
+    termsConditions: DEFAULT_TERMS,
+  });
 
   const saveDefaults = useCallback(
     (updates: Partial<InvoiceDefaults>) => {
       setDefaults((prev) => ({ ...prev, ...updates }));
-      notifyChange("gst_invoice_defaults");
+      notifyChange(key);
     },
-    [setDefaults],
+    [setDefaults, key],
   );
 
   return { defaults, saveDefaults };
 }
 
 export function useInvoiceCounter() {
+  const { activeBizId } = useBusinessContext();
+  const counterKey = bizKey(activeBizId, "invoice_counters");
   const [, setCounters] = useLocalStorage<Record<string, number>>(
-    "gst_invoice_counters",
+    counterKey,
     {},
   );
 
   // Read directly from localStorage to avoid stale closure double-increment
   const getNextNumber = useCallback(
     (type: string, prefix: string) => {
-      const stored = localStorage.getItem("gst_invoice_counters");
+      const stored = localStorage.getItem(counterKey);
       const counters: Record<string, number> = stored ? JSON.parse(stored) : {};
       const current = counters[type] || 0;
       const next = current + 1;
       setCounters((prev) => ({ ...prev, [type]: next }));
       return `${prefix}${String(next).padStart(4, "0")}`;
     },
-    [setCounters],
+    [setCounters, counterKey],
   );
 
   return { getNextNumber };
@@ -429,10 +439,9 @@ export function useInvoiceCounter() {
 // ─── Payroll Hooks ────────────────────────────────────────────────────────────
 
 export function useEmployees() {
-  const [employees, setEmployees] = useLocalStorage<Employee[]>(
-    "gst_employees",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "employees");
+  const [employees, setEmployees] = useLocalStorage<Employee[]>(key, []);
 
   const addEmployee = useCallback(
     (emp: Omit<Employee, "id" | "createdAt" | "updatedAt">) => {
@@ -443,10 +452,10 @@ export function useEmployees() {
         updatedAt: now(),
       };
       setEmployees((prev) => [newEmp, ...prev]);
-      notifyChange("gst_employees");
+      notifyChange(key);
       return newEmp.id;
     },
-    [setEmployees],
+    [setEmployees, key],
   );
 
   const updateEmployee = useCallback(
@@ -456,27 +465,26 @@ export function useEmployees() {
           e.id === id ? { ...e, ...updates, updatedAt: now() } : e,
         ),
       );
-      notifyChange("gst_employees");
+      notifyChange(key);
     },
-    [setEmployees],
+    [setEmployees, key],
   );
 
   const deleteEmployee = useCallback(
     (id: string) => {
       setEmployees((prev) => prev.filter((e) => e.id !== id));
-      notifyChange("gst_employees");
+      notifyChange(key);
     },
-    [setEmployees],
+    [setEmployees, key],
   );
 
   return { employees, addEmployee, updateEmployee, deleteEmployee };
 }
 
 export function useAttendanceRecords() {
-  const [records, setRecords] = useLocalStorage<AttendanceRecord[]>(
-    "gst_attendance",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "attendance");
+  const [records, setRecords] = useLocalStorage<AttendanceRecord[]>(key, []);
 
   const addRecord = useCallback(
     (r: Omit<AttendanceRecord, "id" | "createdAt" | "updatedAt">) => {
@@ -487,10 +495,10 @@ export function useAttendanceRecords() {
         updatedAt: now(),
       };
       setRecords((prev) => [newR, ...prev]);
-      notifyChange("gst_attendance");
+      notifyChange(key);
       return newR.id;
     },
-    [setRecords],
+    [setRecords, key],
   );
 
   const updateRecord = useCallback(
@@ -500,27 +508,26 @@ export function useAttendanceRecords() {
           r.id === id ? { ...r, ...updates, updatedAt: now() } : r,
         ),
       );
-      notifyChange("gst_attendance");
+      notifyChange(key);
     },
-    [setRecords],
+    [setRecords, key],
   );
 
   const deleteRecord = useCallback(
     (id: string) => {
       setRecords((prev) => prev.filter((r) => r.id !== id));
-      notifyChange("gst_attendance");
+      notifyChange(key);
     },
-    [setRecords],
+    [setRecords, key],
   );
 
   return { records, addRecord, updateRecord, deleteRecord };
 }
 
 export function useLeaveBalances() {
-  const [balances, setBalances] = useLocalStorage<LeaveBalance[]>(
-    "gst_leave_balances",
-    [],
-  );
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "leave_balances");
+  const [balances, setBalances] = useLocalStorage<LeaveBalance[]>(key, []);
 
   const addBalance = useCallback(
     (b: Omit<LeaveBalance, "id" | "createdAt" | "updatedAt">) => {
@@ -531,10 +538,10 @@ export function useLeaveBalances() {
         updatedAt: now(),
       };
       setBalances((prev) => [...prev, newB]);
-      notifyChange("gst_leave_balances");
+      notifyChange(key);
       return newB.id;
     },
-    [setBalances],
+    [setBalances, key],
   );
 
   const updateBalance = useCallback(
@@ -544,16 +551,18 @@ export function useLeaveBalances() {
           b.id === id ? { ...b, ...updates, updatedAt: now() } : b,
         ),
       );
-      notifyChange("gst_leave_balances");
+      notifyChange(key);
     },
-    [setBalances],
+    [setBalances, key],
   );
 
   return { balances, addBalance, updateBalance };
 }
 
 export function usePayrollRuns() {
-  const [runs, setRuns] = useLocalStorage<PayrollRun[]>("gst_payroll_runs", []);
+  const { activeBizId } = useBusinessContext();
+  const key = bizKey(activeBizId, "payroll_runs");
+  const [runs, setRuns] = useLocalStorage<PayrollRun[]>(key, []);
 
   const addRun = useCallback(
     (r: Omit<PayrollRun, "id" | "createdAt" | "updatedAt">) => {
@@ -564,10 +573,10 @@ export function usePayrollRuns() {
         updatedAt: now(),
       };
       setRuns((prev) => [newR, ...prev]);
-      notifyChange("gst_payroll_runs");
+      notifyChange(key);
       return newR.id;
     },
-    [setRuns],
+    [setRuns, key],
   );
 
   const updateRun = useCallback(
@@ -577,17 +586,17 @@ export function usePayrollRuns() {
           r.id === id ? { ...r, ...updates, updatedAt: now() } : r,
         ),
       );
-      notifyChange("gst_payroll_runs");
+      notifyChange(key);
     },
-    [setRuns],
+    [setRuns, key],
   );
 
   const deleteRun = useCallback(
     (id: string) => {
       setRuns((prev) => prev.filter((r) => r.id !== id));
-      notifyChange("gst_payroll_runs");
+      notifyChange(key);
     },
-    [setRuns],
+    [setRuns, key],
   );
 
   return { runs, addRun, updateRun, deleteRun };

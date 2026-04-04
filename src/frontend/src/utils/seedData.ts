@@ -446,20 +446,30 @@ export const SEED_TRANSACTIONS: BankTransaction[] = [
 ];
 
 export function seedInitialData() {
+  // Read active business ID for namespaced seeding
+  const activeBizId = localStorage.getItem("gst_active_business") || null;
+  const prefix = activeBizId ? `gst_${activeBizId}_` : "gst_";
+  const seedKey = activeBizId ? `gst_${activeBizId}_seeded` : "gst_seeded";
+
   // Only seed if the user has never saved any data (truly first-time load)
   // Guard: if a business profile already exists, the user has real data — never overwrite
+  if (localStorage.getItem(`${prefix}business_profile`)) return;
   if (localStorage.getItem("gst_business_profile")) return;
+  if (localStorage.getItem(seedKey)) return;
   if (localStorage.getItem("gst_seeded")) return;
 
-  localStorage.setItem("gst_invoices", JSON.stringify(SEED_INVOICES));
-  localStorage.setItem("gst_purchases", JSON.stringify(SEED_PURCHASES));
-  localStorage.setItem("gst_bank_accounts", JSON.stringify(SEED_BANK_ACCOUNTS));
+  localStorage.setItem(`${prefix}invoices`, JSON.stringify(SEED_INVOICES));
+  localStorage.setItem(`${prefix}purchases`, JSON.stringify(SEED_PURCHASES));
   localStorage.setItem(
-    "gst_bank_transactions",
+    `${prefix}bank_accounts`,
+    JSON.stringify(SEED_BANK_ACCOUNTS),
+  );
+  localStorage.setItem(
+    `${prefix}bank_transactions`,
     JSON.stringify(SEED_TRANSACTIONS),
   );
   localStorage.setItem(
-    "gst_invoice_counters",
+    `${prefix}invoice_counters`,
     JSON.stringify({
       sales: 3,
       service: 1,
@@ -468,5 +478,5 @@ export function seedInitialData() {
       journal: 0,
     }),
   );
-  localStorage.setItem("gst_seeded", "true");
+  localStorage.setItem(seedKey, "true");
 }

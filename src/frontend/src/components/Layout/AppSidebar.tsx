@@ -1,4 +1,4 @@
-import { BusinessHeader } from "@/components/BusinessHeader/BusinessHeader";
+import { BusinessSwitcher } from "@/components/BusinessSwitcher/BusinessSwitcher";
 import {
   Collapsible,
   CollapsibleContent,
@@ -219,6 +219,11 @@ const navItems: NavItem[] = [
       { label: "Backup & Restore", page: "backup-restore", icon: Database },
       { label: "Preferences", page: "settings-preferences", icon: Sliders },
       { label: "UAT Dashboard", page: "uat-dashboard", icon: FlaskConical },
+      {
+        label: "Business Manager",
+        page: "business-manager",
+        icon: Building2,
+      },
     ],
   },
 ];
@@ -245,7 +250,7 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <BusinessHeader variant="sidebar" />
+        <BusinessSwitcher onNavigate={onNavigate} />
       </SidebarHeader>
 
       <SidebarContent className="overflow-y-auto">
