@@ -171,16 +171,27 @@ function PageContent({
 function AuthenticatedApp() {
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
   const { businesses } = useBusinessContext();
+  // Track whether wizard has been explicitly completed by the user.
+  // Initializes to true for returning users who already have businesses.
+  const [wizardDone, setWizardDone] = useState(() => businesses.length > 0);
+
   // Activate cloud sync globally for authenticated users
   useCloudSync();
   // Apply per-business theme/font whenever active business changes
   useBusinessTheme();
 
-  // Show setup wizard if no businesses are configured yet
-  if (businesses.length === 0) {
+  const handleWizardComplete = (page: AppPage) => {
+    setWizardDone(true);
+    setCurrentPage(page);
+  };
+
+  // Show setup wizard only if no businesses configured AND wizard not yet completed.
+  // wizardDone prevents the wizard from unmounting when addBusiness() is called on
+  // Step 2 — the user must explicitly click "Go to Dashboard" on Step 3 to dismiss it.
+  if (!wizardDone && businesses.length === 0) {
     return (
       <>
-        <BusinessSetupWizard onComplete={setCurrentPage} />
+        <BusinessSetupWizard onComplete={handleWizardComplete} />
         <Toaster richColors />
       </>
     );
