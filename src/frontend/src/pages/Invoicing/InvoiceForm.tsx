@@ -338,6 +338,41 @@ export function InvoiceForm({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* ─── FY 2026-27 Invoice Series Reset Banner ─────────────────── */}
+      {(() => {
+        const dismissed =
+          localStorage.getItem("fy2627_invoice_reset_dismissed") === "true";
+        const now = new Date();
+        const fyStart = new Date("2026-04-01");
+        if (!dismissed && now >= fyStart) {
+          return (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <span className="mt-0.5 text-amber-500">⚠</span>
+              <div className="flex-1">
+                <strong>FY 2026-27:</strong> Invoice series must restart from 1
+                April 2026 as required by Rule 46 of CGST Rules. Ensure your
+                invoice numbering has been reset for the new financial year.
+              </div>
+              <button
+                type="button"
+                className="ml-2 text-amber-500 hover:text-amber-700"
+                onClick={() => {
+                  localStorage.setItem(
+                    "fy2627_invoice_reset_dismissed",
+                    "true",
+                  );
+                  window.dispatchEvent(new Event("storage"));
+                }}
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
         <div className="flex items-center gap-3">

@@ -88,6 +88,18 @@ export function GSTR1() {
     }
   })();
 
+  // Determine if business is high-turnover (>₹5 Crore) for HSN 6-digit requirement
+  const highTurnover = (() => {
+    try {
+      const profile = JSON.parse(
+        localStorage.getItem("gst_business_profile") || "{}",
+      );
+      return (profile.annualTurnover ?? 0) > 50000000;
+    } catch {
+      return false;
+    }
+  })();
+
   const handleFilingAction = () => {
     if (periodStatus.status === "not_filed") {
       const arn = randomArn();
@@ -194,6 +206,7 @@ export function GSTR1() {
         cgst: number;
         sgst: number;
         shortDigit: boolean;
+        mediumDigit: boolean;
       }
     >();
     for (const inv of allInvoices) {
@@ -217,6 +230,9 @@ export function GSTR1() {
             cgst: li.cgst,
             sgst: li.sgst,
             shortDigit: hsn.replace(/\D/g, "").length < 4,
+            mediumDigit:
+              hsn.replace(/\D/g, "").length >= 4 &&
+              hsn.replace(/\D/g, "").length < 6,
           });
         }
       }
@@ -860,11 +876,17 @@ export function GSTR1() {
                           <TableCell className="pl-4 font-mono text-sm">
                             <div className="flex items-center gap-1">
                               {row.hsn}
-                              {row.shortDigit && (
+                              {row.shortDigit ? (
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                                      <Badge
+                                        variant="destructive"
+                                        className="text-xs px-1 py-0 h-4 cursor-help"
+                                      >
+                                        Min. 4 digits required (Notif.
+                                        78/2020-CT)
+                                      </Badge>
                                     </TooltipTrigger>
                                     <TooltipContent className="text-xs max-w-xs">
                                       Minimum 4-digit HSN required (Notification
@@ -872,7 +894,23 @@ export function GSTR1() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                              )}
+                              ) : row.mediumDigit && highTurnover ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge className="text-xs px-1 py-0 h-4 cursor-help bg-amber-100 text-amber-800 hover:bg-amber-100">
+                                        6 digits required for turnover &gt;₹5Cr
+                                        (Notif. 78/2020-CT)
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs max-w-xs">
+                                      For annual turnover above ₹5 Crore,
+                                      6-digit HSN codes are mandatory as per
+                                      Notification 78/2020-CT.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : null}
                             </div>
                           </TableCell>
                           <TableCell className="text-sm max-w-[200px] truncate">

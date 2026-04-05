@@ -95,17 +95,25 @@ function calculateTDS(
   else taxOld = 112500 + Math.round((afterStd - 1000000) * 0.3);
   if (afterStd <= 500000) taxOld = 0;
 
+  // New Regime slabs — Finance Act 2025, FY 2026-27 (AY 2026-27)
   let taxNew = 0;
-  if (afterStd <= 300000) taxNew = 0;
-  else if (afterStd <= 600000) taxNew = Math.round((afterStd - 300000) * 0.05);
-  else if (afterStd <= 900000)
-    taxNew = 15000 + Math.round((afterStd - 600000) * 0.1);
-  else if (afterStd <= 1200000)
-    taxNew = 45000 + Math.round((afterStd - 900000) * 0.15);
-  else if (afterStd <= 1500000)
-    taxNew = 90000 + Math.round((afterStd - 1200000) * 0.2);
-  else taxNew = 150000 + Math.round((afterStd - 1500000) * 0.3);
-  if (afterStd <= 700000) taxNew = 0;
+  if (afterStd <= 400000) {
+    taxNew = 0;
+  } else if (afterStd <= 800000) {
+    taxNew = Math.round((afterStd - 400000) * 0.05);
+  } else if (afterStd <= 1200000) {
+    taxNew = 20000 + Math.round((afterStd - 800000) * 0.1);
+  } else if (afterStd <= 1600000) {
+    taxNew = 60000 + Math.round((afterStd - 1200000) * 0.15);
+  } else if (afterStd <= 2000000) {
+    taxNew = 120000 + Math.round((afterStd - 1600000) * 0.2);
+  } else if (afterStd <= 2400000) {
+    taxNew = 200000 + Math.round((afterStd - 2000000) * 0.25);
+  } else {
+    taxNew = 300000 + Math.round((afterStd - 2400000) * 0.3);
+  }
+  // 87A rebate new regime FY 2026-27: nil tax if taxable income <= 12L (rebate up to ₹60,000)
+  if (afterStd <= 1200000) taxNew = 0;
 
   const baseTax = taxRegime === "new" ? taxNew : taxOld;
   return Math.round(baseTax * 1.04);
@@ -182,10 +190,17 @@ export function StatutoryCompliance() {
       const avgMonthly = grossYTD / empLines.length;
       const annualProj = avgMonthly * 12;
       const regime: "old" | "new" = emp.taxRegime ?? "new";
-      const estimatedTax = calculateTDS(annualProj, regime, 50000);
+      const estimatedTax = calculateTDS(
+        annualProj,
+        regime,
+        regime === "new" ? 75000 : 50000,
+      );
       const monthlyTDS = Math.round(estimatedTax / 12);
       const tdsYTD = empLines.reduce((s, l) => s + l.tdsDeduction, 0);
-      const afterStd = Math.max(0, annualProj - 50000);
+      const afterStd = Math.max(
+        0,
+        annualProj - (regime === "new" ? 75000 : 50000),
+      );
       return {
         emp,
         grossYTD,
@@ -565,13 +580,14 @@ ${
         )}
         <p className="text-xs text-muted-foreground bg-muted/40 rounded p-2">
           <span className="font-semibold">
-            Section 192 TDS — FY 2025-26 Slab Rates:
+            Section 192 TDS — FY 2026-27 (AY 2026-27) Slab Rates:
           </span>{" "}
-          Standard deduction ₹50,000 applied to both regimes.{" "}
-          <strong>Old Regime:</strong> 5%/20%/30% slabs; 87A rebate (₹12,500) if
-          income ≤05L. <strong>New Regime (default):</strong> 5%/10%/15%/20%/30%
-          slabs; 87A rebate (₹25,000) if income ≤07L. 4% Health & Education Cess
-          included in both.
+          <strong>New Regime (Default):</strong> Nil ≤₹4L; 5% ₹4–8L; 10% ₹8–12L;
+          15% ₹12–16L; 20% ₹16–20L; 25% ₹20–24L; 30% &gt;₹24L. 87A rebate
+          (₹60,000) if taxable income ≤₹12L. Std deduction ₹75,000. 4% Health &
+          Education Cess. <strong>Old Regime:</strong> Nil ≤₹2.5L; 5% ₹2.5–5L;
+          20% ₹5–10L; 30% &gt;₹10L. 87A rebate (₹12,500) if income ≤₹5L. Std
+          deduction ₹50,000. 4% Cess.
         </p>
       </section>
 

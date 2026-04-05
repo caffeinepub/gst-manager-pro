@@ -82,7 +82,7 @@ function getProfessionalTax(grossMonthly: number, stateCode: string): number {
   }
 }
 
-// ─── TDS Section 192 — FY 2025-26 Slabs ────────────────────────────────────
+// ─── TDS Section 192 — FY 2026-27 (AY 2026-27) Slabs ──────────────────────────────────
 // Both old and new regime with correct 87A rebate and 4% health & education cess
 function calculateTDS(
   annualProjection: number,
@@ -105,23 +105,25 @@ function calculateTDS(
   // 87A rebate old regime: tax nil if income <= 5L
   if (afterStdDeduction <= 500000) taxOld = 0;
 
-  // New Regime slabs (Finance Act 2023)
+  // New Regime slabs — Finance Act 2025, FY 2026-27 (AY 2026-27)
   let taxNew = 0;
-  if (afterStdDeduction <= 300000) {
+  if (afterStdDeduction <= 400000) {
     taxNew = 0;
-  } else if (afterStdDeduction <= 600000) {
-    taxNew = Math.round((afterStdDeduction - 300000) * 0.05);
-  } else if (afterStdDeduction <= 900000) {
-    taxNew = 15000 + Math.round((afterStdDeduction - 600000) * 0.1);
+  } else if (afterStdDeduction <= 800000) {
+    taxNew = Math.round((afterStdDeduction - 400000) * 0.05);
   } else if (afterStdDeduction <= 1200000) {
-    taxNew = 45000 + Math.round((afterStdDeduction - 900000) * 0.15);
-  } else if (afterStdDeduction <= 1500000) {
-    taxNew = 90000 + Math.round((afterStdDeduction - 1200000) * 0.2);
+    taxNew = 20000 + Math.round((afterStdDeduction - 800000) * 0.1);
+  } else if (afterStdDeduction <= 1600000) {
+    taxNew = 60000 + Math.round((afterStdDeduction - 1200000) * 0.15);
+  } else if (afterStdDeduction <= 2000000) {
+    taxNew = 120000 + Math.round((afterStdDeduction - 1600000) * 0.2);
+  } else if (afterStdDeduction <= 2400000) {
+    taxNew = 200000 + Math.round((afterStdDeduction - 2000000) * 0.25);
   } else {
-    taxNew = 150000 + Math.round((afterStdDeduction - 1500000) * 0.3);
+    taxNew = 300000 + Math.round((afterStdDeduction - 2400000) * 0.3);
   }
-  // 87A rebate new regime: tax nil if income <= 7L
-  if (afterStdDeduction <= 700000) taxNew = 0;
+  // 87A rebate new regime FY 2026-27: nil tax if taxable income <= 12L (rebate up to ₹60,000)
+  if (afterStdDeduction <= 1200000) taxNew = 0;
 
   // 4% Health & Education Cess
   const baseTax = taxRegime === "new" ? taxNew : taxOld;
@@ -251,7 +253,7 @@ export function ProcessPayroll() {
       const taxableAnnual = Math.max(0, annualProjection - empPfContribAnnual);
       const regime: "old" | "new" = emp.taxRegime ?? "new";
       const annualTDS = emp.tdsSectionApplicable
-        ? calculateTDS(taxableAnnual, regime, 50000)
+        ? calculateTDS(taxableAnnual, regime, regime === "new" ? 75000 : 50000)
         : 0;
       const tdsDeduction = Math.round(annualTDS / 12);
 
