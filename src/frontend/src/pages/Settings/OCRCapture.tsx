@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
-import { useParties } from "@/hooks/useQueries";
+import { useParties } from "@/hooks/useGSTStore";
 import type { InvoiceLineItem, InvoiceType } from "@/types/gst";
 import { GST_RATES } from "@/types/gst";
 import {
@@ -785,7 +785,7 @@ export function OCRCapture() {
 
   const { addInvoice } = useInvoices();
   const { addPurchase } = usePurchases();
-  const { data: parties = [] } = useParties();
+  const { parties = [] } = useParties();
 
   const processFile = async (file: File) => {
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];

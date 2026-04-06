@@ -19,14 +19,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import { useActor } from "@/hooks/useActor";
 import { useBusinessContext } from "@/hooks/useBusinessContext";
 import {
   useApiSettings,
   useBankAccounts,
   useBankTransactions,
   useInvoices,
+  useItems,
   useJournalEntries,
+  useParties,
   usePurchases,
+  useTaxRates,
 } from "@/hooks/useGSTStore";
 import {
   AlertCircle,
@@ -1215,6 +1219,11 @@ export function AutomatedUAT() {
   const { accounts } = useBankAccounts();
   const { transactions } = useBankTransactions();
   const [apiSettings] = useApiSettings();
+  const { parties, addParty } = useParties();
+  const { items, addItem } = useItems();
+  const { taxRates, addTaxRate } = useTaxRates();
+  const { actor } = useActor();
+  const activeBizId = activeBusiness?.id ?? "";
 
   const [seedDone, setSeedDone] = useState(false);
   const [running, setRunning] = useState(false);
@@ -1225,6 +1234,10 @@ export function AutomatedUAT() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [runTimestamp, setRunTimestamp] = useState("");
   const abortRef = useRef(false);
+
+  // Suppress unused variable warnings
+  void actor;
+  void activeBizId;
 
   // Build test data object from backend hooks
   const testData: TestData = {
@@ -1244,12 +1257,139 @@ export function AutomatedUAT() {
     );
   const totalTests = allTests.length;
 
-  const handleSeedData = () => {
+  const handleSeedData = async () => {
     try {
-      // Inject seed data via backend hooks instead of localStorage
-      // Note: injectSeedData() still writes to localStorage for legacy keys (tax rates, items, parties)
-      // The invoices/purchases/journal/bank data is now injected via the backend store
-      injectSeedData(); // writes legacy localStorage keys for tax rates, items, parties
+      // Seed parties if none exist
+      if (parties.length === 0) {
+        addParty({
+          name: "Tata Consultancy Services Ltd",
+          gstin: "27AAACT2727Q1ZW",
+          pan: "AAACT2727Q",
+          partyType: "customer",
+          stateCode: "27",
+          billingAddress: "TCS House, Fort, Mumbai",
+          shippingAddress: "",
+          email: "billing@tcs.com",
+          phone: "9820000001",
+          isActive: true,
+        });
+        addParty({
+          name: "Reliance Industries Ltd",
+          gstin: "24AAACP4029D1ZN",
+          pan: "AAACP4029D",
+          partyType: "customer",
+          stateCode: "24",
+          billingAddress: "Maker Chambers, Mumbai",
+          shippingAddress: "",
+          email: "billing@ril.com",
+          phone: "9820000002",
+          isActive: true,
+        });
+        addParty({
+          name: "Amazon Web Services India",
+          gstin: "29AANCA7727Q1ZY",
+          pan: "AANCA7727Q",
+          partyType: "vendor",
+          stateCode: "29",
+          billingAddress: "Prestige Shantiniketan, Bangalore",
+          shippingAddress: "",
+          email: "invoice@aws.in",
+          phone: "9820000003",
+          isActive: true,
+        });
+        addParty({
+          name: "Microsoft India Pvt Ltd",
+          gstin: "07AAACM1756M1ZG",
+          pan: "AAACM1756M",
+          partyType: "vendor",
+          stateCode: "07",
+          billingAddress: "DLF Cyber City, Gurgaon",
+          shippingAddress: "",
+          email: "invoice@microsoft.in",
+          phone: "9820000004",
+          isActive: true,
+        });
+      }
+      // Seed items if none exist
+      if (items.length === 0) {
+        addItem({
+          name: "IT Consulting Services",
+          description: "Software consulting and IT advisory",
+          hsnSacCode: "998314",
+          itemType: "service",
+          unit: 1,
+          gstRate: 18,
+          cessPercent: 0,
+          sellingPrice: 5000,
+          purchasePrice: 0,
+          openingStock: 0,
+          isActive: true,
+        });
+        addItem({
+          name: "Cloud Infrastructure Setup",
+          description: "AWS/Azure cloud configuration",
+          hsnSacCode: "998315",
+          itemType: "service",
+          unit: 1,
+          gstRate: 18,
+          cessPercent: 0,
+          sellingPrice: 25000,
+          purchasePrice: 0,
+          openingStock: 0,
+          isActive: true,
+        });
+        addItem({
+          name: "Network Switch 24-Port",
+          description: "Enterprise grade managed switch",
+          hsnSacCode: "85176200",
+          itemType: "goods",
+          unit: 1,
+          gstRate: 18,
+          cessPercent: 0,
+          sellingPrice: 15000,
+          purchasePrice: 12000,
+          openingStock: 10,
+          isActive: true,
+        });
+      }
+      // Seed tax rates if none exist
+      if (taxRates.length === 0) {
+        addTaxRate({
+          name: "GST 18%",
+          description: "Standard GST rate for IT services",
+          gstRatePercent: 18,
+          cessPercent: 0,
+          isExempt: false,
+          isRcmApplicable: false,
+          isDefault: true,
+        });
+        addTaxRate({
+          name: "GST 12%",
+          description: "Reduced GST rate",
+          gstRatePercent: 12,
+          cessPercent: 0,
+          isExempt: false,
+          isRcmApplicable: false,
+        });
+        addTaxRate({
+          name: "GST 5%",
+          description: "Essential goods rate",
+          gstRatePercent: 5,
+          cessPercent: 0,
+          isExempt: false,
+          isRcmApplicable: false,
+        });
+        addTaxRate({
+          name: "Nil GST",
+          description: "Zero rated / exempt",
+          gstRatePercent: 0,
+          cessPercent: 0,
+          isExempt: true,
+          isRcmApplicable: false,
+        });
+      }
+      // Also inject legacy localStorage data for backward compat with existing tests
+      injectSeedData();
       setSeedDone(true);
       setResults([]);
       setFailureInfo(null);

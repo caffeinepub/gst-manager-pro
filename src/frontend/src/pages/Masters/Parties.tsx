@@ -1,4 +1,3 @@
-import type { Party } from "@/backend.d";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,14 +36,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs } from "@/hooks/useGSTStore";
-import {
-  PartyType,
-  useAddParty,
-  useDeleteParty,
-  useParties,
-  useUpdateParty,
-} from "@/hooks/useQueries";
+import { useAuditLogs, useParties } from "@/hooks/useGSTStore";
+import type { GSTParty } from "@/hooks/useGSTStore";
 import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
 import { INDIAN_STATES } from "@/types/gst";
 import {
@@ -63,12 +56,12 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
-const emptyParty: Omit<Party, "id"> = {
+const emptyParty: Omit<GSTParty, "id" | "createdAt" | "updatedAt"> = {
   name: "",
   gstin: "",
   pan: "",
-  partyType: PartyType.customer,
-  stateCode: BigInt(27),
+  partyType: "customer",
+  stateCode: "27",
   billingAddress: "",
   shippingAddress: "",
   email: "",
@@ -77,18 +70,17 @@ const emptyParty: Omit<Party, "id"> = {
 };
 
 export function Parties() {
-  const { data: parties = [], isLoading } = useParties();
-  const { mutate: addParty, isPending: isAdding } = useAddParty();
-  const { mutate: updateParty, isPending: isUpdating } = useUpdateParty();
-  const { mutate: deleteParty, isPending: isDeleting } = useDeleteParty();
-
+  const { parties, addParty, updateParty, deleteParty, isLoading } =
+    useParties();
   const { addLog } = useAuditLogs();
 
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
-  const [editingParty, setEditingParty] = useState<Party | null>(null);
-  const [deleteId, setDeleteId] = useState<bigint | null>(null);
-  const [form, setForm] = useState<Omit<Party, "id">>({ ...emptyParty });
+  const [editingParty, setEditingParty] = useState<GSTParty | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<
+    Omit<GSTParty, "id" | "createdAt" | "updatedAt">
+  >({ ...emptyParty });
   const [filterType, setFilterType] = useState("all");
 
   // GSTIN verification state
@@ -122,9 +114,20 @@ export function Parties() {
     setShowDialog(true);
   };
 
-  const openEdit = (party: Party) => {
+  const openEdit = (party: GSTParty) => {
     setEditingParty(party);
-    setForm({ ...party });
+    setForm({
+      name: party.name,
+      gstin: party.gstin,
+      pan: party.pan,
+      partyType: party.partyType,
+      stateCode: party.stateCode,
+      billingAddress: party.billingAddress,
+      shippingAddress: party.shippingAddress,
+      email: party.email,
+      phone: party.phone,
+      isActive: party.isActive,
+    });
     setGstinValidResult(null);
     setPanValidResult(null);
     setShowDialog(true);
@@ -170,7 +173,10 @@ export function Parties() {
       if (result.stateCode) {
         const numCode = Number.parseInt(result.stateCode, 10);
         if (!Number.isNaN(numCode)) {
-          setForm((p) => ({ ...p, stateCode: BigInt(numCode) }));
+          setForm((p) => ({
+            ...p,
+            stateCode: String(numCode).padStart(2, "0"),
+          }));
         }
       }
 
@@ -259,50 +265,36 @@ export function Parties() {
     }
 
     if (editingParty) {
-      updateParty(
-        { id: editingParty.id, party: { ...form, id: editingParty.id } },
-        {
-          onSuccess: () => {
-            toast.success("Party updated");
-            addLog({
-              action: "update",
-              entity: "Party",
-              entityId: String(editingParty?.id ?? ""),
-              description: `Party "${form.name}" updated`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to update party"),
-        },
-      );
+      updateParty(editingParty.id, form);
+      addLog({
+        action: "update",
+        entity: "Party",
+        entityId: editingParty.id,
+        description: `Party "${form.name}" updated`,
+      });
+      toast.success("Party updated");
+      setShowDialog(false);
     } else {
-      addParty(
-        { ...form, id: BigInt(0) },
-        {
-          onSuccess: () => {
-            toast.success("Party added");
-            addLog({
-              action: "create",
-              entity: "Party",
-              entityId: "",
-              description: `Party "${form.name}" created`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to add party"),
-        },
-      );
+      addParty(form);
+      addLog({
+        action: "create",
+        entity: "Party",
+        entityId: "",
+        description: `Party "${form.name}" created`,
+      });
+      toast.success("Party added");
+      setShowDialog(false);
     }
   };
 
-  const partyTypeBadge = (type: PartyType) => {
-    if (type === PartyType.customer)
+  const partyTypeBadge = (type: string) => {
+    if (type === "customer")
       return (
         <Badge className="text-xs bg-primary/20 text-primary border-primary/30">
           Customer
         </Badge>
       );
-    if (type === PartyType.vendor)
+    if (type === "vendor")
       return (
         <Badge variant="secondary" className="text-xs">
           Vendor
@@ -362,9 +354,9 @@ export function Parties() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value={PartyType.customer}>Customers</SelectItem>
-              <SelectItem value={PartyType.vendor}>Vendors</SelectItem>
-              <SelectItem value={PartyType.both}>Both</SelectItem>
+              <SelectItem value="customer">Customers</SelectItem>
+              <SelectItem value="vendor">Vendors</SelectItem>
+              <SelectItem value="both">Both</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -415,11 +407,11 @@ export function Parties() {
                 <TableBody>
                   {filtered.map((party, idx) => {
                     const state = INDIAN_STATES.find(
-                      (s) => BigInt(s.code) === party.stateCode,
+                      (s) => s.code === party.stateCode,
                     );
                     return (
                       <TableRow
-                        key={String(party.id)}
+                        key={party.id}
                         data-ocid={`party.item.${idx + 1}`}
                       >
                         <TableCell className="pl-4 font-medium">
@@ -505,16 +497,19 @@ export function Parties() {
                 <Select
                   value={form.partyType}
                   onValueChange={(v) =>
-                    setForm((p) => ({ ...p, partyType: v as PartyType }))
+                    setForm((p) => ({
+                      ...p,
+                      partyType: v as GSTParty["partyType"],
+                    }))
                   }
                 >
                   <SelectTrigger data-ocid="party.type.select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={PartyType.customer}>Customer</SelectItem>
-                    <SelectItem value={PartyType.vendor}>Vendor</SelectItem>
-                    <SelectItem value={PartyType.both}>Both</SelectItem>
+                    <SelectItem value="customer">Customer</SelectItem>
+                    <SelectItem value="vendor">Vendor</SelectItem>
+                    <SelectItem value="both">Both</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -535,8 +530,8 @@ export function Parties() {
                       }));
                       setGstinValidResult(null);
                     }}
-                    placeholder="GSTIN (15 chars)"
-                    className="font-mono flex-1"
+                    placeholder="22AAAAA0000A1Z5"
+                    className="font-mono text-sm"
                     maxLength={15}
                     data-ocid="party.gstin.input"
                   />
@@ -544,15 +539,15 @@ export function Parties() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => void validateGstin()}
+                    className="shrink-0"
+                    onClick={validateGstin}
                     disabled={gstinValidating || !form.gstin}
-                    data-ocid="party.gstin_validate.button"
-                    className="shrink-0 gap-1.5 text-xs"
+                    data-ocid="party.gstin_verify.button"
                   >
                     {gstinValidating ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <ShieldCheck className="w-3 h-3" />
+                      <ShieldCheck className="w-3.5 h-3.5" />
                     )}
                     Verify
                   </Button>
@@ -593,8 +588,8 @@ export function Parties() {
                       }));
                       setPanValidResult(null);
                     }}
-                    placeholder="PAN (10 chars)"
-                    className="font-mono flex-1"
+                    placeholder="AAAAA0000A"
+                    className="font-mono text-sm"
                     maxLength={10}
                     data-ocid="party.pan.input"
                   />
@@ -602,15 +597,15 @@ export function Parties() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => void validatePan()}
+                    className="shrink-0"
+                    onClick={validatePan}
                     disabled={panValidating || !form.pan}
-                    data-ocid="party.pan_validate.button"
-                    className="shrink-0 gap-1.5 text-xs"
+                    data-ocid="party.pan_verify.button"
                   >
                     {panValidating ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <User className="w-3 h-3" />
+                      <User className="w-3.5 h-3.5" />
                     )}
                     Verify
                   </Button>
@@ -638,9 +633,9 @@ export function Parties() {
               <div className="space-y-1.5">
                 <Label>State</Label>
                 <Select
-                  value={String(form.stateCode).padStart(2, "0")}
+                  value={form.stateCode}
                   onValueChange={(v) =>
-                    setForm((p) => ({ ...p, stateCode: BigInt(v) }))
+                    setForm((p) => ({ ...p, stateCode: v }))
                   }
                 >
                   <SelectTrigger data-ocid="party.state.select">
@@ -720,14 +715,7 @@ export function Parties() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={isAdding || isUpdating}
-                data-ocid="party.submit_button"
-              >
-                {(isAdding || isUpdating) && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
+              <Button type="submit" data-ocid="party.submit_button">
                 {editingParty ? "Update" : "Add Party"}
               </Button>
             </DialogFooter>
@@ -757,26 +745,18 @@ export function Parties() {
               data-ocid="party.delete.confirm_button"
               onClick={() => {
                 if (deleteId !== null) {
-                  deleteParty(deleteId, {
-                    onSuccess: () => {
-                      toast.success("Party deleted");
-                      addLog({
-                        action: "delete",
-                        entity: "Party",
-                        entityId: String(deleteId ?? ""),
-                        description: "Party deleted",
-                      });
-                      setDeleteId(null);
-                    },
-                    onError: () => toast.error("Failed to delete party"),
+                  deleteParty(deleteId);
+                  addLog({
+                    action: "delete",
+                    entity: "Party",
+                    entityId: deleteId,
+                    description: "Party deleted",
                   });
+                  toast.success("Party deleted");
+                  setDeleteId(null);
                 }
               }}
-              disabled={isDeleting}
             >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

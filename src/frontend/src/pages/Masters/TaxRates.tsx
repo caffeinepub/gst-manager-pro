@@ -1,4 +1,3 @@
-import type { TaxRate } from "@/backend.d";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,38 +30,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuditLogs } from "@/hooks/useGSTStore";
-import {
-  useAddTaxRate,
-  useDeleteTaxRate,
-  useTaxRates,
-  useUpdateTaxRate,
-} from "@/hooks/useQueries";
+import { useAuditLogs, useTaxRates } from "@/hooks/useGSTStore";
+import type { GSTTaxRate } from "@/hooks/useGSTStore";
 import { Edit, Loader2, Lock, Plus, ReceiptText, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-const emptyRate: Omit<TaxRate, "id"> = {
+const emptyRate: Omit<GSTTaxRate, "id" | "createdAt" | "updatedAt"> = {
   name: "",
   description: "",
-  gstRatePercent: BigInt(18),
-  cessPercent: BigInt(0),
+  gstRatePercent: 18,
+  cessPercent: 0,
   isExempt: false,
   isRcmApplicable: false,
 };
 
 export function TaxRates() {
-  const { data: taxRates = [], isLoading } = useTaxRates();
-  const { mutate: addTaxRate, isPending: isAdding } = useAddTaxRate();
-  const { mutate: updateTaxRate, isPending: isUpdating } = useUpdateTaxRate();
-  const { mutate: deleteTaxRate, isPending: isDeleting } = useDeleteTaxRate();
-
+  const { taxRates, addTaxRate, updateTaxRate, deleteTaxRate, isLoading } =
+    useTaxRates();
   const { addLog } = useAuditLogs();
 
   const [showDialog, setShowDialog] = useState(false);
-  const [editingRate, setEditingRate] = useState<TaxRate | null>(null);
-  const [deleteId, setDeleteId] = useState<bigint | null>(null);
-  const [form, setForm] = useState<Omit<TaxRate, "id">>({ ...emptyRate });
+  const [editingRate, setEditingRate] = useState<GSTTaxRate | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<
+    Omit<GSTTaxRate, "id" | "createdAt" | "updatedAt">
+  >({ ...emptyRate });
 
   const openAdd = () => {
     setEditingRate(null);
@@ -70,9 +63,17 @@ export function TaxRates() {
     setShowDialog(true);
   };
 
-  const openEdit = (rate: TaxRate) => {
+  const openEdit = (rate: GSTTaxRate) => {
     setEditingRate(rate);
-    setForm({ ...rate });
+    setForm({
+      name: rate.name,
+      description: rate.description,
+      gstRatePercent: rate.gstRatePercent,
+      cessPercent: rate.cessPercent,
+      isExempt: rate.isExempt,
+      isRcmApplicable: rate.isRcmApplicable,
+      isDefault: rate.isDefault,
+    });
     setShowDialog(true);
   };
 
@@ -84,39 +85,25 @@ export function TaxRates() {
     }
 
     if (editingRate) {
-      updateTaxRate(
-        { id: editingRate.id, taxRate: { ...form, id: editingRate.id } },
-        {
-          onSuccess: () => {
-            toast.success("Tax rate updated");
-            addLog({
-              action: "update",
-              entity: "TaxRate",
-              entityId: String(editingRate?.id ?? ""),
-              description: `Tax rate "${form.name}" updated`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to update tax rate"),
-        },
-      );
+      updateTaxRate(editingRate.id, form);
+      addLog({
+        action: "update",
+        entity: "TaxRate",
+        entityId: editingRate.id,
+        description: `Tax rate "${form.name}" updated`,
+      });
+      toast.success("Tax rate updated");
+      setShowDialog(false);
     } else {
-      addTaxRate(
-        { ...form, id: BigInt(0) },
-        {
-          onSuccess: () => {
-            toast.success("Tax rate added");
-            addLog({
-              action: "create",
-              entity: "TaxRate",
-              entityId: "",
-              description: `Tax rate "${form.name}" created`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to add tax rate"),
-        },
-      );
+      addTaxRate(form);
+      addLog({
+        action: "create",
+        entity: "TaxRate",
+        entityId: "",
+        description: `Tax rate "${form.name}" created`,
+      });
+      toast.success("Tax rate added");
+      setShowDialog(false);
     }
   };
 
@@ -249,17 +236,17 @@ export function TaxRates() {
                 <TableBody>
                   {taxRates.map((rate, idx) => (
                     <TableRow
-                      key={String(rate.id)}
+                      key={rate.id}
                       data-ocid={`taxrate.item.${idx + 1}`}
                     >
                       <TableCell className="pl-4 font-medium">
                         {rate.name}
                       </TableCell>
                       <TableCell className="font-numeric text-sm">
-                        {String(rate.gstRatePercent)}%
+                        {rate.gstRatePercent}%
                       </TableCell>
                       <TableCell className="font-numeric text-sm">
-                        {String(rate.cessPercent)}%
+                        {rate.cessPercent}%
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -338,11 +325,11 @@ export function TaxRates() {
                 <Label>GST Rate (%)</Label>
                 <Input
                   type="number"
-                  value={String(form.gstRatePercent)}
+                  value={form.gstRatePercent}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      gstRatePercent: BigInt(e.target.value || "0"),
+                      gstRatePercent: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="18"
@@ -355,11 +342,11 @@ export function TaxRates() {
                 <Label>Cess (%)</Label>
                 <Input
                   type="number"
-                  value={String(form.cessPercent)}
+                  value={form.cessPercent}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      cessPercent: BigInt(e.target.value || "0"),
+                      cessPercent: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="0"
@@ -409,14 +396,7 @@ export function TaxRates() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={isAdding || isUpdating}
-                data-ocid="taxrate.submit_button"
-              >
-                {(isAdding || isUpdating) && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
+              <Button type="submit" data-ocid="taxrate.submit_button">
                 {editingRate ? "Update" : "Add"}
               </Button>
             </DialogFooter>
@@ -444,25 +424,18 @@ export function TaxRates() {
               data-ocid="taxrate.delete.confirm_button"
               onClick={() => {
                 if (deleteId !== null) {
-                  deleteTaxRate(deleteId, {
-                    onSuccess: () => {
-                      addLog({
-                        action: "delete",
-                        entity: "TaxRate",
-                        entityId: String(deleteId ?? ""),
-                        description: "Tax rate deleted",
-                      });
-                      toast.success("Tax rate deleted");
-                      setDeleteId(null);
-                    },
-                    onError: () => toast.error("Failed to delete"),
+                  deleteTaxRate(deleteId);
+                  addLog({
+                    action: "delete",
+                    entity: "TaxRate",
+                    entityId: deleteId,
+                    description: "Tax rate deleted",
                   });
+                  toast.success("Tax rate deleted");
+                  setDeleteId(null);
                 }
               }}
             >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

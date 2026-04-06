@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApiSettings } from "@/hooks/useGSTStore";
+import { useApiSettings, useParties } from "@/hooks/useGSTStore";
+import type { GSTParty } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   type GSTINVerificationResult,
@@ -516,6 +517,7 @@ export function GSTINPANVerification({
   onNavigate,
 }: GSTINPANVerificationProps) {
   const [apiSettings] = useApiSettings();
+  const { parties, addParty, updateParty } = useParties();
   const [gstinInput, setGstinInput] = useState("");
   const [panInput, setPanInput] = useState("");
   const [gstinLoading, setGstinLoading] = useState(false);
@@ -534,19 +536,6 @@ export function GSTINPANVerification({
     "pan_lookup_history",
     [],
   );
-
-  const parties = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("parties") ?? "[]") as Array<{
-        id?: string;
-        name?: string;
-        gstin?: string;
-        pan?: string;
-      }>;
-    } catch {
-      return [];
-    }
-  })();
 
   const handleVerifyGSTIN = async () => {
     const value = gstinInput.trim().toUpperCase();
@@ -636,29 +625,43 @@ export function GSTINPANVerification({
   ) => {
     if (!gstinResult?.success) return;
     try {
-      const storedParties = JSON.parse(
-        localStorage.getItem("parties") ?? "[]",
-      ) as Array<Record<string, unknown>>;
       if (action === "update" && partyId) {
-        const updated = storedParties.map((p) =>
-          p.id === partyId
-            ? {
-                ...p,
-                name: p.name || gstinResult.legalName || gstinResult.tradeName,
-                gstin: gstinResult.gstin,
-                stateCode: gstinResult.stateCode
-                  ? BigInt(Number.parseInt(gstinResult.stateCode, 10))
-                  : p.stateCode,
-              }
-            : p,
-        );
-        localStorage.setItem("parties", JSON.stringify(updated));
+        updateParty(partyId, {
+          name:
+            parties.find((p) => p.id === partyId)?.name ||
+            gstinResult.legalName ||
+            gstinResult.tradeName ||
+            "",
+          gstin: gstinResult.gstin || "",
+          stateCode: gstinResult.stateCode
+            ? String(Number.parseInt(gstinResult.stateCode, 10)).padStart(
+                2,
+                "0",
+              )
+            : (parties.find((p) => p.id === partyId)?.stateCode ?? "27"),
+          gstinVerified: true,
+        });
         toast.success("Party updated with verified GSTIN data");
       } else {
-        toast.info(
-          `Navigate to Masters > Parties > Add Party to create a new party with GSTIN: ${gstinResult.gstin}`,
-        );
-        onNavigate("masters-parties");
+        // Create new party from GSTIN data
+        const stateCode = gstinResult.stateCode
+          ? String(Number.parseInt(gstinResult.stateCode, 10)).padStart(2, "0")
+          : "27";
+        const newParty: Omit<GSTParty, "id" | "createdAt" | "updatedAt"> = {
+          name: gstinResult.legalName || gstinResult.tradeName || "",
+          gstin: gstinResult.gstin || "",
+          pan: "",
+          partyType: "both",
+          stateCode,
+          billingAddress: "",
+          shippingAddress: "",
+          email: "",
+          phone: "",
+          isActive: true,
+          gstinVerified: true,
+        };
+        addParty(newParty);
+        toast.success("Party created with verified GSTIN data");
       }
     } catch {
       toast.error("Failed to save party");
@@ -671,20 +674,15 @@ export function GSTINPANVerification({
   ) => {
     if (!panResult?.success) return;
     try {
-      const storedParties = JSON.parse(
-        localStorage.getItem("parties") ?? "[]",
-      ) as Array<Record<string, unknown>>;
       if (action === "update" && partyId) {
-        const updated = storedParties.map((p) =>
-          p.id === partyId
-            ? {
-                ...p,
-                pan: panResult.pan,
-                name: p.name || panResult.panHolderName,
-              }
-            : p,
-        );
-        localStorage.setItem("parties", JSON.stringify(updated));
+        updateParty(partyId, {
+          pan: panResult.pan || "",
+          name:
+            parties.find((p) => p.id === partyId)?.name ||
+            panResult.panHolderName ||
+            "",
+          panVerified: true,
+        });
         toast.success("Party updated with verified PAN data");
       } else {
         toast.info(

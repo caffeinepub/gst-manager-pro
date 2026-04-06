@@ -1,4 +1,3 @@
-import type { Item } from "@/backend.d";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,8 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { GSTItem } from "@/hooks/useGSTStore";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
-import { useItems } from "@/hooks/useQueries";
+import { useItems } from "@/hooks/useGSTStore";
 import { formatINR } from "@/utils/formatting";
 import { Download, Loader2, Package, Search } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -31,14 +31,14 @@ interface StockRow {
 }
 
 function computeStockRows(
-  items: Item[],
+  items: GSTItem[],
   invoices: ReturnType<typeof useInvoices>["invoices"],
   purchases: ReturnType<typeof usePurchases>["purchases"],
 ): StockRow[] {
   return items.map((item) => {
-    const itemIdStr = String(item.id);
-    const openingStock = Number(item.openingStock);
-    const sellingPrice = Number(item.sellingPrice) / 100;
+    const itemIdStr = item.id;
+    const openingStock = item.openingStock;
+    const sellingPrice = item.sellingPrice;
 
     const unitsSold = invoices
       .filter(
@@ -74,7 +74,7 @@ function computeStockRows(
       closingStock,
       stockValue,
       sellingPrice,
-      unit: Number(item.unit),
+      unit: item.unit,
     };
   });
 }
@@ -88,7 +88,7 @@ function stockBadgeVariant(
 }
 
 export function StockSummary() {
-  const { data: items = [], isLoading } = useItems();
+  const { items = [], isLoading } = useItems();
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
   const [search, setSearch] = useState("");

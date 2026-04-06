@@ -1034,3 +1034,180 @@ export function useApiSettings() {
 
   return [settings, setSettings] as const;
 }
+
+// ─── Frontend Party (string ID, per-business) ─────────────────────────────────
+
+export interface GSTParty {
+  id: string;
+  name: string;
+  gstin: string;
+  pan: string;
+  partyType: "customer" | "vendor" | "both";
+  stateCode: string;
+  billingAddress: string;
+  shippingAddress: string;
+  email: string;
+  phone: string;
+  isActive: boolean;
+  panVerified?: boolean;
+  gstinVerified?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useParties() {
+  const {
+    data: parties,
+    save,
+    remove,
+    isLoading,
+  } = useEntityList<GSTParty>("parties");
+
+  const addParty = useCallback(
+    (p: Omit<GSTParty, "id" | "createdAt" | "updatedAt">) => {
+      const newP: GSTParty = {
+        ...p,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      save(newP);
+      return newP.id;
+    },
+    [save],
+  );
+
+  const updateParty = useCallback(
+    (id: string, updates: Partial<GSTParty>) => {
+      const existing = parties.find((p) => p.id === id);
+      if (!existing) return;
+      save({ ...existing, ...updates, updatedAt: now() });
+    },
+    [parties, save],
+  );
+
+  const deleteParty = useCallback(
+    (id: string) => {
+      remove(id);
+    },
+    [remove],
+  );
+
+  return { parties, addParty, updateParty, deleteParty, isLoading };
+}
+
+// ─── Frontend Item (string ID, per-business) ──────────────────────────────────
+
+export interface GSTItem {
+  id: string;
+  name: string;
+  description: string;
+  hsnSacCode: string;
+  itemType: "goods" | "service";
+  unit: number;
+  gstRate: number;
+  cessPercent: number;
+  sellingPrice: number;
+  purchasePrice: number;
+  openingStock: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useItems() {
+  const {
+    data: items,
+    save,
+    remove,
+    isLoading,
+  } = useEntityList<GSTItem>("items");
+
+  const addItem = useCallback(
+    (i: Omit<GSTItem, "id" | "createdAt" | "updatedAt">) => {
+      const newI: GSTItem = {
+        ...i,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      save(newI);
+      return newI.id;
+    },
+    [save],
+  );
+
+  const updateItem = useCallback(
+    (id: string, updates: Partial<GSTItem>) => {
+      const existing = items.find((i) => i.id === id);
+      if (!existing) return;
+      save({ ...existing, ...updates, updatedAt: now() });
+    },
+    [items, save],
+  );
+
+  const deleteItem = useCallback(
+    (id: string) => {
+      remove(id);
+    },
+    [remove],
+  );
+
+  return { items, addItem, updateItem, deleteItem, isLoading };
+}
+
+// ─── Frontend TaxRate (string ID, per-business) ───────────────────────────────
+
+export interface GSTTaxRate {
+  id: string;
+  name: string;
+  description: string;
+  gstRatePercent: number;
+  cessPercent: number;
+  isExempt: boolean;
+  isRcmApplicable: boolean;
+  isDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useTaxRates() {
+  const {
+    data: taxRates,
+    save,
+    remove,
+    isLoading,
+  } = useEntityList<GSTTaxRate>("tax_rates");
+
+  const addTaxRate = useCallback(
+    (r: Omit<GSTTaxRate, "id" | "createdAt" | "updatedAt">) => {
+      const newR: GSTTaxRate = {
+        ...r,
+        id: generateId(),
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      save(newR);
+      return newR.id;
+    },
+    [save],
+  );
+
+  const updateTaxRate = useCallback(
+    (id: string, updates: Partial<GSTTaxRate>) => {
+      const existing = taxRates.find((r) => r.id === id);
+      if (!existing) return;
+      save({ ...existing, ...updates, updatedAt: now() });
+    },
+    [taxRates, save],
+  );
+
+  const deleteTaxRate = useCallback(
+    (id: string) => {
+      remove(id);
+    },
+    [remove],
+  );
+
+  return { taxRates, addTaxRate, updateTaxRate, deleteTaxRate, isLoading };
+}

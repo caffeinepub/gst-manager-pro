@@ -44,7 +44,7 @@ import {
   usePurchases,
   useStockMovements,
 } from "@/hooks/useGSTStore";
-import { useItems } from "@/hooks/useQueries";
+import { useItems } from "@/hooks/useGSTStore";
 import { formatDate, formatINR, today } from "@/utils/formatting";
 import {
   AlertTriangle,
@@ -73,7 +73,7 @@ const emptyMovementForm = {
 };
 
 export function InventoryERP() {
-  const { data: items = [] } = useItems();
+  const { items = [] } = useItems();
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
   const { movements, addMovement, deleteMovement } = useStockMovements();

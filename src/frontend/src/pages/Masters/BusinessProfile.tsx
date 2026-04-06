@@ -300,6 +300,17 @@ export function BusinessProfile() {
     );
     toast.success("Business profile saved successfully");
 
+    // 3. Sync to business context so switcher/header shows updated info
+    if (activeBizId) {
+      updateBusiness(activeBizId, {
+        name: form.businessName.trim(),
+        gstin: form.gstin.trim(),
+        stateCode: String(form.stateCode).padStart(2, "0"),
+      }).catch(() => {
+        /* non-blocking */
+      });
+    }
+
     // 2. Attempt backend sync — non-blocking, soft warning on failure
     saveProfile(
       {

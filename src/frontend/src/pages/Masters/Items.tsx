@@ -1,4 +1,3 @@
-import type { Item } from "@/backend.d";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,65 +36,61 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs, useInvoices, usePurchases } from "@/hooks/useGSTStore";
-import { ItemType } from "@/hooks/useQueries";
 import {
-  useAddItem,
-  useDeleteItem,
+  useAuditLogs,
+  useInvoices,
   useItems,
-  useUpdateItem,
-} from "@/hooks/useQueries";
+  usePurchases,
+} from "@/hooks/useGSTStore";
+import type { GSTItem } from "@/hooks/useGSTStore";
 import { GST_RATES, UNITS } from "@/types/gst";
 import { formatINR } from "@/utils/formatting";
 import { Edit, Loader2, Package, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-const emptyItem: Omit<Item, "id"> = {
+const emptyItem: Omit<GSTItem, "id" | "createdAt" | "updatedAt"> = {
   name: "",
   description: "",
   hsnSacCode: "",
-  itemType: ItemType.goods,
-  unit: BigInt(1),
-  gstRate: BigInt(18),
-  cessPercent: BigInt(0),
-  sellingPrice: BigInt(0),
-  purchasePrice: BigInt(0),
-  openingStock: BigInt(0),
+  itemType: "goods",
+  unit: 1,
+  gstRate: 18,
+  cessPercent: 0,
+  sellingPrice: 0,
+  purchasePrice: 0,
+  openingStock: 0,
   isActive: true,
 };
 
 export function Items() {
-  const { data: items = [], isLoading } = useItems();
+  const { items, addItem, updateItem, deleteItem, isLoading } = useItems();
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
+  const { addLog } = useAuditLogs();
 
   // Compute live closing stock for each item
   const getClosingStock = (itemId: string, openingStock: number): number => {
-    const itemIdStr = String(itemId);
     const soldQty = invoices
       .filter((inv) => inv.status === "confirmed")
       .flatMap((inv) => inv.lineItems)
-      .filter((li) => String(li.itemId) === itemIdStr)
+      .filter((li) => li.itemId === itemId)
       .reduce((sum, li) => sum + li.qty, 0);
     const purchasedQty = purchases
       .filter((p) => p.status === "confirmed")
       .flatMap((p) => p.lineItems)
-      .filter((li) => String(li.itemId) === itemIdStr)
+      .filter((li) => li.itemId === itemId)
       .reduce((sum, li) => sum + li.qty, 0);
     return openingStock + purchasedQty - soldQty;
   };
-  const { mutate: addItem, isPending: isAdding } = useAddItem();
-  const { mutate: updateItem, isPending: isUpdating } = useUpdateItem();
-  const { mutate: deleteItem, isPending: isDeleting } = useDeleteItem();
-
-  const { addLog } = useAuditLogs();
 
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [deleteId, setDeleteId] = useState<bigint | null>(null);
-  const [form, setForm] = useState<Omit<Item, "id">>({ ...emptyItem });
+  const [editingItem, setEditingItem] = useState<GSTItem | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<
+    Omit<GSTItem, "id" | "createdAt" | "updatedAt">
+  >({ ...emptyItem });
 
   const filtered = items.filter(
     (item) =>
@@ -109,9 +104,21 @@ export function Items() {
     setShowDialog(true);
   };
 
-  const openEdit = (item: Item) => {
+  const openEdit = (item: GSTItem) => {
     setEditingItem(item);
-    setForm({ ...item });
+    setForm({
+      name: item.name,
+      description: item.description,
+      hsnSacCode: item.hsnSacCode,
+      itemType: item.itemType,
+      unit: item.unit,
+      gstRate: item.gstRate,
+      cessPercent: item.cessPercent,
+      sellingPrice: item.sellingPrice,
+      purchasePrice: item.purchasePrice,
+      openingStock: item.openingStock,
+      isActive: item.isActive,
+    });
     setShowDialog(true);
   };
 
@@ -123,39 +130,25 @@ export function Items() {
     }
 
     if (editingItem) {
-      updateItem(
-        { id: editingItem.id, item: { ...form, id: editingItem.id } },
-        {
-          onSuccess: () => {
-            toast.success("Item updated");
-            addLog({
-              action: "update",
-              entity: "Item",
-              entityId: String(editingItem?.id ?? ""),
-              description: `Item "${form.name}" updated`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to update item"),
-        },
-      );
+      updateItem(editingItem.id, form);
+      addLog({
+        action: "update",
+        entity: "Item",
+        entityId: editingItem.id,
+        description: `Item "${form.name}" updated`,
+      });
+      toast.success("Item updated");
+      setShowDialog(false);
     } else {
-      addItem(
-        { ...form, id: BigInt(0) },
-        {
-          onSuccess: () => {
-            toast.success("Item added");
-            addLog({
-              action: "create",
-              entity: "Item",
-              entityId: "",
-              description: `Item "${form.name}" created`,
-            });
-            setShowDialog(false);
-          },
-          onError: () => toast.error("Failed to add item"),
-        },
-      );
+      addItem(form);
+      addLog({
+        action: "create",
+        entity: "Item",
+        entityId: "",
+        description: `Item "${form.name}" created`,
+      });
+      toast.success("Item added");
+      setShowDialog(false);
     }
   };
 
@@ -227,10 +220,7 @@ export function Items() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((item, idx) => (
-                    <TableRow
-                      key={String(item.id)}
-                      data-ocid={`item.item.${idx + 1}`}
-                    >
+                    <TableRow key={item.id} data-ocid={`item.item.${idx + 1}`}>
                       <TableCell className="pl-4 font-medium">
                         {item.name}
                       </TableCell>
@@ -243,19 +233,19 @@ export function Items() {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-numeric text-sm">
-                        {String(item.gstRate)}%
+                        {item.gstRate}%
                       </TableCell>
                       <TableCell className="font-numeric text-sm">
-                        {formatINR(Number(item.sellingPrice) / 100)}
+                        {formatINR(item.sellingPrice)}
                       </TableCell>
                       <TableCell className="font-numeric text-sm">
-                        {formatINR(Number(item.purchasePrice) / 100)}
+                        {formatINR(item.purchasePrice)}
                       </TableCell>
                       <TableCell>
                         {(() => {
                           const closingStock = getClosingStock(
-                            String(item.id),
-                            Number(item.openingStock),
+                            item.id,
+                            item.openingStock,
                           );
                           return (
                             <Badge
@@ -267,7 +257,7 @@ export function Items() {
                                     : "destructive"
                               }
                               className="font-numeric text-xs"
-                              title={`Opening: ${Number(item.openingStock)} | Live: ${closingStock}`}
+                              title={`Opening: ${item.openingStock} | Live: ${closingStock}`}
                             >
                               {closingStock}
                             </Badge>
@@ -355,15 +345,18 @@ export function Items() {
                 <Select
                   value={form.itemType}
                   onValueChange={(v) =>
-                    setForm((p) => ({ ...p, itemType: v as ItemType }))
+                    setForm((p) => ({
+                      ...p,
+                      itemType: v as "goods" | "service",
+                    }))
                   }
                 >
                   <SelectTrigger data-ocid="item.type.select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ItemType.goods}>Goods</SelectItem>
-                    <SelectItem value={ItemType.service}>Service</SelectItem>
+                    <SelectItem value="goods">Goods</SelectItem>
+                    <SelectItem value="service">Service</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -372,7 +365,7 @@ export function Items() {
                 <Select
                   value={String(form.gstRate)}
                   onValueChange={(v) =>
-                    setForm((p) => ({ ...p, gstRate: BigInt(v) }))
+                    setForm((p) => ({ ...p, gstRate: Number(v) }))
                   }
                 >
                   <SelectTrigger data-ocid="item.gstrate.select">
@@ -391,11 +384,11 @@ export function Items() {
                 <Label>Cess (%)</Label>
                 <Input
                   type="number"
-                  value={String(form.cessPercent)}
+                  value={form.cessPercent}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      cessPercent: BigInt(e.target.value || "0"),
+                      cessPercent: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="0"
@@ -408,7 +401,7 @@ export function Items() {
                 <Select
                   value={String(form.unit)}
                   onValueChange={(v) =>
-                    setForm((p) => ({ ...p, unit: BigInt(v) }))
+                    setForm((p) => ({ ...p, unit: Number(v) }))
                   }
                 >
                   <SelectTrigger data-ocid="item.unit.select">
@@ -427,13 +420,11 @@ export function Items() {
                 <Label>Selling Price (₹)</Label>
                 <Input
                   type="number"
-                  value={Number(form.sellingPrice) / 100}
+                  value={form.sellingPrice}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      sellingPrice: BigInt(
-                        Math.round(Number(e.target.value) * 100) || 0,
-                      ),
+                      sellingPrice: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="0.00"
@@ -446,13 +437,11 @@ export function Items() {
                 <Label>Purchase Price (₹)</Label>
                 <Input
                   type="number"
-                  value={Number(form.purchasePrice) / 100}
+                  value={form.purchasePrice}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      purchasePrice: BigInt(
-                        Math.round(Number(e.target.value) * 100) || 0,
-                      ),
+                      purchasePrice: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="0.00"
@@ -465,11 +454,11 @@ export function Items() {
                 <Label>Opening Stock</Label>
                 <Input
                   type="number"
-                  value={String(form.openingStock)}
+                  value={form.openingStock}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
-                      openingStock: BigInt(e.target.value || "0"),
+                      openingStock: Number(e.target.value) || 0,
                     }))
                   }
                   placeholder="0"
@@ -508,14 +497,7 @@ export function Items() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={isAdding || isUpdating}
-                data-ocid="item.submit_button"
-              >
-                {(isAdding || isUpdating) && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
+              <Button type="submit" data-ocid="item.submit_button">
                 {editingItem ? "Update" : "Add Item"}
               </Button>
             </DialogFooter>
@@ -543,25 +525,18 @@ export function Items() {
               data-ocid="item.delete.confirm_button"
               onClick={() => {
                 if (deleteId !== null) {
-                  deleteItem(deleteId, {
-                    onSuccess: () => {
-                      addLog({
-                        action: "delete",
-                        entity: "Item",
-                        entityId: String(deleteId ?? ""),
-                        description: "Item deleted",
-                      });
-                      toast.success("Item deleted");
-                      setDeleteId(null);
-                    },
-                    onError: () => toast.error("Failed to delete item"),
+                  deleteItem(deleteId);
+                  addLog({
+                    action: "delete",
+                    entity: "Item",
+                    entityId: deleteId,
+                    description: "Item deleted",
                   });
+                  toast.success("Item deleted");
+                  setDeleteId(null);
                 }
               }}
             >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -1,11 +1,32 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BusinessProfile, Item, Party, TaxRate } from "../backend.d";
-import { ItemType, PartyType, RegistrationType } from "../backend.d";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useActor } from "./useActor";
+import {
+  useItems as useItemsBackend,
+  useParties as usePartiesBackend,
+  useTaxRates as useTaxRatesBackend,
+} from "./useBackendStore";
 
-export { ItemType, PartyType, RegistrationType };
+// Re-export the business profile hooks that still use the legacy backend
+import { useQuery } from "@tanstack/react-query";
+import type { BusinessProfile } from "../backend.d";
+import { RegistrationType } from "../backend.d";
 
-// Business Profile
+export { RegistrationType };
+
+// Legacy enum shims — these match the string values in GSTParty / GSTItem so
+// any existing code that imports ItemType / PartyType still works correctly.
+export const ItemType = {
+  goods: "goods" as const,
+  service: "service" as const,
+};
+
+export const PartyType = {
+  customer: "customer" as const,
+  vendor: "vendor" as const,
+  both: "both" as const,
+};
+
+// Business Profile — still uses the legacy Motoko structured backend
 export function useBusinessProfile() {
   const { actor, isFetching } = useActor();
   return useQuery<BusinessProfile | null>({
@@ -69,169 +90,224 @@ export function useSetBusinessProfile() {
   });
 }
 
-// Parties
+// Parties — delegate entirely to backend store (string IDs, per-business)
 export function useParties() {
-  const { actor, isFetching } = useActor();
-  return useQuery<Party[]>({
-    queryKey: ["parties"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAllParties();
-    },
-    enabled: !!actor && !isFetching,
-  });
+  const { parties, ...rest } = usePartiesBackend();
+  return { data: parties, ...rest };
 }
 
+// Legacy mutation shims for any remaining code that imports from useQueries
 export function useAddParty() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (party: Party) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.addParty(party);
+  const { addParty } = usePartiesBackend();
+  return {
+    mutate: (
+      party: Parameters<typeof addParty>[0],
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        addParty(party);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["parties"] });
-    },
-  });
+    mutateAsync: (party: Parameters<typeof addParty>[0]) =>
+      Promise.resolve(addParty(party)),
+    isPending: false,
+  };
 }
 
 export function useUpdateParty() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, party }: { id: bigint; party: Party }) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.updateParty(id, party);
+  const { updateParty } = usePartiesBackend();
+  return {
+    mutate: (
+      args: { id: string; party: Parameters<typeof updateParty>[1] },
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        updateParty(args.id, args.party);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["parties"] });
+    mutateAsync: (args: {
+      id: string;
+      party: Parameters<typeof updateParty>[1];
+    }) => {
+      updateParty(args.id, args.party);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
 export function useDeleteParty() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: bigint) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.deleteParty(id);
+  const { deleteParty } = usePartiesBackend();
+  return {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        deleteParty(id);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["parties"] });
+    mutateAsync: (id: string) => {
+      deleteParty(id);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
-// Items
+// Items — delegate entirely to backend store
 export function useItems() {
-  const { actor, isFetching } = useActor();
-  return useQuery<Item[]>({
-    queryKey: ["items"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAllItems();
-    },
-    enabled: !!actor && !isFetching,
-  });
+  const { items, ...rest } = useItemsBackend();
+  return { data: items, ...rest };
 }
 
 export function useAddItem() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (item: Item) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.addItem(item);
+  const { addItem } = useItemsBackend();
+  return {
+    mutate: (
+      item: Parameters<typeof addItem>[0],
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        addItem(item);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-  });
+    mutateAsync: (item: Parameters<typeof addItem>[0]) =>
+      Promise.resolve(addItem(item)),
+    isPending: false,
+  };
 }
 
 export function useUpdateItem() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, item }: { id: bigint; item: Item }) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.updateItem(id, item);
+  const { updateItem } = useItemsBackend();
+  return {
+    mutate: (
+      args: { id: string; item: Parameters<typeof updateItem>[1] },
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        updateItem(args.id, args.item);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
+    mutateAsync: (args: {
+      id: string;
+      item: Parameters<typeof updateItem>[1];
+    }) => {
+      updateItem(args.id, args.item);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
 export function useDeleteItem() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: bigint) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.deleteItem(id);
+  const { deleteItem } = useItemsBackend();
+  return {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        deleteItem(id);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
+    mutateAsync: (id: string) => {
+      deleteItem(id);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
-// Tax Rates
+// Tax Rates — delegate entirely to backend store
 export function useTaxRates() {
-  const { actor, isFetching } = useActor();
-  return useQuery<TaxRate[]>({
-    queryKey: ["taxRates"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAllTaxRates();
-    },
-    enabled: !!actor && !isFetching,
-  });
+  const { taxRates, ...rest } = useTaxRatesBackend();
+  return { data: taxRates, ...rest };
 }
 
 export function useAddTaxRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (taxRate: TaxRate) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.addTaxRate(taxRate);
+  const { addTaxRate } = useTaxRatesBackend();
+  return {
+    mutate: (
+      rate: Parameters<typeof addTaxRate>[0],
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        addTaxRate(rate);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["taxRates"] });
-    },
-  });
+    mutateAsync: (rate: Parameters<typeof addTaxRate>[0]) =>
+      Promise.resolve(addTaxRate(rate)),
+    isPending: false,
+  };
 }
 
 export function useUpdateTaxRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, taxRate }: { id: bigint; taxRate: TaxRate }) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.updateTaxRate(id, taxRate);
+  const { updateTaxRate } = useTaxRatesBackend();
+  return {
+    mutate: (
+      args: { id: string; taxRate: Parameters<typeof updateTaxRate>[1] },
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        updateTaxRate(args.id, args.taxRate);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["taxRates"] });
+    mutateAsync: (args: {
+      id: string;
+      taxRate: Parameters<typeof updateTaxRate>[1];
+    }) => {
+      updateTaxRate(args.id, args.taxRate);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
 export function useDeleteTaxRate() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: bigint) => {
-      if (!actor) throw new Error("Actor not ready");
-      return actor.deleteTaxRate(id);
+  const { deleteTaxRate } = useTaxRatesBackend();
+  return {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: () => void },
+    ) => {
+      try {
+        deleteTaxRate(id);
+        opts?.onSuccess?.();
+      } catch {
+        opts?.onError?.();
+      }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["taxRates"] });
+    mutateAsync: (id: string) => {
+      deleteTaxRate(id);
+      return Promise.resolve();
     },
-  });
+    isPending: false,
+  };
 }
 
 // User Profile

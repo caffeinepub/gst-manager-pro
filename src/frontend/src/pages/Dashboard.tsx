@@ -22,8 +22,8 @@ import {
   usePurchases,
   useStockMovements,
 } from "@/hooks/useGSTStore";
+import { useItems, useParties } from "@/hooks/useGSTStore";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
-import { useItems, useParties } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
 import {
   formatDate,
@@ -73,8 +73,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const { purchases } = usePurchases();
   const { payments } = usePayments();
   const { movements } = useStockMovements();
-  const { data: items = [] } = useItems();
-  const { data: parties = [] } = useParties();
+  const { items = [] } = useItems();
+  const { parties = [] } = useParties();
   const { start, end } = getCurrentMonth();
 
   const stats = useMemo(() => {
@@ -117,8 +117,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
     // Stock value calculation
     const totalStockValue = items.reduce((sum, item) => {
-      const openingStock = Number(item.openingStock ?? 0);
-      const itemId = String(item.id);
+      const openingStock = item.openingStock ?? 0;
+      const itemId = item.id;
       const soldQty = invoices
         .filter(
           (inv) =>
@@ -143,7 +143,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         0,
         openingStock + purchasedQty + receiptQty - soldQty - issueQty,
       );
-      const price = Number(item.sellingPrice) / 100;
+      const price = item.sellingPrice;
       return sum + closingStock * price;
     }, 0);
 

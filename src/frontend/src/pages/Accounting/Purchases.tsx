@@ -41,7 +41,7 @@ import {
   useInvoiceCounter,
   usePurchases,
 } from "@/hooks/useGSTStore";
-import { useItems, useParties } from "@/hooks/useQueries";
+import { useItems, useParties } from "@/hooks/useGSTStore";
 import {
   GST_RATES,
   type InvoiceLineItem,
@@ -105,8 +105,8 @@ function calcLine(line: InvoiceLineItem): InvoiceLineItem {
 export function Purchases() {
   const { purchases, addPurchase, updatePurchase, deletePurchase } =
     usePurchases();
-  const { data: parties = [] } = useParties();
-  const { data: items = [] } = useItems();
+  const { parties = [] } = useParties();
+  const { items = [] } = useItems();
   const { getNextNumber } = useInvoiceCounter();
   const { addLog } = useAuditLogs();
 
@@ -229,17 +229,17 @@ export function Purchases() {
   };
 
   const selectItem = (lineId: string, itemId: string) => {
-    const item = items.find((i) => String(i.id) === itemId);
+    const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    const unitIdx = Number(item.unit) - 1;
+    const unitIdx = (item.unit as number) - 1;
     updateLine(lineId, {
       itemId,
       description: item.name,
       hsnSacCode: item.hsnSacCode,
       unit: UNITS[unitIdx] || "Nos",
-      unitPrice: Number(item.purchasePrice) / 100,
-      gstRate: Number(item.gstRate),
-      cessPercent: Number(item.cessPercent),
+      unitPrice: item.purchasePrice,
+      gstRate: item.gstRate,
+      cessPercent: item.cessPercent,
     });
   };
 

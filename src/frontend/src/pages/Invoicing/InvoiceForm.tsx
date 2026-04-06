@@ -38,7 +38,8 @@ import {
   useInvoiceDefaults,
   useInvoices,
 } from "@/hooks/useGSTStore";
-import { useBusinessProfile, useItems, useParties } from "@/hooks/useQueries";
+import { useItems, useParties } from "@/hooks/useGSTStore";
+import { useBusinessProfile } from "@/hooks/useQueries";
 import {
   GST_RATES,
   INDIAN_STATES,
@@ -126,8 +127,8 @@ export function InvoiceForm({
   onClose,
   viewOnly = false,
 }: InvoiceFormProps) {
-  const { data: parties = [] } = useParties();
-  const { data: items = [] } = useItems();
+  const { parties = [] } = useParties();
+  const { items = [] } = useItems();
   const { data: businessProfile } = useBusinessProfile();
   const { logo } = useBusinessLogo();
   const { localName } = useLocalBusinessName();
@@ -236,15 +237,15 @@ export function InvoiceForm({
   const selectItem = (lineId: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
     if (!item) return;
-    const unitIdx = Number(item.unit) - 1;
+    const unitIdx = (item.unit as number) - 1;
     updateLine(lineId, {
       itemId,
       description: item.name,
       hsnSacCode: item.hsnSacCode,
       unit: UNITS[unitIdx] || "Nos",
-      unitPrice: Number(item.sellingPrice) / 100,
-      gstRate: Number(item.gstRate),
-      cessPercent: Number(item.cessPercent),
+      unitPrice: item.sellingPrice,
+      gstRate: item.gstRate,
+      cessPercent: item.cessPercent,
     });
   };
 
