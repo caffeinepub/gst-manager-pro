@@ -29,6 +29,8 @@ import {
   useBankTransactions,
   useCustomAccounts,
   useInvoices,
+  useItems,
+  useParties,
   usePurchases,
 } from "@/hooks/useGSTStore";
 import {
@@ -75,8 +77,7 @@ async function getTesseract(): Promise<any> {
   }
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement("script");
-    s.src =
-      "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js";
+    s.src = "https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js";
     s.onload = () => {
       _tesseract = (window as any).Tesseract;
       resolve();
@@ -155,11 +156,10 @@ async function runOCR(
 ): Promise<string> {
   const Tesseract = await getTesseract();
   const worker = await Tesseract.createWorker("eng", 1, {
-    workerPath:
-      "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/worker.min.js",
+    workerPath: "https://unpkg.com/tesseract.js@4.1.1/dist/worker.min.js",
     langPath: "https://tessdata.projectnaptha.com/4.0.0",
     corePath:
-      "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
+      "https://unpkg.com/tesseract.js-core@4.0.4/tesseract-core.wasm.js",
   });
   let prog = 0;
   const poll = setInterval(() => {
@@ -606,6 +606,8 @@ function useDuplicateDetectors() {
   const { purchases } = usePurchases();
   const { transactions } = useBankTransactions();
   const { customAccounts } = useCustomAccounts();
+  const { parties } = useParties();
+  const { items } = useItems();
 
   return {
     sales_invoices: (row: Record<string, string>) =>
@@ -632,12 +634,18 @@ function useDuplicateDetectors() {
       purchases.some(
         (p) => p.billNumber === (row.BillNumber || row.billnumber),
       ),
-    parties: (_row: Record<string, string>) => {
-      // Import buffer is transient (no localStorage) — no duplicate detection for parties
-      return false;
+    parties: (row: Record<string, string>) => {
+      const gstin = row.GSTIN || row.gstin || "";
+      const name = row.Name || row.name || "";
+      if (gstin) return parties.some((p) => p.gstin === gstin);
+      return parties.some((p) => p.name.toLowerCase() === name.toLowerCase());
     },
-    items: (_row: Record<string, string>) => {
-      // Import buffer is transient (no localStorage) — no duplicate detection for items
+    items: (row: Record<string, string>) => {
+      const name = row.Name || row.name || "";
+      const hsn = row.HSN_SAC || row.hsn_sac || "";
+      if (name)
+        return items.some((i) => i.name.toLowerCase() === name.toLowerCase());
+      if (hsn) return items.some((i) => i.hsnSacCode === hsn);
       return false;
     },
     chart_of_accounts: (row: Record<string, string>) => {
@@ -759,6 +767,8 @@ function ModuleImportPanel({ moduleKey }: { moduleKey: ModuleKey }) {
   const { addPurchase } = usePurchases();
   const { addTransaction } = useBankTransactions();
   const { addAccount } = useCustomAccounts();
+  const { addParty } = useParties();
+  const { addItem } = useItems();
   const { accounts: bankAccounts } = useBankAccounts();
   const dupDetectors = useDuplicateDetectors();
 
@@ -907,6 +917,8 @@ function ModuleImportPanel({ moduleKey }: { moduleKey: ModuleKey }) {
           addPurchase,
           addTransaction,
           addAccount,
+          addParty,
+          addItem,
           firstBankAccountId: bankAccounts[0]?.id ?? "cash",
         });
         imported++;
@@ -1192,6 +1204,8 @@ type ImportHooks = {
   addPurchase: ReturnType<typeof usePurchases>["addPurchase"];
   addTransaction: ReturnType<typeof useBankTransactions>["addTransaction"];
   addAccount: ReturnType<typeof useCustomAccounts>["addAccount"];
+  addParty: ReturnType<typeof useParties>["addParty"];
+  addItem: ReturnType<typeof useItems>["addItem"];
   firstBankAccountId: string;
 };
 
@@ -1449,22 +1463,35 @@ async function importRow(
       break;
     }
     case "parties": {
-      // Parties are imported via backend entity store (useEntityList "parties")
-      // For now, log the imported party — full parties backend hook is in Phase 2
-      console.info("[DataImport] Party import:", {
+      hooks.addParty({
         name: g("Name"),
-        gstin: g("GSTIN"),
-        pan: g("PAN"),
-        partyType: g("Type") || "customer",
+        gstin: g("GSTIN").toUpperCase(),
+        pan: g("PAN").toUpperCase(),
+        partyType: (g("Type") as "customer" | "vendor" | "both") || "customer",
+        stateCode: g("State") || "27",
+        billingAddress: [g("Address"), g("City"), g("Pincode")]
+          .filter(Boolean)
+          .join(", "),
+        shippingAddress: "",
+        email: g("Email"),
+        phone: g("Phone"),
+        isActive: true,
       });
       break;
     }
     case "items": {
-      // Items are imported via backend entity store
-      console.info("[DataImport] Item import:", {
+      hooks.addItem({
         name: g("Name"),
+        description: "",
         hsnSacCode: g("HSN_SAC"),
+        itemType: (g("Type") as "goods" | "service") || "goods",
+        unit: 1,
         gstRate: n("GSTRate"),
+        cessPercent: 0,
+        sellingPrice: n("SalePrice"),
+        purchasePrice: n("PurchasePrice"),
+        openingStock: n("OpeningStock"),
+        isActive: true,
       });
       break;
     }
