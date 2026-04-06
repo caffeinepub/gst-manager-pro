@@ -35,7 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs, useBankAccounts } from "@/hooks/useGSTStore";
+import {
+  useAuditLogs,
+  useBankAccounts,
+  useBankTransactions,
+} from "@/hooks/useGSTStore";
 import type { BankAccount } from "@/types/gst";
 import { formatINR } from "@/utils/formatting";
 import { Edit, Landmark, Plus, Trash2 } from "lucide-react";
@@ -55,6 +59,7 @@ export function BankAccounts() {
   const { addLog } = useAuditLogs();
   const { accounts, addAccount, updateAccount, deleteAccount } =
     useBankAccounts();
+  const { transactions } = useBankTransactions();
   const [showDialog, setShowDialog] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(
     null,
@@ -103,7 +108,21 @@ export function BankAccounts() {
     setShowDialog(false);
   };
 
-  const totalBalance = accounts.reduce((s, a) => s + a.openingBalance, 0);
+  // Compute real-time balance: opening + credits - debits
+  const getAccountBalance = (accId: string, openingBalance: number) => {
+    const credits = transactions
+      .filter((t) => t.accountId === accId && t.credit > 0)
+      .reduce((s, t) => s + t.credit, 0);
+    const debits = transactions
+      .filter((t) => t.accountId === accId && t.debit > 0)
+      .reduce((s, t) => s + t.debit, 0);
+    return openingBalance + credits - debits;
+  };
+
+  const totalBalance = accounts.reduce(
+    (sum, acc) => sum + getAccountBalance(acc.id, acc.openingBalance),
+    0,
+  );
 
   return (
     <div className="space-y-4" data-ocid="bank.section">
@@ -157,6 +176,9 @@ export function BankAccounts() {
                     <TableHead className="text-right">
                       Opening Balance
                     </TableHead>
+                    <TableHead className="text-right">
+                      Current Balance
+                    </TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
@@ -180,6 +202,11 @@ export function BankAccounts() {
                       </TableCell>
                       <TableCell className="text-right font-numeric font-medium">
                         {formatINR(acc.openingBalance)}
+                      </TableCell>
+                      <TableCell className="text-right font-numeric font-medium text-primary">
+                        {formatINR(
+                          getAccountBalance(acc.id, acc.openingBalance),
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge

@@ -28,6 +28,12 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  useApiSettings,
+  useEmployees,
+  useEntityList,
+  useInvoices,
+} from "@/hooks/useGSTStore";
 import type { Invoice } from "@/types/gst";
 import { formatDate, formatINR } from "@/utils/formatting";
 import {
@@ -74,87 +80,8 @@ interface ApiCfg {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getBizId(): string {
-  return localStorage.getItem("gst_active_business") ?? "";
-}
-
-function getApiCfg(): ApiCfg {
-  const bizId = getBizId();
-  const raw = bizId ? localStorage.getItem(`gst_${bizId}_api_settings`) : null;
-  if (raw) {
-    try {
-      return JSON.parse(raw) as ApiCfg;
-    } catch {
-      /* ignore */
-    }
-  }
-  // Fallback legacy key
-  const legacy = localStorage.getItem("gst_api_settings");
-  if (legacy) {
-    try {
-      return JSON.parse(legacy) as ApiCfg;
-    } catch {
-      /* ignore */
-    }
-  }
-  return {};
-}
-
-function getLogs(): CommLog[] {
-  const bizId = getBizId();
-  const key = `gst_${bizId}_comm_logs`;
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? "[]") as CommLog[];
-  } catch {
-    return [];
-  }
-}
-
-function appendLog(log: CommLog): void {
-  const bizId = getBizId();
-  const key = `gst_${bizId}_comm_logs`;
-  const existing = getLogs();
-  localStorage.setItem(key, JSON.stringify([log, ...existing].slice(0, 500)));
-}
-
-function getInvoices(): Invoice[] {
-  const bizId = getBizId();
-  try {
-    return JSON.parse(
-      localStorage.getItem(`gst_${bizId}_invoices`) ?? "[]",
-    ) as Invoice[];
-  } catch {
-    return [];
-  }
-}
-
-function getEmployees(): {
-  id: string;
-  name: string;
-  pan: string;
-  bankName: string;
-  email?: string;
-  phone?: string;
-}[] {
-  const bizId = getBizId();
-  try {
-    return JSON.parse(localStorage.getItem(`gst_${bizId}_employees`) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function getOverdueInvoices(): Invoice[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return getInvoices().filter((inv) => {
-    if (inv.status !== "confirmed") return false;
-    if (!inv.dueDate) return false;
-    const due = new Date(inv.dueDate);
-    due.setHours(0, 0, 0, 0);
-    return due < today;
-  });
-}
+// Logs are now managed via backend entity store (useEntityList)
+// appendLog and getLogs are handled in the component via hook
 
 function daysOverdue(dueDate: string): number {
   const today = new Date();
@@ -165,7 +92,7 @@ function daysOverdue(dueDate: string): number {
 }
 
 function channelConfigured(cfg: ApiCfg, channel: CommChannel): boolean {
-  if (channel === "email") return !!cfg.sms?.key || !!cfg.email?.key; // SMS card doubles as email
+  if (channel === "email") return !!cfg.email?.key; // Check email key specifically
   if (channel === "sms") return !!cfg.sms?.key;
   if (channel === "whatsapp") return !!cfg.whatsapp?.key;
   return false;
@@ -360,10 +287,17 @@ async function sendViaChannel(
 
 // ─── Tab: Send Invoice ────────────────────────────────────────────────────────
 
-function SendInvoiceTab({ onLogAdded }: { onLogAdded: () => void }) {
-  const invoices = getInvoices();
-  const cfg = getApiCfg();
-
+function SendInvoiceTab({
+  onLogAdded,
+  invoices,
+  cfg,
+  appendLog,
+}: {
+  onLogAdded: () => void;
+  invoices: Invoice[];
+  cfg: ApiCfg;
+  appendLog: (log: CommLog) => void;
+}) {
   const [selectedInvoice, setSelectedInvoice] = useState("");
   const [toName, setToName] = useState("");
   const [toEmail, setToEmail] = useState("");
@@ -583,9 +517,24 @@ function SendInvoiceTab({ onLogAdded }: { onLogAdded: () => void }) {
 
 // ─── Tab: Send Payslip ────────────────────────────────────────────────────────
 
-function SendPayslipTab({ onLogAdded }: { onLogAdded: () => void }) {
-  const employees = getEmployees();
-  const cfg = getApiCfg();
+function SendPayslipTab({
+  onLogAdded,
+  employees,
+  cfg,
+  appendLog,
+}: {
+  onLogAdded: () => void;
+  employees: {
+    id: string;
+    name: string;
+    pan: string;
+    bankName: string;
+    email?: string;
+    phone?: string;
+  }[];
+  cfg: ApiCfg;
+  appendLog: (log: CommLog) => void;
+}) {
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const [selectedEmp, setSelectedEmp] = useState("");
@@ -802,9 +751,27 @@ function SendPayslipTab({ onLogAdded }: { onLogAdded: () => void }) {
 
 // ─── Tab: Payment Reminders ───────────────────────────────────────────────────
 
-function PaymentRemindersTab({ onLogAdded }: { onLogAdded: () => void }) {
-  const overdue = getOverdueInvoices();
-  const cfg = getApiCfg();
+function PaymentRemindersTab({
+  onLogAdded,
+  invoices,
+  cfg,
+  appendLog,
+}: {
+  onLogAdded: () => void;
+  invoices: Invoice[];
+  cfg: ApiCfg;
+  appendLog: (log: CommLog) => void;
+}) {
+  const today3 = new Date();
+  today3.setHours(0, 0, 0, 0);
+  const overdue = invoices.filter((inv) => {
+    if (inv.status !== "confirmed") return false;
+    if (!["sales", "service"].includes(inv.type)) return false;
+    if (!inv.dueDate) return false;
+    const due = new Date(inv.dueDate);
+    due.setHours(0, 0, 0, 0);
+    return due < today3;
+  });
   const [channel, setChannel] = useState<CommChannel>("sms");
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
@@ -1076,14 +1043,41 @@ function CommLogsTab({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CommunicationHub() {
-  const [logs, setLogs] = useState<CommLog[]>(() => getLogs());
+  // Use backend store hooks for data
+  const { invoices } = useInvoices();
+  const { employees } = useEmployees();
+  const [apiSettingsRaw] = useApiSettings();
 
-  const refreshLogs = () => setLogs(getLogs());
+  // Convert ApiSettingsState to ApiCfg shape for inner components
+  const cfg: ApiCfg = {
+    sms: apiSettingsRaw.sms as ApiCfg["sms"],
+    whatsapp: apiSettingsRaw.whatsapp as ApiCfg["whatsapp"],
+    email: apiSettingsRaw.sms as ApiCfg["email"], // email settings share the SMS card
+  };
+
+  // Comm logs via backend entity store
+  const {
+    data: logsData,
+    save: saveLog,
+    remove: removeLog,
+  } = useEntityList<CommLog>("comm_logs");
+  const logs = [...logsData].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+
+  const appendLog = (log: CommLog) => {
+    saveLog(log);
+  };
+
+  const refreshLogs = () => {
+    // Logs auto-refresh via React Query; no manual refresh needed
+  };
 
   const clearLogs = () => {
-    const bizId = getBizId();
-    localStorage.removeItem(`gst_${bizId}_comm_logs`);
-    setLogs([]);
+    // Remove all logs
+    for (const l of logs) {
+      removeLog(l.id);
+    }
     toast.info("Communication logs cleared");
   };
 
@@ -1162,7 +1156,12 @@ export function CommunicationHub() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <SendInvoiceTab onLogAdded={refreshLogs} />
+              <SendInvoiceTab
+                onLogAdded={refreshLogs}
+                invoices={invoices}
+                cfg={cfg}
+                appendLog={appendLog}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1179,7 +1178,12 @@ export function CommunicationHub() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <SendPayslipTab onLogAdded={refreshLogs} />
+              <SendPayslipTab
+                onLogAdded={refreshLogs}
+                employees={employees}
+                cfg={cfg}
+                appendLog={appendLog}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1196,7 +1200,12 @@ export function CommunicationHub() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <PaymentRemindersTab onLogAdded={refreshLogs} />
+              <PaymentRemindersTab
+                onLogAdded={refreshLogs}
+                invoices={invoices}
+                cfg={cfg}
+                appendLog={appendLog}
+              />
             </CardContent>
           </Card>
         </TabsContent>

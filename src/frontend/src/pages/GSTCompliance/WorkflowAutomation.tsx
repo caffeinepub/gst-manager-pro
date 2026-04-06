@@ -10,8 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInvoices } from "@/hooks/useGSTStore";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useBizConfig, useInvoices } from "@/hooks/useGSTStore";
 import {
   getDaysUntil,
   getGSTR1DueDate,
@@ -141,10 +140,17 @@ const categoryColors: Record<string, string> = {
 
 export function WorkflowAutomation() {
   const { invoices } = useInvoices();
-  const [workflowStates, setWorkflowStates] = useLocalStorage<WorkflowStates>(
-    "gst_workflow_states",
+  const [workflowStates, setWorkflowStatesRaw] = useBizConfig<WorkflowStates>(
+    "workflow_states",
     defaultStates,
   );
+  const setWorkflowStates = (
+    updater: WorkflowStates | ((prev: WorkflowStates) => WorkflowStates),
+  ) => {
+    const next =
+      typeof updater === "function" ? updater(workflowStates) : updater;
+    setWorkflowStatesRaw(next);
+  };
   const [runningId, setRunningId] = useState<string | null>(null);
 
   // Real-data computed alerts

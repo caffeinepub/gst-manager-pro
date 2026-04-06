@@ -222,7 +222,7 @@ export function useBusinessBackend() {
 // then persist to backend asynchronously. Preserves sync return types for
 // page components that use IDs immediately after calling add functions.
 
-function useEntityList<T extends { id: string }>(entityType: string) {
+export function useEntityList<T extends { id: string }>(entityType: string) {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
   const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
@@ -266,6 +266,7 @@ function useEntityList<T extends { id: string }>(entityType: string) {
           .catch((err) => {
             console.error(`[${entityType}] Save failed:`, err);
             queryClient.invalidateQueries({ queryKey: key });
+            toast.error("Sync failed - data refreshed from backend");
           });
       }
     },
@@ -1154,6 +1155,59 @@ export function useItems() {
   );
 
   return { items, addItem, updateItem, deleteItem, isLoading };
+}
+
+// ─── Per-Business Config ──────────────────────────────────────────────────────
+// Generic hook for reading/writing per-business config keys in the backend.
+// Backed by saveBizConfig / getBizConfig on the canister.
+
+export function useBizConfig<T>(
+  configKey: string,
+  defaultValue: T,
+): [T, (v: T) => void] {
+  const { actor, isFetching } = useActor();
+  const queryClient = useQueryClient();
+  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+
+  const { data } = useQuery<T>({
+    queryKey: ["bizConfig", bizId, configKey],
+    queryFn: async () => {
+      if (!actor || !bizId) return defaultValue;
+      try {
+        const stored = await actor.getBizConfig(bizId, configKey);
+        if (stored) return JSON.parse(stored) as T;
+        return defaultValue;
+      } catch {
+        return defaultValue;
+      }
+    },
+    enabled: !isFetching && !!bizId,
+    staleTime: 30_000,
+  });
+
+  const setValue = useCallback(
+    (value: T) => {
+      // Optimistic update
+      queryClient.setQueryData(["bizConfig", bizId, configKey], value);
+      // Persist to backend
+      if (actor && bizId) {
+        actor
+          .saveBizConfig(bizId, configKey, JSON.stringify(value))
+          .then(() => {
+            queryClient.invalidateQueries({
+              queryKey: ["bizConfig", bizId, configKey],
+            });
+          })
+          .catch((err) => {
+            console.error(`[useBizConfig:${configKey}] Save failed:`, err);
+            toast.error("Config save failed");
+          });
+      }
+    },
+    [actor, bizId, configKey, queryClient],
+  );
+
+  return [data ?? defaultValue, setValue];
 }
 
 // ─── Frontend TaxRate (string ID, per-business) ───────────────────────────────

@@ -19,8 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useBusinessContext } from "@/hooks/useBusinessContext";
-import { useInvoices } from "@/hooks/useGSTStore";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useBizConfig, useInvoices } from "@/hooks/useGSTStore";
 import { formatDate, formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
 import {
@@ -55,9 +54,9 @@ export function GSTR1() {
   const [dateTo, setDateTo] = useState(defEnd);
 
   const currentPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const [filingStatus, setFilingStatus] = useLocalStorage<
+  const [filingStatus, setFilingStatus] = useBizConfig<
     Record<string, FilingRecord>
-  >("gst_gstr1_status", {});
+  >("gstr1_status", {});
 
   const periodStatus = filingStatus[currentPeriod] ?? {
     status: "not_filed" as FilingStatus,
@@ -80,10 +79,10 @@ export function GSTR1() {
   const handleFilingAction = () => {
     if (periodStatus.status === "not_filed") {
       const arn = randomArn();
-      setFilingStatus((prev) => ({
-        ...prev,
+      setFilingStatus({
+        ...filingStatus,
         [currentPeriod]: { status: "filed", arn },
-      }));
+      });
       toast.success(
         `GSTR-1 filed successfully for ${currentPeriod}. ARN: ${arn}`,
       );
@@ -91,13 +90,13 @@ export function GSTR1() {
   };
 
   const handleMarkAcknowledged = () => {
-    setFilingStatus((prev) => ({
-      ...prev,
+    setFilingStatus({
+      ...filingStatus,
       [currentPeriod]: {
         ...periodStatus,
         status: "acknowledged",
       },
-    }));
+    });
     toast.success("GSTR-1 marked as Acknowledged");
   };
 
@@ -430,7 +429,7 @@ export function GSTR1() {
                           className="gap-2"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5" />
-                          File GSTR-1
+                          Mark as Filed (Local)
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent

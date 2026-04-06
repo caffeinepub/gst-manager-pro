@@ -36,12 +36,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import {
   useAuditLogs,
   useInvoiceCounter,
   usePurchases,
 } from "@/hooks/useGSTStore";
 import { useItems, useParties } from "@/hooks/useGSTStore";
+import { INDIAN_STATES } from "@/types/gst";
 import {
   GST_RATES,
   type InvoiceLineItem,
@@ -105,6 +107,8 @@ function calcLine(line: InvoiceLineItem): InvoiceLineItem {
 export function Purchases() {
   const { purchases, addPurchase, updatePurchase, deletePurchase } =
     usePurchases();
+  const { activeBusiness } = useBusinessContext();
+  const businessStateCode = activeBusiness?.stateCode ?? "";
   const { parties = [] } = useParties();
   const { items = [] } = useItems();
   const { getNextNumber } = useInvoiceCounter();
@@ -116,7 +120,6 @@ export function Purchases() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
-  const [ocrProcessing, setOcrProcessing] = useState(false);
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewOnly = viewingPurchase !== null;
@@ -126,6 +129,7 @@ export function Purchases() {
     billDate: today(),
     dueDate: addDays(today(), 30),
     vendorId: "",
+    placeOfSupply: "",
     isRcm: false,
     itcEligible: true,
     notes: "",
@@ -145,6 +149,7 @@ export function Purchases() {
       billDate: today(),
       dueDate: addDays(today(), 30),
       vendorId: "",
+      placeOfSupply: "",
       isRcm: false,
       itcEligible: true,
       notes: "",
@@ -162,6 +167,7 @@ export function Purchases() {
       billDate: p.billDate,
       dueDate: p.dueDate,
       vendorId: p.vendorId,
+      placeOfSupply: p.placeOfSupply || "",
       isRcm: p.isRcm,
       itcEligible: p.itcEligible,
       notes: p.notes,
@@ -172,34 +178,14 @@ export function Purchases() {
   };
 
   const handleOcrScan = () => {
-    if (!ocrFile) {
-      toast.error("Please select a file to scan");
-      return;
-    }
-    setOcrProcessing(true);
-    setTimeout(() => {
-      setOcrProcessing(false);
-      setOcrDialogOpen(false);
-      // Pre-fill the form with OCR data
-      const scanNumber = `SCAN-${Math.floor(1000 + Math.random() * 9000).toString()}`;
-      setEditingPurchase(null);
-      setForm({
-        billNumber: scanNumber,
-        billDate: today(),
-        dueDate: addDays(today(), 30),
-        vendorId: "",
-        isRcm: false,
-        itcEligible: true,
-        notes: "OCR extracted data - please verify",
-        lines: [emptyLine()],
-        status: "draft" as "draft" | "confirmed",
-      });
-      setOcrFile(null);
-      setShowForm(true);
-      toast.success(
-        "Bill scanned successfully - please verify the extracted data",
-      );
-    }, 1500);
+    // For OCR scanning, use Settings > OCR Capture to extract and save as a Purchase Entry.
+    // This provides proper multi-page PDF support, vendor extraction, and review workflow.
+    toast.info(
+      "For OCR scanning, use Settings › OCR Capture to extract invoice data and save as a Purchase Entry with full review and editing.",
+      { duration: 7000 },
+    );
+    setOcrDialogOpen(false);
+    setOcrFile(null);
   };
 
   const openEdit = (p: Purchase) => {
@@ -210,6 +196,7 @@ export function Purchases() {
       billDate: p.billDate,
       dueDate: p.dueDate,
       vendorId: p.vendorId,
+      placeOfSupply: p.placeOfSupply || "",
       isRcm: p.isRcm,
       itcEligible: p.itcEligible,
       notes: p.notes,
@@ -273,6 +260,21 @@ export function Purchases() {
       return;
     }
 
+    // Determine if inter-state: if place of supply differs from business state, use IGST
+    const posState = form.placeOfSupply || businessStateCode;
+    const isInterState =
+      posState && businessStateCode && posState !== businessStateCode;
+
+    // Recalculate taxes based on place of supply
+    const adjustedTotals = { ...totals };
+    if (isInterState) {
+      // Move CGST + SGST to IGST
+      adjustedTotals.totalIgst =
+        totals.totalCgst + totals.totalSgst + totals.totalIgst;
+      adjustedTotals.totalCgst = 0;
+      adjustedTotals.totalSgst = 0;
+    }
+
     const data = {
       billNumber: form.billNumber,
       billDate: form.billDate,
@@ -281,11 +283,12 @@ export function Purchases() {
       vendorName: vendor?.name || "",
       vendorGstin: vendor?.gstin || "",
       lineItems: form.lines.filter((l) => l.description),
-      ...totals,
+      ...adjustedTotals,
       isRcm: form.isRcm,
       itcEligible: form.itcEligible,
       status: form.status,
       notes: form.notes,
+      placeOfSupply: form.placeOfSupply,
     };
 
     if (editingPurchase) {
@@ -424,6 +427,37 @@ export function Purchases() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Place of Supply</Label>
+                  <Select
+                    value={form.placeOfSupply}
+                    onValueChange={
+                      viewOnly
+                        ? undefined
+                        : (v) => setForm((p) => ({ ...p, placeOfSupply: v }))
+                    }
+                    disabled={viewOnly}
+                  >
+                    <SelectTrigger data-ocid="purchase.pos.select">
+                      <SelectValue placeholder="Same as business state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Same as business state</SelectItem>
+                      {INDIAN_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.name} ({s.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.placeOfSupply &&
+                    businessStateCode &&
+                    form.placeOfSupply !== businessStateCode && (
+                      <p className="text-xs text-amber-600">
+                        Inter-state supply — IGST will apply
+                      </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -796,21 +830,11 @@ export function Purchases() {
             </Button>
             <Button
               onClick={handleOcrScan}
-              disabled={!ocrFile || ocrProcessing}
               data-ocid="purchase.ocr.submit_button"
               className="gap-2"
             >
-              {ocrProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing OCR...
-                </>
-              ) : (
-                <>
-                  <ScanLine className="w-4 h-4" />
-                  Scan Bill
-                </>
-              )}
+              <ScanLine className="w-4 h-4" />
+              Learn More
             </Button>
           </DialogFooter>
         </DialogContent>

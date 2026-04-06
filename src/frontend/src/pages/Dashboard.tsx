@@ -163,16 +163,39 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       ["sales", "service"].includes(inv.type),
     );
 
+    // Build a map of total payments per invoice
+    const paymentsByInvoice: Record<string, number> = {};
+    for (const p of payments) {
+      paymentsByInvoice[p.invoiceId] =
+        (paymentsByInvoice[p.invoiceId] || 0) + p.amount;
+    }
+
+    // An invoice is fully paid if total payments >= grandTotal
+    const isFullyPaid = (inv: (typeof salesServiceInvoices)[0]) =>
+      (paymentsByInvoice[inv.id] || 0) >= inv.grandTotal;
+
     const overdueInvoices = salesServiceInvoices.filter(
       (inv) =>
-        inv.status === "confirmed" && inv.dueDate && inv.dueDate < todayStr,
+        inv.status === "confirmed" &&
+        inv.dueDate &&
+        inv.dueDate < todayStr &&
+        !isFullyPaid(inv),
     );
     const overdueAmount = overdueInvoices.reduce(
-      (sum, inv) => sum + inv.grandTotal,
+      (sum, inv) => sum + inv.grandTotal - (paymentsByInvoice[inv.id] || 0),
       0,
     );
 
-    const paidInvoiceIds = new Set(payments.map((p) => p.invoiceId));
+    const paidInvoiceIds = new Set(
+      Object.entries(paymentsByInvoice)
+        .filter(([invId]) => {
+          const inv = salesServiceInvoices.find((i) => i.id === invId);
+          return inv
+            ? (paymentsByInvoice[invId] || 0) >= inv.grandTotal
+            : false;
+        })
+        .map(([invId]) => invId),
+    );
     const unpaidInvoices = salesServiceInvoices.filter(
       (inv) => inv.status === "confirmed" && !paidInvoiceIds.has(inv.id),
     );

@@ -9,7 +9,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useBusinessLogo, useLocalBusinessName } from "@/hooks/useBusinessLogo";
-import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import { useInvoices, usePayments, usePurchases } from "@/hooks/useGSTStore";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBusinessProfile } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
@@ -148,14 +148,24 @@ interface Notification {
 function useNotifications() {
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
+  const { payments } = usePayments();
 
   return useMemo(() => {
     const today = new Date();
     const notifications: Notification[] = [];
 
+    // Build payments map to exclude fully-paid invoices
+    const paymentsByInvoice: Record<string, number> = {};
+    for (const p of payments) {
+      paymentsByInvoice[p.invoiceId] =
+        (paymentsByInvoice[p.invoiceId] || 0) + p.amount;
+    }
+
     const overdueInvoices = invoices.filter((inv) => {
       if (inv.status !== "confirmed") return false;
       if (!["sales", "service"].includes(inv.type)) return false;
+      const totalPaid = paymentsByInvoice[inv.id] || 0;
+      if (totalPaid >= inv.grandTotal) return false; // fully paid
       return new Date(inv.dueDate) < today;
     });
     if (overdueInvoices.length > 0) {
@@ -229,7 +239,7 @@ function useNotifications() {
     }
 
     return notifications;
-  }, [invoices, purchases]);
+  }, [invoices, purchases, payments]);
 }
 
 interface HeaderProps {

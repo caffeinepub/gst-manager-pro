@@ -33,7 +33,7 @@ type UserRole = "admin" | "user";
 type BusinessType = "Regular" | "Composition" | "Unregistered";
 
 export function BusinessSetupWizard({ onComplete }: BusinessSetupWizardProps) {
-  const { addBusiness } = useBusinessContext();
+  const { addBusiness, businesses } = useBusinessContext();
   const [step, setStep] = useState(1);
   const [role, setRole] = useState<UserRole>("user");
   const [name, setName] = useState("");
@@ -53,6 +53,15 @@ export function BusinessSetupWizard({ onComplete }: BusinessSetupWizardProps) {
     if (gstin && !validateGstin(gstin))
       errs.gstin = "Invalid GSTIN format (15 alphanumeric characters)";
     if (!stateCode) errs.stateCode = "Please select a state";
+    // Check for duplicate GSTIN
+    if (gstin) {
+      const isDuplicate = businesses.some(
+        (b) => b.gstin && b.gstin.toUpperCase() === gstin.toUpperCase(),
+      );
+      if (isDuplicate) {
+        errs.gstin = "A business with this GSTIN already exists.";
+      }
+    }
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;

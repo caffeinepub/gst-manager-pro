@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useBizConfig } from "@/hooks/useGSTStore";
 import { Save, Sliders } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,10 +34,16 @@ const DEFAULTS: Preferences = {
 };
 
 export function Preferences() {
-  const [prefs, setPrefs] = useLocalStorage<Preferences>(
-    "gst_preferences",
+  const [prefs, setPrefsRaw] = useBizConfig<Preferences>(
+    "preferences",
     DEFAULTS,
   );
+  const setPrefs = (
+    updater: Preferences | ((prev: Preferences) => Preferences),
+  ) => {
+    const next = typeof updater === "function" ? updater(prefs) : updater;
+    setPrefsRaw(next);
+  };
 
   const update = (key: keyof Preferences, value: string | boolean) => {
     setPrefs((prev) => ({ ...prev, [key]: value }));

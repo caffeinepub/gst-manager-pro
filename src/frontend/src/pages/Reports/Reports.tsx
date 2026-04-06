@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useGSTStore";
 import { useBusinessProfile } from "@/hooks/useQueries";
 import type { AppPage } from "@/types/gst";
+import { exportToExcel } from "@/utils/exportUtils";
 import { formatDate, formatINR, getCurrentMonth } from "@/utils/formatting";
 import { downloadReportPDF } from "@/utils/pdfExport";
 import { Download, FileText } from "lucide-react";
@@ -49,12 +50,14 @@ function FilterBar({
   setDateFrom,
   setDateTo,
   onExport,
+  onExportExcel,
 }: {
   dateFrom: string;
   dateTo: string;
   setDateFrom: (v: string) => void;
   setDateTo: (v: string) => void;
   onExport: () => void;
+  onExportExcel?: () => void;
 }) {
   return (
     <Card className="bg-card border-border/70">
@@ -86,6 +89,16 @@ function FilterBar({
           >
             <Download className="w-4 h-4" /> Export CSV
           </Button>
+          {onExportExcel && (
+            <Button
+              variant="outline"
+              onClick={onExportExcel}
+              className="gap-2"
+              data-ocid="report.export_excel.button"
+            >
+              <Download className="w-4 h-4" /> Export Excel
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -158,6 +171,23 @@ export function Reports({ page }: ReportsProps) {
           setDateFrom={setDateFrom}
           setDateTo={setDateTo}
           onExport={exportSales}
+          onExportExcel={() => {
+            exportToExcel(
+              filtered.map((inv) => ({
+                "Invoice #": inv.invoiceNumber,
+                Date: inv.date,
+                "Party Name": inv.partyName,
+                GSTIN: inv.partyGstin,
+                "Taxable Amount": (inv.subtotal - inv.totalDiscount).toFixed(2),
+                CGST: inv.totalCgst.toFixed(2),
+                SGST: inv.totalSgst.toFixed(2),
+                IGST: inv.totalIgst.toFixed(2),
+                "Grand Total": inv.grandTotal.toFixed(2),
+              })),
+              `sales-register-${dateFrom}-to-${dateTo}`,
+              "Sales Register",
+            ).catch(console.error);
+          }}
         />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">
@@ -331,6 +361,23 @@ export function Reports({ page }: ReportsProps) {
           setDateFrom={setDateFrom}
           setDateTo={setDateTo}
           onExport={exportPurchase}
+          onExportExcel={() => {
+            exportToExcel(
+              filtered.map((p) => ({
+                "Bill #": p.billNumber,
+                Date: p.billDate,
+                "Vendor Name": p.vendorName,
+                GSTIN: p.vendorGstin,
+                "Taxable Amount": (p.subtotal - p.totalDiscount).toFixed(2),
+                CGST: p.totalCgst.toFixed(2),
+                SGST: p.totalSgst.toFixed(2),
+                IGST: p.totalIgst.toFixed(2),
+                "Grand Total": p.grandTotal.toFixed(2),
+              })),
+              `purchase-register-${dateFrom}-to-${dateTo}`,
+              "Purchase Register",
+            ).catch(console.error);
+          }}
         />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">
@@ -778,6 +825,39 @@ export function Reports({ page }: ReportsProps) {
           setDateFrom={setDateFrom}
           setDateTo={setDateTo}
           onExport={exportPL}
+          onExportExcel={() => {
+            exportToExcel(
+              [
+                {
+                  Category: "Income",
+                  Description: "Sales Revenue",
+                  "Amount (₹)": income.toFixed(2),
+                },
+                {
+                  Category: "Income",
+                  Description: "Total Income",
+                  "Amount (₹)": income.toFixed(2),
+                },
+                {
+                  Category: "Expenses",
+                  Description: "Cost of Purchases",
+                  "Amount (₹)": expenses.toFixed(2),
+                },
+                {
+                  Category: "Expenses",
+                  Description: "Total Expenses",
+                  "Amount (₹)": expenses.toFixed(2),
+                },
+                {
+                  Category: "Net",
+                  Description: profit >= 0 ? "Net Profit" : "Net Loss",
+                  "Amount (₹)": Math.abs(profit).toFixed(2),
+                },
+              ],
+              `profit-loss-${dateFrom}-to-${dateTo}`,
+              "Profit & Loss",
+            ).catch(console.error);
+          }}
         />
         <Card className="bg-card border-border/70">
           <CardHeader className="pb-2">

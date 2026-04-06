@@ -19,8 +19,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useBusinessContext } from "@/hooks/useBusinessContext";
-import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useBizConfig, useInvoices, usePurchases } from "@/hooks/useGSTStore";
+
 import { formatINR } from "@/utils/formatting";
 import { getCurrentMonth } from "@/utils/formatting";
 import { CheckCircle2, ClipboardList, Download, Table2 } from "lucide-react";
@@ -43,9 +43,9 @@ export function GSTR3B() {
   const [dateTo, setDateTo] = useState(defEnd);
 
   const currentPeriod = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const [filingStatus, setFilingStatus] = useLocalStorage<
+  const [filingStatus, setFilingStatus] = useBizConfig<
     Record<string, { status: "not_filed" | "filed"; arn?: string }>
-  >("gst_gstr3b_status", {});
+  >("gstr3b_status", {});
 
   const periodStatus = filingStatus[currentPeriod] ?? { status: "not_filed" };
 
@@ -65,10 +65,10 @@ export function GSTR3B() {
 
   const handleFile = () => {
     const arn = randomArn3b();
-    setFilingStatus((prev) => ({
-      ...prev,
+    setFilingStatus({
+      ...filingStatus,
       [currentPeriod]: { status: "filed", arn },
-    }));
+    });
     toast.success(`GSTR-3B filed successfully. ARN: ${arn}`);
   };
 
@@ -233,7 +233,7 @@ export function GSTR3B() {
                         className="gap-2"
                       >
                         <ClipboardList className="w-3.5 h-3.5" />
-                        Generate & File GSTR-3B
+                        Mark as Filed (Local)
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs text-xs">

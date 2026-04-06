@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/table";
 import {
   useAuditLogs,
+  useBizConfig,
   useJournalEntries,
   usePurchases,
 } from "@/hooks/useGSTStore";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
 import {
   CheckCircle2,
@@ -49,7 +49,11 @@ const RCM_CATEGORIES_9_3 = [
 
 export function RCMTracker() {
   const { purchases } = usePurchases();
-  const [paidRcm, setPaidRcm] = useLocalStorage<string[]>("rcm_paid_ids", []);
+  const [paidRcm, setPaidRcmRaw] = useBizConfig<string[]>("rcm_paid_ids", []);
+  const setPaidRcm = (updater: string[] | ((prev: string[]) => string[])) => {
+    const next = typeof updater === "function" ? updater(paidRcm) : updater;
+    setPaidRcmRaw(next);
+  };
   const { addLog } = useAuditLogs();
   const { addEntry } = useJournalEntries();
   const [rcmInfoOpen, setRcmInfoOpen] = useState(false);
@@ -89,34 +93,34 @@ export function RCMTracker() {
       narration: `RCM tax payment for ${purchase.vendorName}`,
       lines: [
         {
-          id: "1",
+          id: `rcm-${Date.now()}-1`,
           accountCode: "2101",
           accountName: "GST Payable - CGST",
-          type: "debit",
+          type: "debit" as const,
           amount: purchase.totalCgst,
           narration: "RCM CGST",
         },
         {
-          id: "2",
+          id: `rcm-${Date.now()}-2`,
           accountCode: "2102",
           accountName: "GST Payable - SGST",
-          type: "debit",
+          type: "debit" as const,
           amount: purchase.totalSgst,
           narration: "RCM SGST",
         },
         {
-          id: "3",
+          id: `rcm-${Date.now()}-3`,
           accountCode: "2103",
           accountName: "GST Payable - IGST",
-          type: "debit",
+          type: "debit" as const,
           amount: purchase.totalIgst,
           narration: "RCM IGST",
         },
         {
-          id: "4",
+          id: `rcm-${Date.now()}-4`,
           accountCode: "1002",
           accountName: "Bank Account",
-          type: "credit",
+          type: "credit" as const,
           amount: rcmTax,
           narration: "RCM tax paid via bank",
         },

@@ -15,46 +15,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs, useInvoices, usePurchases } from "@/hooks/useGSTStore";
+import { useAuditLogs } from "@/hooks/useGSTStore";
 import { formatDateTime } from "@/utils/formatting";
 import { History } from "lucide-react";
 import { useState } from "react";
 
 export function AuditTrail() {
   const { logs } = useAuditLogs();
-  const { invoices } = useInvoices();
-  const { purchases } = usePurchases();
   const [actionFilter, setActionFilter] = useState("all");
+  const [entityFilter, setEntityFilter] = useState("all");
 
-  // Build synthetic audit log from invoices and purchases
-  const syntheticLogs = [
-    ...invoices.map((inv) => ({
-      id: `inv-${inv.id}`,
-      action: "create" as const,
-      entity: "Invoice",
-      entityId: inv.invoiceNumber,
-      description: `Invoice ${inv.invoiceNumber} created for ${inv.partyName} - ${inv.status}`,
-      timestamp: inv.createdAt,
-    })),
-    ...purchases.map((p) => ({
-      id: `pur-${p.id}`,
-      action: "create" as const,
-      entity: "Purchase",
-      entityId: p.billNumber,
-      description: `Purchase ${p.billNumber} from ${p.vendorName} recorded`,
-      timestamp: p.createdAt,
-    })),
-    ...logs,
-  ].sort(
+  // Only show real logs from the backend store (no synthetic generation)
+  const sortedLogs = [...logs].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
-  const filteredLogs =
-    actionFilter === "all"
-      ? syntheticLogs
-      : syntheticLogs.filter((log) =>
-          log.action.toLowerCase().includes(actionFilter.toLowerCase()),
-        );
+  const filteredLogs = sortedLogs.filter((log) => {
+    const actionMatch =
+      actionFilter === "all" ||
+      log.action.toLowerCase() === actionFilter.toLowerCase();
+    const entityMatch =
+      entityFilter === "all" ||
+      log.entity.toLowerCase() === entityFilter.toLowerCase();
+    return actionMatch && entityMatch;
+  });
 
   const actionVariant = (
     action: string,
@@ -68,32 +52,56 @@ export function AuditTrail() {
     <div className="space-y-4" data-ocid="audit.section">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-sm font-medium text-muted-foreground">
-          Showing {filteredLogs.length} of {syntheticLogs.length} events
+          Showing {filteredLogs.length} of {sortedLogs.length} events
         </h1>
-        <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger
-            className="w-44"
-            data-ocid="audit.action_filter.select"
-          >
-            <SelectValue placeholder="All Actions" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Actions</SelectItem>
-            <SelectItem value="create">Create</SelectItem>
-            <SelectItem value="update">Update</SelectItem>
-            <SelectItem value="delete">Delete</SelectItem>
-            <SelectItem value="view">View</SelectItem>
-            <SelectItem value="export">Export</SelectItem>
-            <SelectItem value="file">File</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <SelectTrigger
+              className="w-40"
+              data-ocid="audit.entity_filter.select"
+            >
+              <SelectValue placeholder="All Entities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Entities</SelectItem>
+              <SelectItem value="invoice">Invoice</SelectItem>
+              <SelectItem value="purchase">Purchase</SelectItem>
+              <SelectItem value="party">Party</SelectItem>
+              <SelectItem value="item">Item</SelectItem>
+              <SelectItem value="payment">Payment</SelectItem>
+              <SelectItem value="payroll">Payroll</SelectItem>
+              <SelectItem value="bankaccount">Bank Account</SelectItem>
+              <SelectItem value="cashbook">CashBook</SelectItem>
+              <SelectItem value="journalentry">Journal Entry</SelectItem>
+              <SelectItem value="rcm">RCM</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger
+              className="w-44"
+              data-ocid="audit.action_filter.select"
+            >
+              <SelectValue placeholder="All Actions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Actions</SelectItem>
+              <SelectItem value="create">Create</SelectItem>
+              <SelectItem value="update">Update</SelectItem>
+              <SelectItem value="delete">Delete</SelectItem>
+              <SelectItem value="view">View</SelectItem>
+              <SelectItem value="export">Export</SelectItem>
+              <SelectItem value="file">File</SelectItem>
+              <SelectItem value="approve">Approve</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card className="bg-card border-border/70">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <History className="w-4 h-4 text-primary" />
-            Audit Trail ({syntheticLogs.length} events)
+            Audit Trail ({sortedLogs.length} events)
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

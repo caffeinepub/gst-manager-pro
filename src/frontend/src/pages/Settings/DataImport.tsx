@@ -77,7 +77,7 @@ async function getTesseract(): Promise<any> {
   }
   await new Promise<void>((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js";
+    s.src = "https://unpkg.com/tesseract.js@4.1.4/dist/tesseract.min.js";
     s.onload = () => {
       _tesseract = (window as any).Tesseract;
       resolve();
@@ -156,7 +156,7 @@ async function runOCR(
 ): Promise<string> {
   const Tesseract = await getTesseract();
   const worker = await Tesseract.createWorker("eng", 1, {
-    workerPath: "https://unpkg.com/tesseract.js@4.1.1/dist/worker.min.js",
+    workerPath: "https://unpkg.com/tesseract.js@4.1.4/dist/worker.min.js",
     langPath: "https://tessdata.projectnaptha.com/4.0.0",
     corePath:
       "https://unpkg.com/tesseract.js-core@4.0.4/tesseract-core.wasm.js",

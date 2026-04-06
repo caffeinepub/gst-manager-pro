@@ -31,13 +31,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   useAuditLogs,
+  useCustomAccounts,
   useInvoiceCounter,
   useJournalEntries,
 } from "@/hooks/useGSTStore";
 import { CHART_OF_ACCOUNTS } from "@/types/gst";
 import type { JournalEntry, JournalLine } from "@/types/gst";
 import { formatDate, formatINR, today } from "@/utils/formatting";
-import { BookOpen, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -55,10 +56,12 @@ const emptyLine = (): JournalLine => ({
 });
 
 export function JournalEntries() {
-  const { entries, addEntry, deleteEntry } = useJournalEntries();
+  const { entries, addEntry, updateEntry, deleteEntry } = useJournalEntries();
+  const { customAccounts } = useCustomAccounts();
   const { getNextNumber } = useInvoiceCounter();
   const { addLog } = useAuditLogs();
   const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -80,6 +83,16 @@ export function JournalEntries() {
     setShowForm(true);
   };
 
+  // Merge hardcoded + custom accounts for the dropdown
+  const allAccounts = [
+    ...CHART_OF_ACCOUNTS,
+    ...customAccounts.map((a) => ({
+      code: a.code,
+      name: a.name,
+      type: a.type,
+    })),
+  ];
+
   const updateLine = (id: string, updates: Partial<JournalLine>) => {
     setForm((prev) => ({
       ...prev,
@@ -87,9 +100,7 @@ export function JournalEntries() {
         if (l.id !== id) return l;
         const u = { ...l, ...updates };
         if (updates.accountCode) {
-          const acc = CHART_OF_ACCOUNTS.find(
-            (a) => a.code === updates.accountCode,
-          );
+          const acc = allAccounts.find((a) => a.code === updates.accountCode);
           if (acc) u.accountName = acc.name;
         }
         return u;
@@ -105,6 +116,18 @@ export function JournalEntries() {
     .reduce((s, l) => s + l.amount, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
 
+  const openEdit = (entry: JournalEntry) => {
+    setEditingEntry(entry);
+    setForm({
+      entryNumber: entry.entryNumber,
+      date: entry.date,
+      reference: entry.reference,
+      narration: entry.narration,
+      lines: entry.lines.length > 0 ? entry.lines : [emptyLine(), emptyLine()],
+    });
+    setShowForm(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isBalanced) {
@@ -116,22 +139,45 @@ export function JournalEntries() {
       return;
     }
 
-    const entryId = addEntry({
-      entryNumber: form.entryNumber,
-      date: form.date,
-      reference: form.reference,
-      narration: form.narration,
-      lines: form.lines.filter((l) => l.accountCode && l.amount > 0),
-      totalDebit,
-      totalCredit,
-    });
-    addLog({
-      entity: "Journal",
-      action: "create",
-      entityId: entryId as string,
-      description: `Created journal entry ${form.entryNumber}`,
-    });
-    toast.success("Journal entry saved");
+    const filteredLines = form.lines.filter(
+      (l) => l.accountCode && l.amount > 0,
+    );
+    if (editingEntry) {
+      updateEntry(editingEntry.id, {
+        entryNumber: form.entryNumber,
+        date: form.date,
+        reference: form.reference,
+        narration: form.narration,
+        lines: filteredLines,
+        totalDebit,
+        totalCredit,
+      });
+      addLog({
+        entity: "JournalEntry",
+        action: "update",
+        entityId: editingEntry.id,
+        description: `Updated journal entry ${form.entryNumber}`,
+      });
+      toast.success("Journal entry updated");
+    } else {
+      const entryId = addEntry({
+        entryNumber: form.entryNumber,
+        date: form.date,
+        reference: form.reference,
+        narration: form.narration,
+        lines: filteredLines,
+        totalDebit,
+        totalCredit,
+      });
+      addLog({
+        entity: "Journal",
+        action: "create",
+        entityId: entryId as string,
+        description: `Created journal entry ${form.entryNumber}`,
+      });
+      toast.success("Journal entry saved");
+    }
+    setEditingEntry(null);
     setShowForm(false);
   };
 
@@ -139,8 +185,16 @@ export function JournalEntries() {
     return (
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-cabinet font-bold">Journal Entry</h2>
-          <Button variant="outline" onClick={() => setShowForm(false)}>
+          <h2 className="text-lg font-cabinet font-bold">
+            {editingEntry ? "Edit Journal Entry" : "New Journal Entry"}
+          </h2>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowForm(false);
+              setEditingEntry(null);
+            }}
+          >
             Back
           </Button>
         </div>
@@ -239,7 +293,7 @@ export function JournalEntries() {
                               <SelectValue placeholder="Select account..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {CHART_OF_ACCOUNTS.map((acc) => (
+                              {allAccounts.map((acc) => (
                                 <SelectItem key={acc.code} value={acc.code}>
                                   {acc.code} - {acc.name}
                                 </SelectItem>
@@ -442,15 +496,26 @@ export function JournalEntries() {
                         {formatINR(entry.totalDebit)}
                       </TableCell>
                       <TableCell className="text-right pr-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(entry.id)}
-                          data-ocid={`journal.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(entry)}
+                            data-ocid={`journal.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(entry.id)}
+                            data-ocid={`journal.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -42,18 +42,30 @@ import {
 } from "@/hooks/useGSTStore";
 import type { BankTransaction } from "@/types/gst";
 import { formatDate, formatINR, today } from "@/utils/formatting";
-import { Banknote, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Banknote,
+  Edit,
+  Plus,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export function CashBook() {
   const { accounts } = useBankAccounts();
-  const { transactions, addTransaction, deleteTransaction } =
+  const { transactions, addTransaction, updateTransaction, deleteTransaction } =
     useBankTransactions();
   const { addLog } = useAuditLogs();
   const [showDialog, setShowDialog] = useState(false);
+  const [editingTxn, setEditingTxn] = useState<
+    import("@/types/gst").BankTransaction | null
+  >(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [filterAccount, setFilterAccount] = useState("all");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
 
   const [form, setForm] = useState({
     accountId: "",
@@ -64,10 +76,12 @@ export function CashBook() {
     reference: "",
   });
 
-  const filtered =
-    filterAccount === "all"
-      ? transactions
-      : transactions.filter((t) => t.accountId === filterAccount);
+  const filtered = transactions.filter((t) => {
+    if (filterAccount !== "all" && t.accountId !== filterAccount) return false;
+    if (filterFrom && t.date < filterFrom) return false;
+    if (filterTo && t.date > filterTo) return false;
+    return true;
+  });
 
   // Get opening balance for the selected account
   const selectedAccount =
@@ -75,6 +89,19 @@ export function CashBook() {
       ? accounts.find((a) => a.id === filterAccount)
       : null;
   const openingBalance = selectedAccount?.openingBalance || 0;
+
+  const openEdit = (txn: import("@/types/gst").BankTransaction) => {
+    setEditingTxn(txn);
+    setForm({
+      accountId: txn.accountId,
+      date: txn.date,
+      description: txn.description,
+      debit: txn.debit,
+      credit: txn.credit,
+      reference: txn.reference,
+    });
+    setShowDialog(true);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,15 +114,30 @@ export function CashBook() {
       return;
     }
 
-    addTransaction({ ...form, balance: form.credit - form.debit });
-    addLog({
-      action: "create",
-      entity: "CashBook",
-      entityId: "",
-      description: `Cash entry: ${form.description || "Transaction"} (Dr: ${form.debit}, Cr: ${form.credit})`,
-    });
-    toast.success("Transaction added");
+    if (editingTxn) {
+      updateTransaction(editingTxn.id, {
+        ...form,
+        balance: form.credit - form.debit,
+      });
+      addLog({
+        action: "update",
+        entity: "CashBook",
+        entityId: editingTxn.id,
+        description: `Cash entry updated: ${form.description || "Transaction"}`,
+      });
+      toast.success("Transaction updated");
+    } else {
+      addTransaction({ ...form, balance: form.credit - form.debit });
+      addLog({
+        action: "create",
+        entity: "CashBook",
+        entityId: "",
+        description: `Cash entry: ${form.description || "Transaction"} (Dr: ${form.debit}, Cr: ${form.credit})`,
+      });
+      toast.success("Transaction added");
+    }
     setShowDialog(false);
+    setEditingTxn(null);
     setForm({
       accountId: "",
       date: today(),
@@ -149,7 +191,27 @@ export function CashBook() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <Label className="text-xs whitespace-nowrap">From</Label>
+            <Input
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              className="w-36 h-8 text-xs"
+              data-ocid="cashbook.filter_from.input"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <Label className="text-xs whitespace-nowrap">To</Label>
+            <Input
+              type="date"
+              value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+              className="w-36 h-8 text-xs"
+              data-ocid="cashbook.filter_to.input"
+            />
+          </div>
           <Select value={filterAccount} onValueChange={setFilterAccount}>
             <SelectTrigger className="w-48" data-ocid="cashbook.account.select">
               <SelectValue placeholder="All Accounts" />
@@ -245,15 +307,26 @@ export function CashBook() {
                           {formatINR(balance)}
                         </TableCell>
                         <TableCell className="text-right pr-4">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteId(txn.id)}
-                            data-ocid={`cashbook.delete_button.${idx + 1}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => openEdit(txn)}
+                              data-ocid={`cashbook.edit_button.${idx + 1}`}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteId(txn.id)}
+                              data-ocid={`cashbook.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -265,10 +338,18 @@ export function CashBook() {
         </CardContent>
       </Card>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={(open) => {
+          setShowDialog(open);
+          if (!open) setEditingTxn(null);
+        }}
+      >
         <DialogContent data-ocid="cashbook.dialog">
           <DialogHeader>
-            <DialogTitle>Add Transaction</DialogTitle>
+            <DialogTitle>
+              {editingTxn ? "Edit Transaction" : "Add Transaction"}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -362,7 +443,7 @@ export function CashBook() {
                 Cancel
               </Button>
               <Button type="submit" data-ocid="cashbook.submit_button">
-                Add Transaction
+                {editingTxn ? "Update Transaction" : "Add Transaction"}
               </Button>
             </DialogFooter>
           </form>

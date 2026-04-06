@@ -42,6 +42,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   CreditCard,
+  Edit,
   Plus,
   Trash2,
   TrendingUp,
@@ -51,8 +52,11 @@ import { toast } from "sonner";
 
 export function Payments() {
   const { invoices } = useInvoices();
-  const { payments, addPayment, deletePayment } = usePayments();
+  const { payments, addPayment, updatePayment, deletePayment } = usePayments();
   const [showDialog, setShowDialog] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<
+    import("@/types/gst").Payment | null
+  >(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -70,6 +74,30 @@ export function Payments() {
       ["sales", "service"].includes(inv.type) && inv.status === "confirmed",
   );
 
+  // Compute outstanding balance for a given invoice
+  const getOutstandingBalance = (invoiceId: string) => {
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (!inv) return 0;
+    const totalPaid = payments
+      .filter((p) => p.invoiceId === invoiceId)
+      .reduce((s, p) => s + p.amount, 0);
+    return Math.max(0, inv.grandTotal - totalPaid);
+  };
+
+  const openEdit = (pmt: import("@/types/gst").Payment) => {
+    setEditingPayment(pmt);
+    setForm({
+      invoiceId: pmt.invoiceId,
+      amount: pmt.amount,
+      date: pmt.date,
+      mode: pmt.mode,
+      reference: pmt.reference,
+      notes: pmt.notes || "",
+      type: pmt.type,
+    });
+    setShowDialog(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const inv = invoices.find((i) => i.id === form.invoiceId);
@@ -82,13 +110,23 @@ export function Payments() {
       return;
     }
 
-    addPayment({
-      ...form,
-      invoiceNumber: inv.invoiceNumber,
-      partyName: inv.partyName,
-    });
-    toast.success("Payment recorded");
+    if (editingPayment) {
+      updatePayment(editingPayment.id, {
+        ...form,
+        invoiceNumber: inv.invoiceNumber,
+        partyName: inv.partyName,
+      });
+      toast.success("Payment updated");
+    } else {
+      addPayment({
+        ...form,
+        invoiceNumber: inv.invoiceNumber,
+        partyName: inv.partyName,
+      });
+      toast.success("Payment recorded");
+    }
     setShowDialog(false);
+    setEditingPayment(null);
     setForm({
       invoiceId: "",
       amount: 0,
@@ -200,6 +238,7 @@ export function Payments() {
                     <TableHead>Mode</TableHead>
                     <TableHead>Reference</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Outstanding</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right pr-4">Actions</TableHead>
                   </TableRow>
@@ -228,6 +267,9 @@ export function Payments() {
                       <TableCell className="text-right font-numeric font-medium">
                         {formatINR(pmt.amount)}
                       </TableCell>
+                      <TableCell className="text-right font-numeric text-sm text-muted-foreground">
+                        {formatINR(getOutstandingBalance(pmt.invoiceId))}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant={
@@ -239,15 +281,26 @@ export function Payments() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right pr-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(pmt.id)}
-                          data-ocid={`payment.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEdit(pmt)}
+                            data-ocid={`payment.edit_button.${idx + 1}`}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(pmt.id)}
+                            data-ocid={`payment.delete_button.${idx + 1}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -258,10 +311,18 @@ export function Payments() {
         </CardContent>
       </Card>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={(open) => {
+          setShowDialog(open);
+          if (!open) setEditingPayment(null);
+        }}
+      >
         <DialogContent data-ocid="payment.dialog">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>
+              {editingPayment ? "Edit Payment" : "Record Payment"}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -391,7 +452,7 @@ export function Payments() {
                 Cancel
               </Button>
               <Button type="submit" data-ocid="payment.submit_button">
-                Record Payment
+                {editingPayment ? "Update Payment" : "Record Payment"}
               </Button>
             </DialogFooter>
           </form>

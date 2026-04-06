@@ -160,6 +160,14 @@ export function BusinessManager() {
 
   const handleDelete = () => {
     if (!deleteTarget) return;
+    // If deleting the currently active business, switch first
+    if (deleteTarget.id === activeBizId) {
+      const remaining = businesses.filter((b) => b.id !== deleteTarget.id);
+      if (remaining.length > 0) {
+        switchBusiness(remaining[0].id);
+      }
+      // If no remaining businesses, deleteBusiness will handle UI reset
+    }
     deleteBusiness(deleteTarget.id);
     setDeleteTarget(null);
   };

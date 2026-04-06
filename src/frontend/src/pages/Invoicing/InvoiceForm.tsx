@@ -134,7 +134,7 @@ export function InvoiceForm({
   const { localName } = useLocalBusinessName();
   const resolvedBusinessName =
     businessProfile?.businessName || localName || "Your Business";
-  const { addInvoice, updateInvoice } = useInvoices();
+  const { invoices, addInvoice, updateInvoice } = useInvoices();
   const { getNextNumber } = useInvoiceCounter();
   const { defaults: invoiceDefaults } = useInvoiceDefaults();
 
@@ -292,14 +292,8 @@ export function InvoiceForm({
     // For credit/debit notes, populate linkedInvoiceNumber from the linked invoice
     let resolvedLinkedInvoiceNumber = "";
     if ((type === "credit_note" || type === "debit_note") && linkedInvoiceId) {
-      const linkedInv = (
-        typeof window !== "undefined"
-          ? (JSON.parse(localStorage.getItem("gst_invoices") || "[]") as {
-              id: string;
-              invoiceNumber: string;
-            }[])
-          : []
-      ).find((inv) => inv.id === linkedInvoiceId);
+      // Use already-loaded invoices from hook instead of localStorage
+      const linkedInv = invoices.find((inv) => inv.id === linkedInvoiceId);
       resolvedLinkedInvoiceNumber = linkedInv?.invoiceNumber || "";
     }
 
@@ -341,8 +335,9 @@ export function InvoiceForm({
     <div className="space-y-6 animate-fade-in">
       {/* ─── FY 2026-27 Invoice Series Reset Banner ─────────────────── */}
       {(() => {
+        const bizId = localStorage.getItem("gst_active_business") ?? "global";
         const dismissed =
-          localStorage.getItem("fy2627_invoice_reset_dismissed") === "true";
+          localStorage.getItem(`fy2627_${bizId}_reset_dismissed`) === "true";
         const now = new Date();
         const fyStart = new Date("2026-04-01");
         if (!dismissed && now >= fyStart) {
@@ -358,10 +353,9 @@ export function InvoiceForm({
                 type="button"
                 className="ml-2 text-amber-500 hover:text-amber-700"
                 onClick={() => {
-                  localStorage.setItem(
-                    "fy2627_invoice_reset_dismissed",
-                    "true",
-                  );
+                  const bId =
+                    localStorage.getItem("gst_active_business") ?? "global";
+                  localStorage.setItem(`fy2627_${bId}_reset_dismissed`, "true");
                   window.dispatchEvent(new Event("storage"));
                 }}
                 aria-label="Dismiss"
@@ -754,11 +748,13 @@ export function InvoiceForm({
                                     ],
                                 ).join("");
                                 setIrnNumber(irn);
-                                toast.success("IRN generated successfully");
+                                toast.warning(
+                                  "This is a simulation — not registered with IRP/NIC. Real e-Invoice requires GSP registration and IRP API access.",
+                                );
                               }}
                             >
                               <Wand2 className="w-3 h-3 mr-1" />
-                              Generate IRN
+                              Generate (Simulation)
                             </Button>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -807,7 +803,9 @@ export function InvoiceForm({
                               Math.floor(Math.random() * 10),
                             ).join("")}`;
                             setEWayBillNumber(ewb);
-                            toast.success("e-Way Bill generated");
+                            toast.warning(
+                              "This is a simulation — not registered with NIC. Real e-Way Bill requires NIC API access.",
+                            );
                           } else {
                             toast.warning(
                               "e-Way Bill required only for invoices above ₹50,000",

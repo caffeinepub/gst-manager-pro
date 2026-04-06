@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useActor } from "@/hooks/useActor";
 import { type CloudBackup, useBackup } from "@/hooks/useBackup";
 import { useCloudSync } from "@/hooks/useCloudSync";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Cloud,
@@ -81,6 +82,7 @@ export function BackupRestore() {
 
   const { syncStatus, lastSyncedAt, syncNow, loadFromCloud, isOnline } =
     useCloudSync();
+  const queryClient = useQueryClient();
 
   const [cloudBackups, setCloudBackups] =
     useState<CloudBackup[]>(getCloudBackups);
@@ -129,8 +131,10 @@ export function BackupRestore() {
   const handleRestoreFromCloud = async () => {
     try {
       await loadFromCloud();
+      // Invalidate all React Query caches so UI reflects restored data
+      await queryClient.invalidateQueries();
       toast.success(
-        "Data restored from cloud! Refresh the page to see all changes.",
+        "Data restored from cloud! All views have been refreshed.",
         { duration: 6000 },
       );
     } catch {
