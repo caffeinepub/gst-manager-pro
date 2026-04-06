@@ -22,6 +22,8 @@ actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
+  // ─── Shared Types ───────────────────────────────────────────────────────────
+
   module BusinessProfile {
     public type RegistrationType = {
       #regular;
@@ -101,6 +103,53 @@ actor {
     role : Text;
   };
 
+  // ─── Business Entity (multi-business per user) ──────────────────────────────
+
+  public type BusinessRecord = {
+    id : Text;
+    name : Text;
+    gstin : Text;
+    stateCode : Text;
+    role : Text;
+    businessType : Text;
+    address : Text;
+    contactDetails : Text;
+    fontFamily : Text;
+    themePreset : Text;
+    primaryColor : Text;
+    secondaryColor : Text;
+    bgColor : Text;
+    textColor : Text;
+    createdAt : Int;
+    updatedAt : Int;
+  };
+
+  // ─── Per-principal data store: Text key -> Text value (JSON encoded) ─────────
+  let dataStore = Map.empty<Principal, Map.Map<Text, Text>>();
+
+  // Helper: get or create the user's data map
+  func getUserMap(user : Principal) : Map.Map<Text, Text> {
+    switch (dataStore.get(user)) {
+      case (?m) { m };
+      case null {
+        let m = Map.empty<Text, Text>();
+        dataStore.add(user, m);
+        m;
+      };
+    };
+  };
+
+  // Helper: split a comma-separated index string into an array of non-empty IDs
+  func splitIndex(idx : Text) : [Text] {
+    idx.split(#char ',').toArray().filter(func(s : Text) : Bool { s != "" });
+  };
+
+  // Helper: build a comma-separated index string from an array of IDs
+  func joinIndex(ids : [Text]) : Text {
+    ids.vals().join(",");
+  };
+
+  // ─── Legacy storage (kept for backward compatibility) ───────────────────────
   var businessProfile : ?BusinessProfile.BusinessProfile = null;
   var nextPartyId : NatId = 1;
   var nextItemId : NatId = 1;
@@ -111,9 +160,7 @@ actor {
   let taxRates = Map.empty<NatId, TaxRateMaster.TaxRate>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Cloud sync storage: per-user key-value store
-  let cloudData = Map.empty<Principal, Map.Map<Text, Text>>();
-  let lastSyncTimes = Map.empty<Principal, Int>();
+  // ─── Sort helpers ───────────────────────────────────────────────────────────
 
   module Party {
     public func compare(p1 : PartyMaster.Party, p2 : PartyMaster.Party) : Order.Order {
@@ -133,7 +180,8 @@ actor {
     };
   };
 
-  // User Profile Management
+  // ─── User Profile Management ────────────────────────────────────────────────
+
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can access profiles");
@@ -155,11 +203,9 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Business Profile Management
+  // ─── Legacy Business Profile ────────────────────────────────────────────────
+
   public shared ({ caller }) func setBusinessProfile(profile : BusinessProfile.BusinessProfile) : async () {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can set business profile");
-    };
     businessProfile := ?profile;
   };
 
@@ -167,7 +213,162 @@ actor {
     businessProfile;
   };
 
-  // Party Master CRUD
+  // ─── Multi-Business Management (per-user) ───────────────────────────────────
+
+  public shared ({ caller }) func saveBusinessRecord(id : Text, recordJson : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    m.add("biz:" # id, recordJson);
+    let existing = switch (m.get("biz:__index")) {
+      case (?idx) { idx };
+      case null { "" };
+    };
+    let filtered = if (existing == "") { [] } else {
+      splitIndex(existing).filter(func(s : Text) : Bool { s != id });
+    };
+    m.add("biz:__index", joinIndex(filtered.concat([id])));
+  };
+
+  public query ({ caller }) func getBusinessRecord(id : Text) : async ?Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    getUserMap(caller).get("biz:" # id);
+  };
+
+  public query ({ caller }) func getAllBusinessRecords() : async [Text] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    switch (m.get("biz:__index")) {
+      case (?idx) {
+        if (idx == "") { return [] };
+        let ids = splitIndex(idx);
+        ids.filterMap(func(id : Text) : ?Text { m.get("biz:" # id) });
+      };
+      case null { [] };
+    };
+  };
+
+  public shared ({ caller }) func deleteBusinessRecord(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    m.remove("biz:" # id);
+    let existing = switch (m.get("biz:__index")) {
+      case (?idx) { idx };
+      case null { "" };
+    };
+    let ids = splitIndex(existing).filter(func(s : Text) : Bool { s != id });
+    m.add("biz:__index", joinIndex(ids));
+  };
+
+  // ─── Generic Per-Business Entity Storage ────────────────────────────────────
+
+  public shared ({ caller }) func saveEntityRecord(bizId : Text, entityType : Text, id : Text, recordJson : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    let key = bizId # ":" # entityType # ":" # id;
+    m.add(key, recordJson);
+    let indexKey = bizId # ":" # entityType # ":__index";
+    let existing = switch (m.get(indexKey)) {
+      case (?idx) { idx };
+      case null { "" };
+    };
+    let filtered = if (existing == "") { [] } else {
+      splitIndex(existing).filter(func(s : Text) : Bool { s != id });
+    };
+    m.add(indexKey, joinIndex(filtered.concat([id])));
+  };
+
+  public query ({ caller }) func getEntityRecord(bizId : Text, entityType : Text, id : Text) : async ?Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    getUserMap(caller).get(bizId # ":" # entityType # ":" # id);
+  };
+
+  public query ({ caller }) func getAllEntityRecords(bizId : Text, entityType : Text) : async [Text] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    let indexKey = bizId # ":" # entityType # ":__index";
+    switch (m.get(indexKey)) {
+      case (?idx) {
+        if (idx == "") { return [] };
+        let ids = splitIndex(idx);
+        ids.filterMap(func(id : Text) : ?Text { m.get(bizId # ":" # entityType # ":" # id) });
+      };
+      case null { [] };
+    };
+  };
+
+  public shared ({ caller }) func deleteEntityRecord(bizId : Text, entityType : Text, id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    m.remove(bizId # ":" # entityType # ":" # id);
+    let indexKey = bizId # ":" # entityType # ":__index";
+    let existing = switch (m.get(indexKey)) {
+      case (?idx) { idx };
+      case null { "" };
+    };
+    let ids = splitIndex(existing).filter(func(s : Text) : Bool { s != id });
+    m.add(indexKey, joinIndex(ids));
+  };
+
+  // ─── Settings / Config per business (single JSON blob) ──────────────────────
+
+  public shared ({ caller }) func saveBizConfig(bizId : Text, configKey : Text, value : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    getUserMap(caller).add(bizId # ":config:" # configKey, value);
+  };
+
+  public query ({ caller }) func getBizConfig(bizId : Text, configKey : Text) : async ?Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    getUserMap(caller).get(bizId # ":config:" # configKey);
+  };
+
+  // ─── Invoice Counter (auto-increment per type per business) ─────────────────
+
+  public shared ({ caller }) func getNextInvoiceNumber(bizId : Text, counterType : Text, prefix : Text) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let m = getUserMap(caller);
+    let counterKey = bizId # ":counter:" # counterType;
+    let current : Nat = switch (m.get(counterKey)) {
+      case (?v) {
+        switch (Nat.fromText(v)) {
+          case (?n) { n };
+          case null { 0 };
+        };
+      };
+      case null { 0 };
+    };
+    let next = current + 1;
+    m.add(counterKey, next.toText());
+    let padded = if (next < 10) { "000" # next.toText() }
+      else if (next < 100) { "00" # next.toText() }
+      else if (next < 1000) { "0" # next.toText() }
+      else { next.toText() };
+    prefix # padded;
+  };
+
+  // ─── Legacy Party Master CRUD ────────────────────────────────────────────────
+
   public shared ({ caller }) func addParty(party : PartyMaster.Party) : async NatId {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can add parties");
@@ -206,7 +407,8 @@ actor {
     parties.values().toArray().sort();
   };
 
-  // Item/Service Master CRUD
+  // ─── Legacy Item/Service Master CRUD ────────────────────────────────────────
+
   public shared ({ caller }) func addItem(item : ItemServiceMaster.Item) : async NatId {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can add items");
@@ -245,7 +447,8 @@ actor {
     items.values().toArray().sort();
   };
 
-  // Tax Rate Master CRUD
+  // ─── Legacy Tax Rate Master CRUD ─────────────────────────────────────────────
+
   public shared ({ caller }) func addTaxRate(taxRate : TaxRateMaster.TaxRate) : async NatId {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can add tax rates");
@@ -284,8 +487,10 @@ actor {
     taxRates.values().toArray().sort();
   };
 
-  // Cloud Data Sync
-  // Save a key-value pair for the caller
+  // ─── Legacy Cloud Sync (kept for backward compatibility) ─────────────────────
+  let cloudData = Map.empty<Principal, Map.Map<Text, Text>>();
+  let lastSyncTimes = Map.empty<Principal, Int>();
+
   public shared ({ caller }) func saveCloudData(key : Text, value : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can save cloud data");
@@ -302,7 +507,6 @@ actor {
     lastSyncTimes.add(caller, Time.now());
   };
 
-  // Get a single value by key for the caller
   public query ({ caller }) func getCloudData(key : Text) : async ?Text {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
@@ -313,7 +517,6 @@ actor {
     };
   };
 
-  // Get all key-value pairs for the caller
   public query ({ caller }) func getAllCloudData() : async [(Text, Text)] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
@@ -326,7 +529,6 @@ actor {
     };
   };
 
-  // Get last sync timestamp for the caller
   public query ({ caller }) func getLastSyncTime() : async ?Int {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
@@ -334,7 +536,6 @@ actor {
     lastSyncTimes.get(caller);
   };
 
-  // Delete a key from cloud storage for the caller
   public shared ({ caller }) func deleteCloudData(key : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");

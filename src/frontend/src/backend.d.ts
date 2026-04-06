@@ -106,4 +106,19 @@ export interface backendInterface {
     getAllCloudData(): Promise<Array<[string, string]>>;
     getLastSyncTime(): Promise<bigint | null>;
     deleteCloudData(key: string): Promise<void>;
+    // Multi-business management
+    saveBusinessRecord(id: string, recordJson: string): Promise<void>;
+    getBusinessRecord(id: string): Promise<string | null>;
+    getAllBusinessRecords(): Promise<string[]>;
+    deleteBusinessRecord(id: string): Promise<void>;
+    // Generic per-business entity CRUD
+    saveEntityRecord(bizId: string, entityType: string, id: string, recordJson: string): Promise<void>;
+    getEntityRecord(bizId: string, entityType: string, id: string): Promise<string | null>;
+    getAllEntityRecords(bizId: string, entityType: string): Promise<string[]>;
+    deleteEntityRecord(bizId: string, entityType: string, id: string): Promise<void>;
+    // Business config
+    saveBizConfig(bizId: string, configKey: string, value: string): Promise<void>;
+    getBizConfig(bizId: string, configKey: string): Promise<string | null>;
+    // Invoice counter
+    getNextInvoiceNumber(bizId: string, counterType: string, prefix: string): Promise<string>;
 }

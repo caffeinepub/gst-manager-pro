@@ -183,6 +183,27 @@ export interface backendInterface {
     updateItem(id: NatId, updatedItem: Item): Promise<void>;
     updateParty(id: NatId, updatedParty: Party): Promise<void>;
     updateTaxRate(id: NatId, updatedTaxRate: TaxRate): Promise<void>;
+    // Cloud sync
+    saveCloudData(key: string, value: string): Promise<void>;
+    getCloudData(key: string): Promise<string | null>;
+    getAllCloudData(): Promise<Array<[string, string]>>;
+    getLastSyncTime(): Promise<bigint | null>;
+    deleteCloudData(key: string): Promise<void>;
+    // Multi-business management
+    saveBusinessRecord(id: string, recordJson: string): Promise<void>;
+    getBusinessRecord(id: string): Promise<string | null>;
+    getAllBusinessRecords(): Promise<string[]>;
+    deleteBusinessRecord(id: string): Promise<void>;
+    // Generic per-business entity CRUD
+    saveEntityRecord(bizId: string, entityType: string, id: string, recordJson: string): Promise<void>;
+    getEntityRecord(bizId: string, entityType: string, id: string): Promise<string | null>;
+    getAllEntityRecords(bizId: string, entityType: string): Promise<string[]>;
+    deleteEntityRecord(bizId: string, entityType: string, id: string): Promise<void>;
+    // Business config
+    saveBizConfig(bizId: string, configKey: string, value: string): Promise<void>;
+    getBizConfig(bizId: string, configKey: string): Promise<string | null>;
+    // Invoice counter
+    getNextInvoiceNumber(bizId: string, counterType: string, prefix: string): Promise<string>;
 }
 import type { BusinessProfile as _BusinessProfile, Item as _Item, ItemType as _ItemType, NatId as _NatId, Party as _Party, PartyType as _PartyType, RegistrationType as _RegistrationType, TaxRate as _TaxRate, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -522,6 +543,72 @@ export class Backend implements backendInterface {
             const result = await this.actor.updateTaxRate(arg0, arg1);
             return result;
         }
+    }
+    // ─── Cloud sync methods ──────────────────────────────────────────────────
+    async saveCloudData(key: string, value: string): Promise<void> {
+        const result = await (this.actor as any).saveCloudData(key, value);
+        return result;
+    }
+    async getCloudData(key: string): Promise<string | null> {
+        const result = await (this.actor as any).getCloudData(key);
+        return result && result.length > 0 ? result[0] : null;
+    }
+    async getAllCloudData(): Promise<Array<[string, string]>> {
+        const result = await (this.actor as any).getAllCloudData();
+        return result;
+    }
+    async getLastSyncTime(): Promise<bigint | null> {
+        const result = await (this.actor as any).getLastSyncTime();
+        return result && result.length > 0 ? result[0] : null;
+    }
+    async deleteCloudData(key: string): Promise<void> {
+        const result = await (this.actor as any).deleteCloudData(key);
+        return result;
+    }
+    // ─── New backend methods for database storage ─────────────────────────────
+    async saveBusinessRecord(id: string, recordJson: string): Promise<void> {
+        const result = await (this.actor as any).saveBusinessRecord(id, recordJson);
+        return result;
+    }
+    async getBusinessRecord(id: string): Promise<string | null> {
+        const result = await (this.actor as any).getBusinessRecord(id);
+        return result && result.length > 0 ? result[0] : null;
+    }
+    async getAllBusinessRecords(): Promise<string[]> {
+        const result = await (this.actor as any).getAllBusinessRecords();
+        return result;
+    }
+    async deleteBusinessRecord(id: string): Promise<void> {
+        const result = await (this.actor as any).deleteBusinessRecord(id);
+        return result;
+    }
+    async saveEntityRecord(bizId: string, entityType: string, id: string, recordJson: string): Promise<void> {
+        const result = await (this.actor as any).saveEntityRecord(bizId, entityType, id, recordJson);
+        return result;
+    }
+    async getEntityRecord(bizId: string, entityType: string, id: string): Promise<string | null> {
+        const result = await (this.actor as any).getEntityRecord(bizId, entityType, id);
+        return result && result.length > 0 ? result[0] : null;
+    }
+    async getAllEntityRecords(bizId: string, entityType: string): Promise<string[]> {
+        const result = await (this.actor as any).getAllEntityRecords(bizId, entityType);
+        return result;
+    }
+    async deleteEntityRecord(bizId: string, entityType: string, id: string): Promise<void> {
+        const result = await (this.actor as any).deleteEntityRecord(bizId, entityType, id);
+        return result;
+    }
+    async saveBizConfig(bizId: string, configKey: string, value: string): Promise<void> {
+        const result = await (this.actor as any).saveBizConfig(bizId, configKey, value);
+        return result;
+    }
+    async getBizConfig(bizId: string, configKey: string): Promise<string | null> {
+        const result = await (this.actor as any).getBizConfig(bizId, configKey);
+        return result && result.length > 0 ? result[0] : null;
+    }
+    async getNextInvoiceNumber(bizId: string, counterType: string, prefix: string): Promise<string> {
+        const result = await (this.actor as any).getNextInvoiceNumber(bizId, counterType, prefix);
+        return result;
     }
 }
 function from_candid_BusinessProfile_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _BusinessProfile): BusinessProfile {

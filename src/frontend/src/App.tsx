@@ -2,7 +2,6 @@ import { AppLayout } from "@/components/Layout/AppLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useBusinessTheme } from "@/hooks/useBusinessTheme";
-import { useCloudSync } from "@/hooks/useCloudSync";
 import { useInternetIdentity } from "@/hooks/useInternetIdentity";
 import { LanguageProvider } from "@/hooks/useLanguage";
 import { AIAssistant } from "@/pages/AIAssistant/AIAssistant";
@@ -48,8 +47,7 @@ import { OCRCapture } from "@/pages/Settings/OCRCapture";
 import { Preferences } from "@/pages/Settings/Preferences";
 import { AutomatedUAT } from "@/pages/UAT/AutomatedUAT";
 import type { AppPage } from "@/types/gst";
-import { seedInitialData } from "@/utils/seedData";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 function PageContent({
   page,
@@ -170,13 +168,11 @@ function PageContent({
 
 function AuthenticatedApp() {
   const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
-  const { businesses } = useBusinessContext();
+  const { businesses, isLoading } = useBusinessContext();
   // Track whether wizard has been explicitly completed by the user.
   // Initializes to true for returning users who already have businesses.
-  const [wizardDone, setWizardDone] = useState(() => businesses.length > 0);
+  const [wizardDone, setWizardDone] = useState(() => false);
 
-  // Activate cloud sync globally for authenticated users
-  useCloudSync();
   // Apply per-business theme/font whenever active business changes
   useBusinessTheme();
 
@@ -185,9 +181,22 @@ function AuthenticatedApp() {
     setCurrentPage(page);
   };
 
+  // Show loading spinner while fetching businesses from backend
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            Loading your businesses...
+          </p>
+        </div>
+        <Toaster richColors />
+      </div>
+    );
+  }
+
   // Show setup wizard only if no businesses configured AND wizard not yet completed.
-  // wizardDone prevents the wizard from unmounting when addBusiness() is called on
-  // Step 2 — the user must explicitly click "Go to Dashboard" on Step 3 to dismiss it.
   if (!wizardDone && businesses.length === 0) {
     return (
       <>
@@ -206,10 +215,6 @@ function AuthenticatedApp() {
 
 export default function App() {
   const { identity, isInitializing } = useInternetIdentity();
-
-  useEffect(() => {
-    seedInitialData();
-  }, []);
 
   if (isInitializing) {
     return (
