@@ -77,6 +77,7 @@ function getApiSettings(): ApiSettings {
     },
     banking: { key: "", url: "", bankName: "", accountId: "", enabled: false },
     sms: { provider: "msg91", key: "", senderId: "", enabled: false },
+    whatsapp: { provider: "meta", key: "", phoneNumberId: "", enabled: false },
   };
 }
 

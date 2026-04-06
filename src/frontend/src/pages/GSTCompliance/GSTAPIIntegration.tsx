@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
+import { useApiSettings } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
 import type { ApiSettings } from "@/types/gst";
@@ -54,41 +56,11 @@ interface ApiCardState {
   source?: "live" | "format_only" | "no_key";
 }
 
-function getApiSettings(): ApiSettings {
-  try {
-    const raw = localStorage.getItem("gst_api_settings");
-    if (raw) return JSON.parse(raw) as ApiSettings;
-  } catch {
-    // ignore
-  }
-  return {
-    gstn: { key: "", url: "", clientId: "", clientSecret: "", enabled: false },
-    pan: { key: "", url: "", enabled: false },
-    einvoice: {
-      key: "",
-      url: "",
-      clientId: "",
-      clientSecret: "",
-      enabled: false,
-    },
-    ewaybill: { key: "", url: "", username: "", enabled: false },
-    gstnReturn: { key: "", url: "", clientId: "", enabled: false },
-    accountAggregator: {
-      clientId: "",
-      clientSecret: "",
-      url: "",
-      redirectUri: "",
-      enabled: false,
-    },
-    banking: { key: "", url: "", bankName: "", accountId: "", enabled: false },
-    sms: { provider: "msg91", key: "", senderId: "", enabled: false },
-  };
-}
+// getApiSettings removed — settings now passed as parameter to API functions
 
 // ─── e-Invoice IRN API ────────────────────────────────────────────────────────
 
-async function callEInvoiceAPI(): Promise<ApiCardState> {
-  const settings = getApiSettings();
+async function callEInvoiceAPI(settings: ApiSettings): Promise<ApiCardState> {
   const cfg = settings.einvoice;
 
   if (!cfg?.enabled || !cfg.key) {
@@ -191,8 +163,7 @@ async function callEInvoiceAPI(): Promise<ApiCardState> {
 
 // ─── e-Way Bill API ───────────────────────────────────────────────────────────
 
-async function callEWayBillAPI(): Promise<ApiCardState> {
-  const settings = getApiSettings();
+async function callEWayBillAPI(settings: ApiSettings): Promise<ApiCardState> {
   const cfg = settings.ewaybill;
 
   if (!cfg?.enabled || !cfg.key) {
@@ -297,8 +268,10 @@ async function callEWayBillAPI(): Promise<ApiCardState> {
 
 // ─── GSTN Return Fetch ────────────────────────────────────────────────────────
 
-async function callGSTNReturnAPI(): Promise<ApiCardState> {
-  const settings = getApiSettings();
+async function callGSTNReturnAPI(
+  settings: ApiSettings,
+  businessGstin: string,
+): Promise<ApiCardState> {
   const cfg = settings.gstnReturn;
 
   if (!cfg?.enabled || !cfg.key) {
@@ -311,19 +284,7 @@ async function callGSTNReturnAPI(): Promise<ApiCardState> {
   }
 
   const gstnSettings = settings.gstn;
-  const gstin = (() => {
-    try {
-      return (
-        (
-          JSON.parse(
-            localStorage.getItem("gst_business_profile") || "{}",
-          ) as Record<string, string>
-        )?.gstin ?? ""
-      );
-    } catch {
-      return "";
-    }
-  })();
+  const gstin = businessGstin;
 
   const now = new Date();
   const period = `${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
@@ -415,8 +376,9 @@ async function callGSTNReturnAPI(): Promise<ApiCardState> {
 
 // ─── RBI Account Aggregator ───────────────────────────────────────────────────
 
-async function callAccountAggregatorAPI(): Promise<ApiCardState> {
-  const settings = getApiSettings();
+async function callAccountAggregatorAPI(
+  settings: ApiSettings,
+): Promise<ApiCardState> {
   const cfg = settings.accountAggregator;
 
   if (!cfg?.enabled || !cfg.clientId) {
@@ -542,6 +504,8 @@ async function callAccountAggregatorAPI(): Promise<ApiCardState> {
 }
 
 export function GSTAPIIntegration() {
+  const [apiSettings] = useApiSettings();
+  const { activeBusiness } = useBusinessContext();
   const [gstinInput, setGstinInput] = useState("");
   const [gstinHistory, setGstinHistory] = useLocalStorage<GstinHistoryEntry[]>(
     "gstin_validation_history",
@@ -582,7 +546,7 @@ export function GSTAPIIntegration() {
 
   const handleEInvoice = async () => {
     setEInvoiceState({ loading: true, result: null, error: null });
-    const result = await callEInvoiceAPI();
+    const result = await callEInvoiceAPI(apiSettings);
     setEInvoiceState(result);
     if (result.source === "no_key")
       toast.warning("Configure e-Invoice credentials in Settings > API Config");
@@ -594,7 +558,7 @@ export function GSTAPIIntegration() {
 
   const handleEWayBill = async () => {
     setEWayBillState({ loading: true, result: null, error: null });
-    const result = await callEWayBillAPI();
+    const result = await callEWayBillAPI(apiSettings);
     setEWayBillState(result);
     if (result.source === "no_key")
       toast.warning(
@@ -609,7 +573,10 @@ export function GSTAPIIntegration() {
 
   const handleGSTRFetch = async () => {
     setGstReturnState({ loading: true, result: null, error: null });
-    const result = await callGSTNReturnAPI();
+    const result = await callGSTNReturnAPI(
+      apiSettings,
+      activeBusiness?.gstin ?? "",
+    );
     setGstReturnState(result);
     if (result.source === "no_key")
       toast.warning(
@@ -736,7 +703,7 @@ export function GSTAPIIntegration() {
 
   const handleBankSync = async () => {
     setBankSyncState({ loading: true, result: null, error: null });
-    const result = await callAccountAggregatorAPI();
+    const result = await callAccountAggregatorAPI(apiSettings);
     setBankSyncState(result);
     if (result.source === "no_key")
       toast.warning(

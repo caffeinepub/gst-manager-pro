@@ -18,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useInvoices, usePurchases } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatINR } from "@/utils/formatting";
@@ -48,28 +49,13 @@ export function GSTR3B() {
 
   const periodStatus = filingStatus[currentPeriod] ?? { status: "not_filed" };
 
-  // Business profile
-  const businessStateCode = (() => {
-    try {
-      const p = JSON.parse(
-        localStorage.getItem("gst_business_profile") || "{}",
-      );
-      return String(p.stateCode || p.state_code || "27").padStart(2, "0");
-    } catch {
-      return "27";
-    }
-  })();
-
-  const businessGstin = (() => {
-    try {
-      const p = JSON.parse(
-        localStorage.getItem("gst_business_profile") || "{}",
-      );
-      return p.gstin || p.gstNumber || "";
-    } catch {
-      return "";
-    }
-  })();
+  // Business profile from context (replaces localStorage reads)
+  const { activeBusiness } = useBusinessContext();
+  const businessStateCode = String(activeBusiness?.stateCode || "27").padStart(
+    2,
+    "0",
+  );
+  const businessGstin = activeBusiness?.gstin ?? "";
 
   // Derive ret_period from selected date range
   const retPeriod = (() => {

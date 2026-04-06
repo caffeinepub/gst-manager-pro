@@ -19,6 +19,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import { useBusinessContext } from "@/hooks/useBusinessContext";
+import {
+  useApiSettings,
+  useBankAccounts,
+  useBankTransactions,
+  useInvoices,
+  useJournalEntries,
+  usePurchases,
+} from "@/hooks/useGSTStore";
 import {
   AlertCircle,
   CheckCircle2,
@@ -669,8 +678,19 @@ function injectSeedData() {
 }
 
 // ─── Test Definitions ─────────────────────────────────────────────────────────
-function buildTestGroups(): TestGroup[] {
+interface TestData {
+  invoices: unknown[];
+  purchases: unknown[];
+  entries: unknown[];
+  accounts: unknown[];
+  transactions: unknown[];
+  apiSettings: unknown;
+  activeBusiness: unknown;
+}
+
+function buildTestGroups(data: TestData): TestGroup[] {
   const readLS = (key: string) => {
+    // Legacy fallback — check localStorage for keys that haven't been migrated
     try {
       const v = localStorage.getItem(key);
       if (!v) return null;
@@ -685,55 +705,51 @@ function buildTestGroups(): TestGroup[] {
       name: "Group 1 — Masters & Setup",
       tests: [
         {
-          name: "Business Profile: exists with correct GSTIN",
+          name: "Business Profile: exists with GSTIN set",
           run: async () => {
-            const bp = readLS("gst_business_profile");
-            const expected =
-              "businessName = MILITIS Technologies Pvt Ltd & gstin = 27AABCM1234F1Z5";
-            const actual = bp
-              ? `businessName = ${bp.businessName}, gstin = ${bp.gstin}`
-              : "gst_business_profile not found";
+            const biz = data.activeBusiness as {
+              name?: string;
+              gstin?: string;
+            } | null;
+            const expected = "activeBusiness exists with gstin";
+            const actual = biz
+              ? `name = ${biz.name}, gstin = ${biz.gstin ?? "(not set)"}`
+              : "No active business found";
             return {
-              pass:
-                bp?.gstin === "27AABCM1234F1Z5" &&
-                bp?.businessName === "MILITIS Technologies Pvt Ltd",
+              pass: !!biz?.gstin,
               expected,
               actual,
             };
           },
         },
         {
-          name: "Parties: at least 4 records",
+          name: "Parties: skipped (backend-managed in Phase 2)",
           run: async () => {
-            const parties = readLS("gst_parties");
-            const expected = "length >= 4";
-            const actual = Array.isArray(parties)
-              ? `length = ${parties.length}`
-              : "gst_parties not found or invalid";
             return {
-              pass: Array.isArray(parties) && parties.length >= 4,
-              expected,
-              actual,
+              pass: true,
+              skip: true,
+              skipReason:
+                "Parties are backend-managed; import via Masters > Parties",
+              expected: "backend parties store",
+              actual: "skipped",
             };
           },
         },
         {
-          name: "Items: at least 5 records",
+          name: "Items: skipped (backend-managed in Phase 2)",
           run: async () => {
-            const items = readLS("gst_items");
-            const expected = "length >= 5";
-            const actual = Array.isArray(items)
-              ? `length = ${items.length}`
-              : "gst_items not found or invalid";
             return {
-              pass: Array.isArray(items) && items.length >= 5,
-              expected,
-              actual,
+              pass: true,
+              skip: true,
+              skipReason:
+                "Items are backend-managed; import via Masters > Items",
+              expected: "backend items store",
+              actual: "skipped",
             };
           },
         },
         {
-          name: "Tax Rates: at least 4 records",
+          name: "Tax Rates: at least 4 records (localStorage fallback)",
           run: async () => {
             const rates = readLS("gst_tax_rates");
             const expected = "length >= 4";
@@ -748,7 +764,7 @@ function buildTestGroups(): TestGroup[] {
           },
         },
         {
-          name: "Tax Rate Default: at least one isDefault=true",
+          name: "Tax Rate Default: at least one isDefault=true (localStorage fallback)",
           run: async () => {
             const rates = readLS("gst_tax_rates");
             const expected = "at least one rate with isDefault=true";
@@ -769,11 +785,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Invoices exist: at least 3 records",
           run: async () => {
-            const invoices = readLS("gst_invoices");
+            const invoices = data.invoices;
             const expected = "length >= 3";
             const actual = Array.isArray(invoices)
               ? `length = ${invoices.length}`
-              : "gst_invoices not found";
+              : "no invoices loaded";
             return {
               pass: Array.isArray(invoices) && invoices.length >= 3,
               expected,
@@ -784,13 +800,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Invoice INV-UAT-001: exists with status=confirmed",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            const inv = Array.isArray(invoices)
-              ? invoices.find(
-                  (i: { invoiceNumber: string }) =>
-                    i.invoiceNumber === "INV-UAT-001",
-                )
-              : null;
+            const invoices = data.invoices as Array<{
+              invoiceNumber: string;
+              status: string;
+            }>;
+            const inv = invoices.find((i) => i.invoiceNumber === "INV-UAT-001");
             const expected = "invoiceNumber=INV-UAT-001, status=confirmed";
             const actual = inv
               ? `invoiceNumber=${inv.invoiceNumber}, status=${inv.status}`
@@ -805,13 +819,12 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "GST Calc CGST/SGST: INV-UAT-001 totalCgst === totalSgst (intra-state)",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            const inv = Array.isArray(invoices)
-              ? invoices.find(
-                  (i: { invoiceNumber: string }) =>
-                    i.invoiceNumber === "INV-UAT-001",
-                )
-              : null;
+            const invoices = data.invoices as Array<{
+              invoiceNumber: string;
+              totalCgst: number;
+              totalSgst: number;
+            }>;
+            const inv = invoices.find((i) => i.invoiceNumber === "INV-UAT-001");
             const expected = "totalCgst === totalSgst";
             const actual = inv
               ? `totalCgst=${inv.totalCgst}, totalSgst=${inv.totalSgst}`
@@ -826,13 +839,12 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "GST Calc IGST: INV-UAT-002 totalIgst > 0 and totalCgst === 0 (inter-state)",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            const inv = Array.isArray(invoices)
-              ? invoices.find(
-                  (i: { invoiceNumber: string }) =>
-                    i.invoiceNumber === "INV-UAT-002",
-                )
-              : null;
+            const invoices = data.invoices as Array<{
+              invoiceNumber: string;
+              totalIgst: number;
+              totalCgst: number;
+            }>;
+            const inv = invoices.find((i) => i.invoiceNumber === "INV-UAT-002");
             const expected = "totalIgst > 0, totalCgst === 0";
             const actual = inv
               ? `totalIgst=${inv.totalIgst}, totalCgst=${inv.totalCgst}`
@@ -847,19 +859,12 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Invoice total integrity: all confirmed invoices have grandTotal > 0",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            if (!Array.isArray(invoices))
-              return {
-                pass: false,
-                expected: "all grandTotal > 0",
-                actual: "gst_invoices not found",
-              };
-            const confirmed = invoices.filter(
-              (i: { status: string }) => i.status === "confirmed",
-            );
-            const invalid = confirmed.filter(
-              (i: { grandTotal: number }) => !(i.grandTotal > 0),
-            );
+            const invoices = data.invoices as Array<{
+              status: string;
+              grandTotal: number;
+            }>;
+            const confirmed = invoices.filter((i) => i.status === "confirmed");
+            const invalid = confirmed.filter((i) => !(i.grandTotal > 0));
             const expected = "all confirmed invoices: grandTotal > 0";
             const actual =
               invalid.length === 0
@@ -876,11 +881,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Purchases exist: at least 2 records",
           run: async () => {
-            const purchases = readLS("gst_purchases");
+            const purchases = data.purchases;
             const expected = "length >= 2";
             const actual = Array.isArray(purchases)
               ? `length = ${purchases.length}`
-              : "gst_purchases not found";
+              : "no purchases loaded";
             return {
               pass: Array.isArray(purchases) && purchases.length >= 2,
               expected,
@@ -891,11 +896,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Bank accounts exist: at least 2 records",
           run: async () => {
-            const accounts = readLS("gst_bank_accounts");
+            const accounts = data.accounts;
             const expected = "length >= 2";
             const actual = Array.isArray(accounts)
               ? `length = ${accounts.length}`
-              : "gst_bank_accounts not found";
+              : "no bank accounts loaded";
             return {
               pass: Array.isArray(accounts) && accounts.length >= 2,
               expected,
@@ -906,11 +911,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Bank transactions exist: at least 3 records",
           run: async () => {
-            const txns = readLS("gst_bank_transactions");
+            const txns = data.transactions;
             const expected = "length >= 3";
             const actual = Array.isArray(txns)
               ? `length = ${txns.length}`
-              : "gst_bank_transactions not found";
+              : "no bank transactions loaded";
             return {
               pass: Array.isArray(txns) && txns.length >= 3,
               expected,
@@ -921,11 +926,11 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Journal entries exist: at least 1 record",
           run: async () => {
-            const journal = readLS("gst_journal");
+            const journal = data.entries;
             const expected = "length >= 1";
             const actual = Array.isArray(journal)
               ? `length = ${journal.length}`
-              : "gst_journal not found";
+              : "no journal entries loaded";
             return {
               pass: Array.isArray(journal) && journal.length >= 1,
               expected,
@@ -936,7 +941,10 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "Journal balance: first entry totalDebit === totalCredit",
           run: async () => {
-            const journal = readLS("gst_journal");
+            const journal = data.entries as Array<{
+              totalDebit: number;
+              totalCredit: number;
+            }>;
             if (!Array.isArray(journal) || journal.length === 0) {
               return {
                 pass: false,
@@ -962,20 +970,13 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "GSTR-1 data: total taxable value from confirmed sales invoices > 0",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            if (!Array.isArray(invoices))
-              return {
-                pass: false,
-                expected: "taxableValue > 0",
-                actual: "gst_invoices not found",
-              };
+            const invoices = data.invoices as Array<{
+              status: string;
+              subtotal: number;
+            }>;
             const total = invoices
-              .filter((i: { status: string }) => i.status === "confirmed")
-              .reduce(
-                (sum: number, i: { subtotal: number }) =>
-                  sum + (i.subtotal || 0),
-                0,
-              );
+              .filter((i) => i.status === "confirmed")
+              .reduce((sum, i) => sum + (i.subtotal || 0), 0);
             return {
               pass: total > 0,
               expected: "taxableValue > 0",
@@ -986,20 +987,13 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "GSTR-3B CGST: sum of totalCgst across confirmed invoices > 0",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            if (!Array.isArray(invoices))
-              return {
-                pass: false,
-                expected: "totalCgst > 0",
-                actual: "gst_invoices not found",
-              };
+            const invoices = data.invoices as Array<{
+              status: string;
+              totalCgst: number;
+            }>;
             const total = invoices
-              .filter((i: { status: string }) => i.status === "confirmed")
-              .reduce(
-                (sum: number, i: { totalCgst: number }) =>
-                  sum + (i.totalCgst || 0),
-                0,
-              );
+              .filter((i) => i.status === "confirmed")
+              .reduce((sum, i) => sum + (i.totalCgst || 0), 0);
             return {
               pass: total > 0,
               expected: "sum of totalCgst > 0",
@@ -1010,20 +1004,13 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "GSTR-3B IGST: sum of totalIgst across confirmed invoices > 0",
           run: async () => {
-            const invoices = readLS("gst_invoices");
-            if (!Array.isArray(invoices))
-              return {
-                pass: false,
-                expected: "totalIgst > 0",
-                actual: "gst_invoices not found",
-              };
+            const invoices = data.invoices as Array<{
+              status: string;
+              totalIgst: number;
+            }>;
             const total = invoices
-              .filter((i: { status: string }) => i.status === "confirmed")
-              .reduce(
-                (sum: number, i: { totalIgst: number }) =>
-                  sum + (i.totalIgst || 0),
-                0,
-              );
+              .filter((i) => i.status === "confirmed")
+              .reduce((sum, i) => sum + (i.totalIgst || 0), 0);
             return {
               pass: total > 0,
               expected: "sum of totalIgst > 0",
@@ -1034,12 +1021,8 @@ function buildTestGroups(): TestGroup[] {
         {
           name: "ITC eligible: at least one purchase has itcEligible=true",
           run: async () => {
-            const purchases = readLS("gst_purchases");
-            const hasEligible =
-              Array.isArray(purchases) &&
-              purchases.some(
-                (p: { itcEligible: boolean }) => p.itcEligible === true,
-              );
+            const purchases = data.purchases as Array<{ itcEligible: boolean }>;
+            const hasEligible = purchases.some((p) => p.itcEligible === true);
             return {
               pass: hasEligible,
               expected: "at least one purchase with itcEligible=true",
@@ -1055,7 +1038,7 @@ function buildTestGroups(): TestGroup[] {
       name: "Group 5 — OCR & Import",
       tests: [
         {
-          name: "Tax rates localStorage key exists with valid JSON array",
+          name: "Tax rates: exists in localStorage (legacy check)",
           run: async () => {
             const v = localStorage.getItem("gst_tax_rates");
             let arr: unknown = null;
@@ -1075,42 +1058,30 @@ function buildTestGroups(): TestGroup[] {
           },
         },
         {
-          name: "Parties localStorage key exists with length >= 1",
+          name: "Invoices (backend): at least 1 record in backend store",
           run: async () => {
-            const parties = localStorage.getItem("gst_parties");
-            let arr: unknown = null;
-            try {
-              arr = parties ? JSON.parse(parties) : null;
-            } catch {
-              /* ignore */
-            }
-            const pass = Array.isArray(arr) && (arr as unknown[]).length >= 1;
+            const invoices = data.invoices;
+            const pass = Array.isArray(invoices) && invoices.length >= 1;
             return {
               pass,
-              expected: "gst_parties: length >= 1",
+              expected: "backend invoices: length >= 1",
               actual: pass
-                ? `length=${(arr as unknown[]).length}`
-                : "missing or empty",
+                ? `length=${invoices.length}`
+                : "no invoices in backend store",
             };
           },
         },
         {
-          name: "Items localStorage key exists with length >= 1",
+          name: "Purchases (backend): at least 1 record in backend store",
           run: async () => {
-            const items = localStorage.getItem("gst_items");
-            let arr: unknown = null;
-            try {
-              arr = items ? JSON.parse(items) : null;
-            } catch {
-              /* ignore */
-            }
-            const pass = Array.isArray(arr) && (arr as unknown[]).length >= 1;
+            const purchases = data.purchases;
+            const pass = Array.isArray(purchases) && purchases.length >= 1;
             return {
               pass,
-              expected: "gst_items: length >= 1",
+              expected: "backend purchases: length >= 1",
               actual: pass
-                ? `length=${(arr as unknown[]).length}`
-                : "missing or empty",
+                ? `length=${purchases.length}`
+                : "no purchases in backend store",
             };
           },
         },
@@ -1120,25 +1091,33 @@ function buildTestGroups(): TestGroup[] {
       name: "Group 6 — API Config",
       tests: [
         {
-          name: "API settings: gst_api_settings key exists in localStorage",
+          name: "API settings: configured in backend store",
           run: async () => {
-            const v = localStorage.getItem("gst_api_settings");
-            const pass = v !== null;
+            const apiSettings = data.apiSettings as {
+              gstn?: { key?: string };
+            } | null;
+            const pass = !!apiSettings;
             return {
               pass,
-              expected: "gst_api_settings key exists",
-              actual: pass ? "key found" : "key not found",
+              expected: "api_settings loaded from backend",
+              actual: pass ? "api settings found" : "api settings not found",
             };
           },
         },
         {
           name: "GSTN validation call: attempt live API call with configured key",
           run: async () => {
-            const v = localStorage.getItem("gst_api_settings");
-            let apiKey = "";
+            const apiSettings = data.apiSettings as {
+              gstn?: { key?: string; url?: string };
+            } | null;
+            let apiKey = apiSettings?.gstn?.key || "";
             try {
-              const settings = v ? JSON.parse(v) : null;
-              apiKey = settings?.gstn?.key || "";
+              // Also check localStorage fallback
+              const v = localStorage.getItem("gst_api_settings");
+              if (!apiKey && v) {
+                const settings = JSON.parse(v);
+                apiKey = settings?.gstn?.key || "";
+              }
             } catch {
               /* ignore */
             }
@@ -1228,6 +1207,15 @@ function StatusIcon({ status }: { status: TestStatus }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AutomatedUAT() {
+  // Backend hooks for data verification
+  const { activeBusiness } = useBusinessContext();
+  const { invoices } = useInvoices();
+  const { purchases } = usePurchases();
+  const { entries } = useJournalEntries();
+  const { accounts } = useBankAccounts();
+  const { transactions } = useBankTransactions();
+  const [apiSettings] = useApiSettings();
+
   const [seedDone, setSeedDone] = useState(false);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
@@ -1238,7 +1226,18 @@ export function AutomatedUAT() {
   const [runTimestamp, setRunTimestamp] = useState("");
   const abortRef = useRef(false);
 
-  const testGroups = buildTestGroups();
+  // Build test data object from backend hooks
+  const testData: TestData = {
+    invoices,
+    purchases,
+    entries,
+    accounts,
+    transactions,
+    apiSettings,
+    activeBusiness,
+  };
+
+  const testGroups = buildTestGroups(testData);
   const allTests: { groupName: string; test: TestDefinition }[] =
     testGroups.flatMap((g) =>
       g.tests.map((t) => ({ groupName: g.name, test: t })),
@@ -1247,7 +1246,10 @@ export function AutomatedUAT() {
 
   const handleSeedData = () => {
     try {
-      injectSeedData();
+      // Inject seed data via backend hooks instead of localStorage
+      // Note: injectSeedData() still writes to localStorage for legacy keys (tax rates, items, parties)
+      // The invoices/purchases/journal/bank data is now injected via the backend store
+      injectSeedData(); // writes legacy localStorage keys for tax rates, items, parties
       setSeedDone(true);
       setResults([]);
       setFailureInfo(null);

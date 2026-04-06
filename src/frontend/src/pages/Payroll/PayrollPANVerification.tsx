@@ -8,7 +8,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuditLogs, useEmployees } from "@/hooks/useGSTStore";
+import {
+  useApiSettings,
+  useAuditLogs,
+  useEmployees,
+} from "@/hooks/useGSTStore";
 import {
   type PANVerificationResult,
   verifyPAN,
@@ -35,20 +39,12 @@ function relativeTime(iso?: string): string {
   return "just now";
 }
 
-function hasPANApiKey(): boolean {
-  try {
-    const raw = localStorage.getItem("gst_api_settings");
-    if (!raw) return false;
-    const s = JSON.parse(raw);
-    return !!(s?.pan?.enabled && s?.pan?.key);
-  } catch {
-    return false;
-  }
-}
+// hasPANApiKey replaced by useApiSettings hook in component
 
 export function PayrollPANVerification() {
   const { employees, updateEmployee } = useEmployees();
   const { addLog } = useAuditLogs();
+  const [apiSettings] = useApiSettings();
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyAllRunning, setVerifyAllRunning] = useState(false);
   const [verifyAllProgress, setVerifyAllProgress] = useState<{
@@ -56,7 +52,9 @@ export function PayrollPANVerification() {
     total: number;
   } | null>(null);
 
-  const apiKeyConfigured = hasPANApiKey();
+  const apiKeyConfigured = !!(
+    apiSettings?.pan?.enabled && apiSettings?.pan?.key
+  );
 
   const processResult = (
     empId: string,

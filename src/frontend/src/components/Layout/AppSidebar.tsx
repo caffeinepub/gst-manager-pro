@@ -50,6 +50,7 @@ import {
   RefreshCw,
   Scale,
   ScanLine,
+  Send,
   Settings,
   Settings2,
   Shield,
@@ -208,6 +209,7 @@ const navItems: NavItem[] = [
     ],
   },
   { label: "AI Tax Assistant", page: "ai-assistant", icon: MessageSquare },
+  { label: "Communication", page: "communication", icon: Send },
   {
     label: "Settings",
     icon: Settings2,

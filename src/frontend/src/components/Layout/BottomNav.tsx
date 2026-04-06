@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Menu,
   MessageSquare,
+  Send,
   ShieldCheck,
   Users2,
 } from "lucide-react";
@@ -70,6 +71,12 @@ const BOTTOM_NAV_ITEMS: Array<{
     icon: MessageSquare,
     ocid: "bottom_nav.ai.link",
   },
+  {
+    label: "Comms",
+    page: "communication",
+    icon: Send,
+    ocid: "bottom_nav.communication.link",
+  },
 ];
 
 const DIRECT_NAV_PAGES = new Set<AppPage>([
@@ -80,6 +87,7 @@ const DIRECT_NAV_PAGES = new Set<AppPage>([
   "reports-sales",
   "payroll-employees",
   "ai-assistant",
+  "communication",
 ]);
 
 export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
@@ -92,7 +100,8 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
     !currentPage.startsWith("accounting") &&
     !currentPage.startsWith("reports") &&
     !currentPage.startsWith("payroll") &&
-    currentPage !== "ai-assistant";
+    currentPage !== "ai-assistant" &&
+    currentPage !== "communication";
 
   const btnClass = (isActive: boolean) =>
     `flex flex-shrink-0 flex-col items-center justify-center gap-0.5 py-1.5 text-[9px] font-medium transition-colors min-h-[52px] min-w-[52px] px-1 touch-manipulation ${

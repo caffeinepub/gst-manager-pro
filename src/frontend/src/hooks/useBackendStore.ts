@@ -898,3 +898,139 @@ export function usePayrollRuns() {
 
   return { runs, addRun, updateRun, deleteRun };
 }
+
+// ─── API Settings ─────────────────────────────────────────────────────────────
+
+export const DEFAULT_API_SETTINGS = {
+  gstn: {
+    key: "",
+    url: "https://api.gst.gov.in/enriched/commonapi/search",
+    clientId: "",
+    clientSecret: "",
+    enabled: false,
+    sandboxMode: false,
+  },
+  pan: {
+    key: "",
+    url: "https://api.incometax.gov.in/v1/pan-allotment-info",
+    enabled: false,
+    sandboxMode: false,
+  },
+  einvoice: {
+    key: "",
+    url: "https://einvoice1.gst.gov.in/irisapi/einvoice/generate",
+    clientId: "",
+    clientSecret: "",
+    enabled: false,
+    sandboxMode: false,
+  },
+  ewaybill: {
+    key: "",
+    url: "https://ewaybillgst.gov.in/api/ewayapi/genewaybill",
+    username: "",
+    enabled: false,
+    sandboxMode: false,
+  },
+  gstnReturn: {
+    key: "",
+    url: "https://api.gst.gov.in/enriched/returns/gstr1",
+    clientId: "",
+    enabled: false,
+  },
+  accountAggregator: {
+    clientId: "",
+    clientSecret: "",
+    url: "https://api.sandbox.sahamati.org.in",
+    redirectUri: "",
+    enabled: false,
+    sandboxMode: true as boolean,
+  },
+  banking: { key: "", url: "", bankName: "", accountId: "", enabled: false },
+  sms: { provider: "msg91" as string, key: "", senderId: "", enabled: false },
+  whatsapp: {
+    provider: "meta" as string,
+    key: "",
+    phoneNumberId: "",
+    enabled: false,
+  },
+};
+
+export type ApiSettingsState = typeof DEFAULT_API_SETTINGS;
+
+export function useApiSettings() {
+  const { actor, isFetching } = useActor();
+  const queryClient = useQueryClient();
+  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+
+  const settingsQuery = useQuery({
+    queryKey: ["bizConfig", bizId, "api_settings"],
+    queryFn: async () => {
+      if (actor && bizId) {
+        try {
+          const stored = await actor.getBizConfig(bizId, "api_settings");
+          if (stored) return JSON.parse(stored) as ApiSettingsState;
+        } catch {
+          /* fall through */
+        }
+      }
+      // Migration: pull from old localStorage key
+      const legacyRaw = localStorage.getItem("gst_api_settings");
+      if (legacyRaw) {
+        try {
+          return JSON.parse(legacyRaw) as ApiSettingsState;
+        } catch {
+          /* ignore */
+        }
+      }
+      return DEFAULT_API_SETTINGS;
+    },
+    enabled: !isFetching,
+    staleTime: 30_000,
+  });
+
+  const settings = settingsQuery.data ?? DEFAULT_API_SETTINGS;
+
+  const saveSettings = useCallback(
+    async (updated: ApiSettingsState) => {
+      if (actor && bizId) {
+        try {
+          await actor.saveBizConfig(
+            bizId,
+            "api_settings",
+            JSON.stringify(updated),
+          );
+          queryClient.invalidateQueries({
+            queryKey: ["bizConfig", bizId, "api_settings"],
+          });
+          return;
+        } catch (err) {
+          console.error("[useApiSettings] Backend save failed:", err);
+        }
+      }
+      // Fallback: localStorage
+      localStorage.setItem("gst_api_settings", JSON.stringify(updated));
+      queryClient.invalidateQueries({
+        queryKey: ["bizConfig", bizId, "api_settings"],
+      });
+    },
+    [actor, bizId, queryClient],
+  );
+
+  const setSettings = useCallback(
+    (
+      valueOrFn:
+        | ApiSettingsState
+        | ((prev: ApiSettingsState) => ApiSettingsState),
+    ) => {
+      const next =
+        typeof valueOrFn === "function" ? valueOrFn(settings) : valueOrFn;
+      // Optimistic update
+      queryClient.setQueryData(["bizConfig", bizId, "api_settings"], next);
+      // Persist to backend
+      saveSettings(next).catch(console.error);
+    },
+    [settings, bizId, queryClient, saveSettings],
+  );
+
+  return [settings, setSettings] as const;
+}

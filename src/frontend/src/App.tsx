@@ -13,6 +13,7 @@ import { JournalEntries } from "@/pages/Accounting/JournalEntries";
 import { Purchases } from "@/pages/Accounting/Purchases";
 import { BusinessManager } from "@/pages/Business/BusinessManager";
 import { BusinessSetupWizard } from "@/pages/Business/BusinessSetupWizard";
+import { CommunicationHub } from "@/pages/Communication/CommunicationHub";
 import { Dashboard } from "@/pages/Dashboard";
 import { AuditTrail } from "@/pages/GSTCompliance/AuditTrail";
 import { GSTAPIIntegration } from "@/pages/GSTCompliance/GSTAPIIntegration";
@@ -65,27 +66,27 @@ function PageContent({
     case "masters-taxrates":
       return <TaxRates />;
     case "invoicing-sales":
-      return <InvoiceList type="sales" />;
+      return <InvoiceList type="sales" onNavigate={onNavigate} />;
     case "invoicing-service":
-      return <InvoiceList type="service" />;
+      return <InvoiceList type="service" onNavigate={onNavigate} />;
     case "invoicing-einvoice":
-      return <InvoiceList type="einvoice" />;
+      return <InvoiceList type="einvoice" onNavigate={onNavigate} />;
     case "invoicing-quotations":
-      return <InvoiceList type="quotation" />;
+      return <InvoiceList type="quotation" onNavigate={onNavigate} />;
     case "invoicing-proforma":
-      return <InvoiceList type="proforma" />;
+      return <InvoiceList type="proforma" onNavigate={onNavigate} />;
     case "invoicing-eway-bill":
-      return <InvoiceList type="eway_bill" />;
+      return <InvoiceList type="eway_bill" onNavigate={onNavigate} />;
     case "invoicing-credit-notes":
-      return <InvoiceList type="credit_note" />;
+      return <InvoiceList type="credit_note" onNavigate={onNavigate} />;
     case "invoicing-debit-notes":
-      return <InvoiceList type="debit_note" />;
+      return <InvoiceList type="debit_note" onNavigate={onNavigate} />;
     case "invoicing-bill-of-supply":
-      return <InvoiceList type="bill_of_supply" />;
+      return <InvoiceList type="bill_of_supply" onNavigate={onNavigate} />;
     case "invoicing-delivery-challans":
-      return <InvoiceList type="delivery_challan" />;
+      return <InvoiceList type="delivery_challan" onNavigate={onNavigate} />;
     case "invoicing-all":
-      return <InvoiceList type="all" />;
+      return <InvoiceList type="all" onNavigate={onNavigate} />;
     case "invoicing-payments":
       return <Payments />;
     case "accounting-purchases":
@@ -161,6 +162,8 @@ function PageContent({
       return <PayrollPANVerification />;
     case "business-manager":
       return <BusinessManager />;
+    case "communication":
+      return <CommunicationHub />;
     default:
       return <Dashboard onNavigate={onNavigate} />;
   }

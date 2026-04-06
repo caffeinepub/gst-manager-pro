@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useEmployees, usePayrollRuns } from "@/hooks/useGSTStore";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -120,6 +121,7 @@ function calculateTDS(
 }
 
 export function StatutoryCompliance() {
+  const { activeBusiness } = useBusinessContext();
   const { runs } = usePayrollRuns();
   const { employees } = useEmployees();
 
@@ -223,14 +225,7 @@ export function StatutoryCompliance() {
       return;
     }
 
-    const profile = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("gst_business_profile") || "{}");
-      } catch {
-        return {};
-      }
-    })();
-    const businessName = profile.businessName || profile.name || "Your Company";
+    const businessName = activeBusiness?.name ?? "Your Company";
 
     const html = `
 <!DOCTYPE html><html><head><title>${type} Challan - ${monthLabel(month)}</title>

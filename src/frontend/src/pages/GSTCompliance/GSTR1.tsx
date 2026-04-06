@@ -18,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useInvoices } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { formatDate, formatINR } from "@/utils/formatting";
@@ -62,43 +63,19 @@ export function GSTR1() {
     status: "not_filed" as FilingStatus,
   };
 
-  // Get business state code from profile for B2CS sply_ty determination
-  const businessStateCode = (() => {
-    try {
-      const profile = JSON.parse(
-        localStorage.getItem("gst_business_profile") || "{}",
-      );
-      return String(profile.stateCode || profile.state_code || "27").padStart(
-        2,
-        "0",
-      );
-    } catch {
-      return "27";
-    }
-  })();
+  // Get business profile from context (replaces localStorage reads)
+  const { activeBusiness } = useBusinessContext();
 
-  const businessGstin = (() => {
-    try {
-      const profile = JSON.parse(
-        localStorage.getItem("gst_business_profile") || "{}",
-      );
-      return profile.gstin || profile.gstNumber || "";
-    } catch {
-      return "";
-    }
-  })();
+  // Get business state code from profile for B2CS sply_ty determination
+  const businessStateCode = String(activeBusiness?.stateCode || "27").padStart(
+    2,
+    "0",
+  );
+
+  const businessGstin = activeBusiness?.gstin ?? "";
 
   // Determine if business is high-turnover (>₹5 Crore) for HSN 6-digit requirement
-  const highTurnover = (() => {
-    try {
-      const profile = JSON.parse(
-        localStorage.getItem("gst_business_profile") || "{}",
-      );
-      return (profile.annualTurnover ?? 0) > 50000000;
-    } catch {
-      return false;
-    }
-  })();
+  const highTurnover = false; // annualTurnover not stored in Business record yet
 
   const handleFilingAction = () => {
     if (periodStatus.status === "not_filed") {

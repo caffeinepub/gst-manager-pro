@@ -11,6 +11,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -31,7 +37,18 @@ import { useAuditLogs, useInvoices } from "@/hooks/useGSTStore";
 import { useSwipeToDelete } from "@/hooks/useSwipeToDelete";
 import type { Invoice, InvoiceType } from "@/types/gst";
 import { formatDate, formatINR } from "@/utils/formatting";
-import { Edit, Eye, FileText, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Edit,
+  Eye,
+  FileText,
+  Mail,
+  MessageCircle,
+  Phone,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { InvoiceForm } from "./InvoiceForm";
@@ -52,6 +69,7 @@ const TYPE_LABELS: Record<InvoiceType | "all", string> = {
 
 interface InvoiceListProps {
   type: InvoiceType | "all";
+  onNavigate?: (page: import("@/types/gst").AppPage) => void;
 }
 
 // Swipeable card component for mobile invoice rows
@@ -160,7 +178,7 @@ function SwipeableInvoiceCard({
   );
 }
 
-export function InvoiceList({ type }: InvoiceListProps) {
+export function InvoiceList({ type, onNavigate }: InvoiceListProps) {
   const { invoices, deleteInvoice } = useInvoices();
   const { addLog } = useAuditLogs();
   const [showForm, setShowForm] = useState(false);
@@ -367,6 +385,47 @@ export function InvoiceList({ type }: InvoiceListProps) {
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground"
+                                  data-ocid={`invoice.send_button.${idx + 1}`}
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    toast.info("Opening Communication Hub...");
+                                    onNavigate?.("communication");
+                                  }}
+                                >
+                                  <Mail className="w-3.5 h-3.5 mr-2" />
+                                  Send via Email
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    toast.info("Opening Communication Hub...");
+                                    onNavigate?.("communication");
+                                  }}
+                                >
+                                  <Phone className="w-3.5 h-3.5 mr-2" />
+                                  Send via SMS
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    toast.info("Opening Communication Hub...");
+                                    onNavigate?.("communication");
+                                  }}
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5 mr-2" />
+                                  Send via WhatsApp
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>

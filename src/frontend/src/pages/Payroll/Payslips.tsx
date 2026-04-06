@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import { useEmployees, usePayrollRuns } from "@/hooks/useGSTStore";
 import { Download, FileText } from "lucide-react";
 import { useState } from "react";
@@ -42,6 +43,7 @@ function monthLabel(m: string) {
 }
 
 export function Payslips() {
+  const { activeBusiness } = useBusinessContext();
   const { runs } = usePayrollRuns();
   const { employees } = useEmployees();
   const [filterEmp, setFilterEmp] = useState("");
@@ -60,16 +62,8 @@ export function Payslips() {
     if (!line) return;
     const emp = employees.find((e) => e.id === employeeId);
 
-    const profile = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("gst_business_profile") || "{}");
-      } catch {
-        return {};
-      }
-    })();
-
-    const businessName = profile.businessName || profile.name || "Your Company";
-    const address = profile.address || "";
+    const businessName = activeBusiness?.name ?? "Your Company";
+    const address = "";
 
     const html = `
 <!DOCTYPE html>

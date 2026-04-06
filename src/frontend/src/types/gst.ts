@@ -248,6 +248,12 @@ export interface ApiSettings {
     enabled: boolean;
   };
   sms: { provider: string; key: string; senderId: string; enabled: boolean };
+  whatsapp: {
+    provider: string;
+    key: string;
+    phoneNumberId: string;
+    enabled: boolean;
+  };
 }
 
 // Indian States with GST codes
@@ -418,7 +424,8 @@ export type AppPage =
   | "payroll-reports"
   | "payroll-statutory"
   | "payroll-pan-verification"
-  | "business-manager";
+  | "business-manager"
+  | "communication";
 
 // ─── Payroll Types ────────────────────────────────────────────────
 

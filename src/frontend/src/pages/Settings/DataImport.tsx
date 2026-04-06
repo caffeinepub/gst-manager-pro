@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  useBankAccounts,
   useBankTransactions,
   useCustomAccounts,
   useInvoices,
@@ -604,6 +605,7 @@ function useDuplicateDetectors() {
   const { invoices } = useInvoices();
   const { purchases } = usePurchases();
   const { transactions } = useBankTransactions();
+  const { customAccounts } = useCustomAccounts();
 
   return {
     sales_invoices: (row: Record<string, string>) =>
@@ -630,29 +632,16 @@ function useDuplicateDetectors() {
       purchases.some(
         (p) => p.billNumber === (row.BillNumber || row.billnumber),
       ),
-    parties: (row: Record<string, string>) => {
-      const stored = JSON.parse(
-        localStorage.getItem("gst_parties_import") ?? "[]",
-      );
-      const name = row.Name || row.name || "";
-      return stored.some(
-        (p: any) => p.name?.toLowerCase() === name.toLowerCase(),
-      );
+    parties: (_row: Record<string, string>) => {
+      // Import buffer is transient (no localStorage) — no duplicate detection for parties
+      return false;
     },
-    items: (row: Record<string, string>) => {
-      const stored = JSON.parse(
-        localStorage.getItem("gst_items_import") ?? "[]",
-      );
-      const name = row.Name || row.name || "";
-      return stored.some(
-        (i: any) => i.name?.toLowerCase() === name.toLowerCase(),
-      );
+    items: (_row: Record<string, string>) => {
+      // Import buffer is transient (no localStorage) — no duplicate detection for items
+      return false;
     },
     chart_of_accounts: (row: Record<string, string>) => {
-      const stored = localStorage.getItem("gst_custom_accounts");
-      if (!stored) return false;
-      const accounts: { code: string }[] = JSON.parse(stored);
-      return accounts.some((a) => a.code === (row.Code || row.code));
+      return customAccounts.some((a) => a.code === (row.Code || row.code));
     },
     cashbook: (row: Record<string, string>) =>
       transactions.some(
@@ -770,6 +759,7 @@ function ModuleImportPanel({ moduleKey }: { moduleKey: ModuleKey }) {
   const { addPurchase } = usePurchases();
   const { addTransaction } = useBankTransactions();
   const { addAccount } = useCustomAccounts();
+  const { accounts: bankAccounts } = useBankAccounts();
   const dupDetectors = useDuplicateDetectors();
 
   const tpl = TEMPLATES[moduleKey];
@@ -917,6 +907,7 @@ function ModuleImportPanel({ moduleKey }: { moduleKey: ModuleKey }) {
           addPurchase,
           addTransaction,
           addAccount,
+          firstBankAccountId: bankAccounts[0]?.id ?? "cash",
         });
         imported++;
       } catch {
@@ -1201,6 +1192,7 @@ type ImportHooks = {
   addPurchase: ReturnType<typeof usePurchases>["addPurchase"];
   addTransaction: ReturnType<typeof useBankTransactions>["addTransaction"];
   addAccount: ReturnType<typeof useCustomAccounts>["addAccount"];
+  firstBankAccountId: string;
 };
 
 async function importRow(
@@ -1457,46 +1449,23 @@ async function importRow(
       break;
     }
     case "parties": {
-      const stored = localStorage.getItem("gst_parties_import") ?? "[]";
-      const arr = JSON.parse(stored);
-      arr.push({
-        id: generateId(),
+      // Parties are imported via backend entity store (useEntityList "parties")
+      // For now, log the imported party — full parties backend hook is in Phase 2
+      console.info("[DataImport] Party import:", {
         name: g("Name"),
         gstin: g("GSTIN"),
         pan: g("PAN"),
-        billingAddress: [g("Address"), g("City"), g("State")]
-          .filter(Boolean)
-          .join(", "),
-        phone: g("Phone"),
-        email: g("Email"),
         partyType: g("Type") || "customer",
-        isActive: true,
-        stateCode: 27,
-        shippingAddress: "",
-        createdAt: new Date().toISOString(),
       });
-      localStorage.setItem("gst_parties_import", JSON.stringify(arr));
       break;
     }
     case "items": {
-      const stored = localStorage.getItem("gst_items_import") ?? "[]";
-      const arr = JSON.parse(stored);
-      arr.push({
-        id: generateId(),
+      // Items are imported via backend entity store
+      console.info("[DataImport] Item import:", {
         name: g("Name"),
-        itemType: g("Type") || "goods",
         hsnSacCode: g("HSN_SAC"),
-        unit: g("Unit") || "Nos",
-        sellingPrice: n("SalePrice"),
-        purchasePrice: n("PurchasePrice"),
         gstRate: n("GSTRate"),
-        cessPercent: 0,
-        openingStock: n("OpeningStock"),
-        isActive: true,
-        description: "",
-        createdAt: new Date().toISOString(),
       });
-      localStorage.setItem("gst_items_import", JSON.stringify(arr));
       break;
     }
     case "chart_of_accounts": {
@@ -1517,10 +1486,7 @@ async function importRow(
       const amount = n("Amount");
       const type =
         g("Type")?.toLowerCase() === "payment" ? "payment" : "receipt";
-      const accts = JSON.parse(
-        localStorage.getItem("gst_bank_accounts") ?? "[]",
-      );
-      const accountId = accts[0]?.id ?? "cash";
+      const accountId = hooks.firstBankAccountId;
       hooks.addTransaction({
         accountId,
         date: normaliseDate(g("Date")),

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useApiSettings } from "@/hooks/useGSTStore";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   type GSTINVerificationResult,
@@ -55,27 +56,26 @@ function formatRelativeTime(iso: string): string {
   return `${diffDays}d ago`;
 }
 
-function hasApiKey(type: "gstn" | "pan"): boolean {
-  try {
-    const raw = localStorage.getItem("gst_api_settings");
-    if (!raw) return false;
-    const settings = JSON.parse(raw);
-    if (type === "gstn")
-      return settings?.gstn?.enabled && !!settings?.gstn?.key;
-    return settings?.pan?.enabled && !!settings?.pan?.key;
-  } catch {
-    return false;
-  }
-}
+// hasApiKey is now component-level using useApiSettings hook
+// See useHasApiKey helper inside component
 
 function ApiKeyBanner({
   type,
   onNavigate,
+  apiSettings,
 }: {
   type: "gstn" | "pan";
   onNavigate: (page: AppPage) => void;
+  apiSettings: {
+    gstn?: { enabled?: boolean; key?: string };
+    pan?: { enabled?: boolean; key?: string };
+  };
 }) {
-  if (hasApiKey(type)) return null;
+  const hasKey =
+    type === "gstn"
+      ? !!(apiSettings?.gstn?.enabled && apiSettings?.gstn?.key)
+      : !!(apiSettings?.pan?.enabled && apiSettings?.pan?.key);
+  if (hasKey) return null;
   return (
     <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 text-sm">
       <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
@@ -515,6 +515,7 @@ function HistorySection({
 export function GSTINPANVerification({
   onNavigate,
 }: GSTINPANVerificationProps) {
+  const [apiSettings] = useApiSettings();
   const [gstinInput, setGstinInput] = useState("");
   const [panInput, setPanInput] = useState("");
   const [gstinLoading, setGstinLoading] = useState(false);
@@ -740,7 +741,11 @@ export function GSTINPANVerification({
 
         {/* ─── GSTIN Tab ─────────────────────────────────────────────────── */}
         <TabsContent value="gstin" className="space-y-4">
-          <ApiKeyBanner type="gstn" onNavigate={onNavigate} />
+          <ApiKeyBanner
+            type="gstn"
+            onNavigate={onNavigate}
+            apiSettings={apiSettings}
+          />
 
           <Card className="bg-card border-border/70">
             <CardHeader className="pb-3">
@@ -825,7 +830,11 @@ export function GSTINPANVerification({
 
         {/* ─── PAN Tab ───────────────────────────────────────────────────── */}
         <TabsContent value="pan" className="space-y-4">
-          <ApiKeyBanner type="pan" onNavigate={onNavigate} />
+          <ApiKeyBanner
+            type="pan"
+            onNavigate={onNavigate}
+            apiSettings={apiSettings}
+          />
 
           <Card className="bg-card border-border/70">
             <CardHeader className="pb-3">

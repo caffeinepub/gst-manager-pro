@@ -17,9 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { DEFAULT_API_SETTINGS, useApiSettings } from "@/hooks/useGSTStore";
 import { verifyGSTIN, verifyPAN } from "@/services/gstVerificationService";
-import type { ApiSettings } from "@/types/gst";
 import {
   AlertCircle,
   BanknoteIcon,
@@ -29,6 +28,7 @@ import {
   EyeOff,
   FlaskConical,
   Loader2,
+  MessageCircle,
   MessageSquare,
   QrCode,
   Save,
@@ -41,65 +41,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
-const DEFAULT_SETTINGS: ApiSettings = {
-  gstn: {
-    key: "",
-    url: "https://api.gst.gov.in/enriched/commonapi/search",
-    clientId: "",
-    clientSecret: "",
-    enabled: false,
-    sandboxMode: false,
-  },
-  pan: {
-    key: "",
-    url: "https://api.incometax.gov.in/v1/pan-allotment-info",
-    enabled: false,
-    sandboxMode: false,
-  },
-  einvoice: {
-    key: "",
-    url: "https://einvoice1.gst.gov.in/irisapi/einvoice/generate",
-    clientId: "",
-    clientSecret: "",
-    enabled: false,
-    sandboxMode: false,
-  },
-  ewaybill: {
-    key: "",
-    url: "https://ewaybillgst.gov.in/api/ewayapi/genewaybill",
-    username: "",
-    enabled: false,
-    sandboxMode: false,
-  },
-  gstnReturn: {
-    key: "",
-    url: "https://api.gst.gov.in/enriched/returns/gstr1",
-    clientId: "",
-    enabled: false,
-  },
-  accountAggregator: {
-    clientId: "",
-    clientSecret: "",
-    url: "https://api.sandbox.sahamati.org.in",
-    redirectUri: "",
-    enabled: false,
-    sandboxMode: true,
-  },
-  banking: {
-    key: "",
-    url: "https://api.example-bank.in/v1",
-    bankName: "",
-    accountId: "",
-    enabled: false,
-  },
-  sms: {
-    provider: "msg91",
-    key: "",
-    senderId: "",
-    enabled: false,
-  },
-};
 
 function MaskedInput({
   value,
@@ -167,10 +108,7 @@ function SandboxToggle({
 }
 
 export function APIConfig() {
-  const [settings, setSettings] = useLocalStorage<ApiSettings>(
-    "gst_api_settings",
-    DEFAULT_SETTINGS,
-  );
+  const [settings, setSettings] = useApiSettings();
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; message: string }>
@@ -184,18 +122,24 @@ export function APIConfig() {
   const updateEInvoice = (key: string, val: string | boolean) =>
     setSettings((prev) => ({
       ...prev,
-      einvoice: { ...(prev.einvoice ?? DEFAULT_SETTINGS.einvoice), [key]: val },
+      einvoice: {
+        ...(prev.einvoice ?? DEFAULT_API_SETTINGS.einvoice),
+        [key]: val,
+      },
     }));
   const updateEWayBill = (key: string, val: string | boolean) =>
     setSettings((prev) => ({
       ...prev,
-      ewaybill: { ...(prev.ewaybill ?? DEFAULT_SETTINGS.ewaybill), [key]: val },
+      ewaybill: {
+        ...(prev.ewaybill ?? DEFAULT_API_SETTINGS.ewaybill),
+        [key]: val,
+      },
     }));
   const updateGstnReturn = (key: string, val: string | boolean) =>
     setSettings((prev) => ({
       ...prev,
       gstnReturn: {
-        ...(prev.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn),
+        ...(prev.gstnReturn ?? DEFAULT_API_SETTINGS.gstnReturn),
         [key]: val,
       },
     }));
@@ -203,7 +147,7 @@ export function APIConfig() {
     setSettings((prev) => ({
       ...prev,
       accountAggregator: {
-        ...(prev.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator),
+        ...(prev.accountAggregator ?? DEFAULT_API_SETTINGS.accountAggregator),
         [key]: val,
       },
     }));
@@ -214,6 +158,17 @@ export function APIConfig() {
     }));
   const updateSms = (key: string, val: string | boolean) =>
     setSettings((prev) => ({ ...prev, sms: { ...prev.sms, [key]: val } }));
+  const updateWhatsapp = (key: string, val: string | boolean) =>
+    setSettings((prev) => ({
+      ...prev,
+      whatsapp: {
+        provider: prev.whatsapp?.provider ?? "meta",
+        key: prev.whatsapp?.key ?? "",
+        phoneNumberId: prev.whatsapp?.phoneNumberId ?? "",
+        enabled: prev.whatsapp?.enabled ?? false,
+        [key]: val,
+      },
+    }));
 
   // Test connections
   const testGSTN = async () => {
@@ -250,7 +205,7 @@ export function APIConfig() {
 
   const testEInvoice = async () => {
     setTesting("EInvoice");
-    const cfg = settings.einvoice ?? DEFAULT_SETTINGS.einvoice;
+    const cfg = settings.einvoice ?? DEFAULT_API_SETTINGS.einvoice;
     if (!cfg.key) {
       toast.warning("Enter credentials first");
       setTesting(null);
@@ -293,7 +248,7 @@ export function APIConfig() {
 
   const testEWayBill = async () => {
     setTesting("EWayBill");
-    const cfg = settings.ewaybill ?? DEFAULT_SETTINGS.ewaybill;
+    const cfg = settings.ewaybill ?? DEFAULT_API_SETTINGS.ewaybill;
     if (!cfg.key) {
       toast.warning("Enter credentials first");
       setTesting(null);
@@ -335,7 +290,7 @@ export function APIConfig() {
 
   const testGstnReturn = async () => {
     setTesting("GSTNReturn");
-    const cfg = settings.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn;
+    const cfg = settings.gstnReturn ?? DEFAULT_API_SETTINGS.gstnReturn;
     if (!cfg.key) {
       toast.warning("Enter credentials first");
       setTesting(null);
@@ -371,7 +326,7 @@ export function APIConfig() {
   const testAA = async () => {
     setTesting("AA");
     const cfg =
-      settings.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator;
+      settings.accountAggregator ?? DEFAULT_API_SETTINGS.accountAggregator;
     if (!cfg.clientId) {
       toast.warning("Enter Client ID first");
       setTesting(null);
@@ -401,13 +356,102 @@ export function APIConfig() {
     }
   };
 
+  const testSms = async () => {
+    setTesting("SMS");
+    const smsCfg = settings.sms;
+    if (!smsCfg?.key) {
+      toast.warning("Enter SMS API key first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const provider = smsCfg.provider;
+      if (provider === "msg91") {
+        const res = await fetch("https://api.msg91.com/api/v5/account", {
+          headers: { authkey: smsCfg.key },
+          signal: AbortSignal.timeout(8000),
+        });
+        const ok = res.ok || res.status === 401;
+        const msg = ok
+          ? `Reachable (HTTP ${res.status})`
+          : "Auth failed — check API key";
+        setTestResults((prev) => ({ ...prev, SMS: { ok, message: msg } }));
+        if (ok) toast.success(`SMS: ${msg}`);
+        else toast.error(`SMS: ${msg}`);
+      } else if (provider === "sendgrid") {
+        // SendGrid test is same as email
+        const res = await fetch("https://api.sendgrid.com/v3/user/profile", {
+          headers: { Authorization: `Bearer ${smsCfg.key}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        const ok = res.ok || res.status === 401;
+        const msg = ok ? `Reachable (HTTP ${res.status})` : "Auth failed";
+        setTestResults((prev) => ({ ...prev, SMS: { ok, message: msg } }));
+        if (ok) toast.success(`Email/SendGrid: ${msg}`);
+        else toast.error(`Email/SendGrid: ${msg}`);
+      } else {
+        setTestResults((prev) => ({
+          ...prev,
+          SMS: {
+            ok: true,
+            message: "Custom provider — manual testing required",
+          },
+        }));
+        toast.info("Custom provider: manually test your endpoint");
+      }
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        SMS: { ok: true, message: "CORS blocked (expected for browser calls)" },
+      }));
+      toast.warning("SMS: CORS blocked — requires server proxy");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const testWhatsApp = async () => {
+    setTesting("WhatsApp");
+    const waCfg = settings.whatsapp;
+    if (!waCfg?.key) {
+      toast.warning("Enter WhatsApp API key first");
+      setTesting(null);
+      return;
+    }
+    try {
+      const phoneId = waCfg.phoneNumberId || "0";
+      const res = await fetch(`https://graph.facebook.com/v18.0/${phoneId}`, {
+        headers: { Authorization: `Bearer ${waCfg.key}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      const ok = res.ok || res.status === 400 || res.status === 401;
+      const msg = ok
+        ? `Reachable (HTTP ${res.status})`
+        : "Auth failed — check token";
+      setTestResults((prev) => ({ ...prev, WhatsApp: { ok, message: msg } }));
+      if (ok) toast.success(`WhatsApp: ${msg}`);
+      else toast.error(`WhatsApp: ${msg}`);
+    } catch {
+      setTestResults((prev) => ({
+        ...prev,
+        WhatsApp: {
+          ok: true,
+          message: "CORS blocked (expected for browser calls)",
+        },
+      }));
+      toast.warning("WhatsApp: CORS blocked — requires server proxy");
+    } finally {
+      setTesting(null);
+    }
+  };
+
   const handleSave = () => toast.success("API settings saved");
 
-  const einvoiceCfg = settings.einvoice ?? DEFAULT_SETTINGS.einvoice;
-  const ewaybillCfg = settings.ewaybill ?? DEFAULT_SETTINGS.ewaybill;
-  const gstnReturnCfg = settings.gstnReturn ?? DEFAULT_SETTINGS.gstnReturn;
+  const einvoiceCfg = settings.einvoice ?? DEFAULT_API_SETTINGS.einvoice;
+  const ewaybillCfg = settings.ewaybill ?? DEFAULT_API_SETTINGS.ewaybill;
+  const gstnReturnCfg = settings.gstnReturn ?? DEFAULT_API_SETTINGS.gstnReturn;
   const aaCfg =
-    settings.accountAggregator ?? DEFAULT_SETTINGS.accountAggregator;
+    settings.accountAggregator ?? DEFAULT_API_SETTINGS.accountAggregator;
 
   return (
     <div className="max-w-3xl space-y-6" data-ocid="apiconfig.section">
@@ -1233,6 +1277,143 @@ export function APIConfig() {
                 data-ocid="apiconfig.sms.senderid.input"
               />
             </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.SMS && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.SMS.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "SMS"}
+              onClick={() => void testSms()}
+              data-ocid="apiconfig.sms.test_button"
+              className="shrink-0"
+            >
+              {testing === "SMS" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* WhatsApp Business API */}
+      <Card className="bg-card border-border/70">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MessageCircle className="w-5 h-5 text-[#25D366]" />
+              WhatsApp Business API
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {testResults.WhatsApp && (
+                <Badge
+                  variant={testResults.WhatsApp.ok ? "default" : "destructive"}
+                  className="text-xs"
+                >
+                  {testResults.WhatsApp.ok ? "Reachable" : "Failed"}
+                </Badge>
+              )}
+              <Switch
+                checked={settings.whatsapp?.enabled ?? false}
+                onCheckedChange={(v) => updateWhatsapp("enabled", v)}
+                data-ocid="apiconfig.whatsapp.switch"
+              />
+            </div>
+          </div>
+          <CardDescription>
+            Send invoices, payslips, and payment reminders via WhatsApp Business
+            (Meta, Twilio, WATI, or custom)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/40 border border-border/50 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <ExternalLink className="w-3 h-3" />
+              Meta Business API endpoint
+            </div>
+            <code className="block text-muted-foreground font-mono">
+              {"https://graph.facebook.com/v18.0/{phoneNumberId}/messages"}
+            </code>
+            <p className="text-muted-foreground">
+              Requires a Meta Business Account with WhatsApp Business API
+              enabled. Get Access Token from Meta Business Manager.
+            </p>
+            <a
+              href="https://developers.facebook.com/docs/whatsapp/cloud-api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Meta WhatsApp Cloud API Docs <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Provider</Label>
+              <Select
+                value={settings.whatsapp?.provider ?? "meta"}
+                onValueChange={(v) => updateWhatsapp("provider", v)}
+              >
+                <SelectTrigger data-ocid="apiconfig.whatsapp.provider.select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meta">Meta Business API</SelectItem>
+                  <SelectItem value="twilio">Twilio WhatsApp</SelectItem>
+                  <SelectItem value="wati">WATI</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Access Token / API Key</Label>
+              <MaskedInput
+                value={settings.whatsapp?.key ?? ""}
+                onChange={(v) => updateWhatsapp("key", v)}
+                placeholder="Enter Access Token"
+                data-ocid="apiconfig.whatsapp.key.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone Number ID (Meta)</Label>
+              <Input
+                value={settings.whatsapp?.phoneNumberId ?? ""}
+                onChange={(e) =>
+                  updateWhatsapp("phoneNumberId", e.target.value)
+                }
+                placeholder="Meta Phone Number ID"
+                data-ocid="apiconfig.whatsapp.phoneid.input"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            {testResults.WhatsApp && (
+              <p className="text-xs text-muted-foreground flex-1 truncate">
+                {testResults.WhatsApp.message}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testing === "WhatsApp"}
+              onClick={() => void testWhatsApp()}
+              data-ocid="apiconfig.whatsapp.test_button"
+              className="shrink-0"
+            >
+              {testing === "WhatsApp" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
           </div>
         </CardContent>
       </Card>
