@@ -10,13 +10,13 @@
   "categories": ["finance", "business", "productivity"],
   "icons": [
     {
-      "src": "/assets/uploads/MILITIS-Logo-1M_edited-1.jpg",
+      "src": "/assets/MILITIS-Logo-1M_edited.jpg",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/uploads/MILITIS-Logo-1M_edited-1.jpg",
+      "src": "/assets/MILITIS-Logo-1M_edited.jpg",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"

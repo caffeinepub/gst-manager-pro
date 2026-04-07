@@ -5,7 +5,7 @@ import { useLocalStorage } from "./useLocalStorage";
 const EXTENDED_PROFILE_KEY = "gst_extended_profile";
 const LOCAL_BUSINESS_NAME_KEY = "gst_local_business_name";
 
-const DEFAULT_LOGO = "/assets/uploads/MILITIS-Logo-1M-1-1.JPG";
+const DEFAULT_LOGO = "/assets/MILITIS-Logo-1M-1.JPG";
 
 export interface ExtendedBusinessProfile {
   tradeName: string;
