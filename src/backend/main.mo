@@ -7,20 +7,14 @@ import Map "mo:core/Map";
 import Array "mo:core/Array";
 import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
-import Result "mo:core/Result";
-import List "mo:core/List";
-import Option "mo:core/Option";
 import Principal "mo:core/Principal";
 
-import MixinAuthorization "authorization/MixinAuthorization";
-import AccessControl "authorization/access-control";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   type Timestamp = Int;
   type NatId = Nat;
-
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
 
   // ─── Shared Types ───────────────────────────────────────────────────────────
 
@@ -183,23 +177,17 @@ actor {
   // ─── User Profile Management ────────────────────────────────────────────────
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access profiles");
-    };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != user) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
     userProfiles.add(caller, profile);
   };
 
@@ -216,9 +204,6 @@ actor {
   // ─── Multi-Business Management (per-user) ───────────────────────────────────
 
   public shared ({ caller }) func saveBusinessRecord(id : Text, recordJson : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     m.add("biz:" # id, recordJson);
     let existing = switch (m.get("biz:__index")) {
@@ -232,16 +217,10 @@ actor {
   };
 
   public query ({ caller }) func getBusinessRecord(id : Text) : async ?Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     getUserMap(caller).get("biz:" # id);
   };
 
   public query ({ caller }) func getAllBusinessRecords() : async [Text] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     switch (m.get("biz:__index")) {
       case (?idx) {
@@ -254,9 +233,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteBusinessRecord(id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     m.remove("biz:" # id);
     let existing = switch (m.get("biz:__index")) {
@@ -270,9 +246,6 @@ actor {
   // ─── Generic Per-Business Entity Storage ────────────────────────────────────
 
   public shared ({ caller }) func saveEntityRecord(bizId : Text, entityType : Text, id : Text, recordJson : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     let key = bizId # ":" # entityType # ":" # id;
     m.add(key, recordJson);
@@ -288,16 +261,10 @@ actor {
   };
 
   public query ({ caller }) func getEntityRecord(bizId : Text, entityType : Text, id : Text) : async ?Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     getUserMap(caller).get(bizId # ":" # entityType # ":" # id);
   };
 
   public query ({ caller }) func getAllEntityRecords(bizId : Text, entityType : Text) : async [Text] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     let indexKey = bizId # ":" # entityType # ":__index";
     switch (m.get(indexKey)) {
@@ -311,9 +278,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteEntityRecord(bizId : Text, entityType : Text, id : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     m.remove(bizId # ":" # entityType # ":" # id);
     let indexKey = bizId # ":" # entityType # ":__index";
@@ -328,25 +292,16 @@ actor {
   // ─── Settings / Config per business (single JSON blob) ──────────────────────
 
   public shared ({ caller }) func saveBizConfig(bizId : Text, configKey : Text, value : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     getUserMap(caller).add(bizId # ":config:" # configKey, value);
   };
 
   public query ({ caller }) func getBizConfig(bizId : Text, configKey : Text) : async ?Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     getUserMap(caller).get(bizId # ":config:" # configKey);
   };
 
   // ─── Invoice Counter (auto-increment per type per business) ─────────────────
 
   public shared ({ caller }) func getNextInvoiceNumber(bizId : Text, counterType : Text, prefix : Text) : async Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     let m = getUserMap(caller);
     let counterKey = bizId # ":counter:" # counterType;
     let current : Nat = switch (m.get(counterKey)) {
@@ -370,9 +325,6 @@ actor {
   // ─── Legacy Party Master CRUD ────────────────────────────────────────────────
 
   public shared ({ caller }) func addParty(party : PartyMaster.Party) : async NatId {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add parties");
-    };
     let id = nextPartyId;
     parties.add(id, { party with id });
     nextPartyId += 1;
@@ -380,9 +332,6 @@ actor {
   };
 
   public shared ({ caller }) func updateParty(id : NatId, updatedParty : PartyMaster.Party) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update parties");
-    };
     if (not parties.containsKey(id)) {
       Runtime.trap("Party not found");
     };
@@ -390,9 +339,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteParty(id : NatId) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete parties");
-    };
     if (not parties.containsKey(id)) {
       Runtime.trap("Party not found");
     };
@@ -410,9 +356,6 @@ actor {
   // ─── Legacy Item/Service Master CRUD ────────────────────────────────────────
 
   public shared ({ caller }) func addItem(item : ItemServiceMaster.Item) : async NatId {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add items");
-    };
     let id = nextItemId;
     items.add(id, { item with id });
     nextItemId += 1;
@@ -420,9 +363,6 @@ actor {
   };
 
   public shared ({ caller }) func updateItem(id : NatId, updatedItem : ItemServiceMaster.Item) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update items");
-    };
     if (not items.containsKey(id)) {
       Runtime.trap("Item not found");
     };
@@ -430,9 +370,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteItem(id : NatId) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete items");
-    };
     if (not items.containsKey(id)) {
       Runtime.trap("Item not found");
     };
@@ -450,9 +387,6 @@ actor {
   // ─── Legacy Tax Rate Master CRUD ─────────────────────────────────────────────
 
   public shared ({ caller }) func addTaxRate(taxRate : TaxRateMaster.TaxRate) : async NatId {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can add tax rates");
-    };
     let id = nextTaxRateId;
     taxRates.add(id, { taxRate with id });
     nextTaxRateId += 1;
@@ -460,9 +394,6 @@ actor {
   };
 
   public shared ({ caller }) func updateTaxRate(id : NatId, updatedTaxRate : TaxRateMaster.TaxRate) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update tax rates");
-    };
     if (not taxRates.containsKey(id)) {
       Runtime.trap("Tax rate not found");
     };
@@ -470,9 +401,6 @@ actor {
   };
 
   public shared ({ caller }) func deleteTaxRate(id : NatId) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete tax rates");
-    };
     if (not taxRates.containsKey(id)) {
       Runtime.trap("Tax rate not found");
     };
@@ -492,9 +420,6 @@ actor {
   let lastSyncTimes = Map.empty<Principal, Int>();
 
   public shared ({ caller }) func saveCloudData(key : Text, value : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save cloud data");
-    };
     let userMap = switch (cloudData.get(caller)) {
       case (?m) { m };
       case null {
@@ -508,9 +433,6 @@ actor {
   };
 
   public query ({ caller }) func getCloudData(key : Text) : async ?Text {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     switch (cloudData.get(caller)) {
       case (?userMap) { userMap.get(key) };
       case null { null };
@@ -518,9 +440,6 @@ actor {
   };
 
   public query ({ caller }) func getAllCloudData() : async [(Text, Text)] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     switch (cloudData.get(caller)) {
       case (?userMap) {
         userMap.entries().toArray();
@@ -530,16 +449,10 @@ actor {
   };
 
   public query ({ caller }) func getLastSyncTime() : async ?Int {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     lastSyncTimes.get(caller);
   };
 
   public shared ({ caller }) func deleteCloudData(key : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
-    };
     switch (cloudData.get(caller)) {
       case (?userMap) { userMap.remove(key) };
       case null {};

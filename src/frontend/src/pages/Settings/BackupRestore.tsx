@@ -29,7 +29,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useActor } from "@/hooks/useActor";
 import { type CloudBackup, useBackup } from "@/hooks/useBackup";
 import { useCloudSync } from "@/hooks/useCloudSync";
 import { useQueryClient } from "@tanstack/react-query";
@@ -71,8 +70,8 @@ function formatDate(date: Date | null): string {
 }
 
 export function BackupRestore() {
-  const { actor } = useActor();
   const {
+    createLocalBackup,
     restoreFromFile,
     getCloudBackups,
     createCloudBackup,
@@ -147,107 +146,14 @@ export function BackupRestore() {
   // ── Local Backup ──────────────────────────────────────────────────────────
 
   const handleDownload = async () => {
-    const bizId = localStorage.getItem("gst_active_business") ?? "";
-    const entityTypes = [
-      "invoices",
-      "parties",
-      "items",
-      "employees",
-      "payrollRuns",
-      "journalEntries",
-      "cashTransactions",
-      "bankTransactions",
-      "purchases",
-    ];
-
-    let backendData: Record<string, unknown> = {};
-    let hasBackendData = false;
-
-    if (actor && bizId) {
-      try {
-        const results = await Promise.all(
-          entityTypes.map(async (et) => {
-            try {
-              const records = await (
-                actor as unknown as {
-                  getAllEntityRecords: (
-                    bizId: string,
-                    entityType: string,
-                  ) => Promise<string[]>;
-                }
-              ).getAllEntityRecords(bizId, et);
-              return {
-                et,
-                records: records.map((r: string) => {
-                  try {
-                    return JSON.parse(r);
-                  } catch {
-                    return r;
-                  }
-                }),
-              };
-            } catch {
-              return { et, records: [] };
-            }
-          }),
-        );
-        for (const { et, records } of results) {
-          if (records.length > 0) {
-            backendData[`backend_${et}`] = records;
-            hasBackendData = true;
-          }
-        }
-      } catch (err) {
-        console.warn(
-          "[BackupRestore] Backend fetch failed, using localStorage only:",
-          err,
-        );
-        toast.warning(
-          "Could not fetch ICP backend data — creating localStorage-only backup",
-        );
-      }
-    } else if (!actor) {
-      toast.warning(
-        "Not authenticated — backup includes localStorage data only",
+    try {
+      await createLocalBackup();
+      toast.success("Backup downloaded — includes ICP entity store data");
+    } catch (err) {
+      toast.error(
+        `Backup failed: ${(err as Error)?.message || "Unknown error"}`,
       );
     }
-
-    // Collect localStorage data
-    const localData: Record<string, unknown> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith("gst_") && key !== "gst_cloud_backups") {
-        try {
-          localData[key] = JSON.parse(localStorage.getItem(key) || "null");
-        } catch {
-          localData[key] = localStorage.getItem(key);
-        }
-      }
-    }
-
-    const backup = {
-      version: "2.0",
-      exportedAt: new Date().toISOString(),
-      appName: "GST Manager Pro",
-      source: hasBackendData ? "ICP Backend + Local Cache" : "Local Cache only",
-      bizId,
-      data: { ...localData, ...backendData },
-    };
-
-    const blob = new Blob([JSON.stringify(backup, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `gst_backup_${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(
-      hasBackendData
-        ? "Backup downloaded — includes ICP backend + local cache data"
-        : "Backup downloaded — localStorage only (login to include backend data)",
-    );
   };
 
   const handleFileDrop = (e: React.DragEvent) => {
@@ -288,10 +194,10 @@ export function BackupRestore() {
 
   // ── Cloud Backup ──────────────────────────────────────────────────────────
 
-  const handleCreateCloud = () => {
+  const handleCreateCloud = async () => {
     setIsCreatingCloud(true);
     try {
-      createCloudBackup(cloudName);
+      await createCloudBackup(cloudName);
       refreshCloudBackups();
       setCloudName("");
       toast.success("Cloud snapshot created");
@@ -302,9 +208,9 @@ export function BackupRestore() {
     }
   };
 
-  const handleCloudRestore = (id: string) => {
+  const handleCloudRestore = async (id: string) => {
     try {
-      restoreCloudBackup(id);
+      await restoreCloudBackup(id);
       toast.success(
         "Data restored successfully! Please refresh the page to see changes.",
         { duration: 6000 },

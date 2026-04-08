@@ -193,8 +193,8 @@
   }
 
   body {
-    background: #fff !important;
-    color: #000 !important;
+    background: oklch(1 0 0) !important;
+    color: oklch(0.18 0.04 254) !important;
     font-size: 10pt;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

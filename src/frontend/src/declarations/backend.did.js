@@ -54,11 +54,6 @@ export const TaxRate = IDL.Record({
   'description' : IDL.Text,
   'cessPercent' : IDL.Nat,
 });
-export const UserRole = IDL.Variant({
-  'admin' : IDL.Null,
-  'user' : IDL.Null,
-  'guest' : IDL.Null,
-});
 export const RegistrationType = IDL.Variant({
   'unregistered' : IDL.Null,
   'regular' : IDL.Null,
@@ -79,21 +74,50 @@ export const UserProfile = IDL.Record({
 });
 
 export const idlService = IDL.Service({
-  '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addItem' : IDL.Func([Item], [NatId], []),
   'addParty' : IDL.Func([Party], [NatId], []),
   'addTaxRate' : IDL.Func([TaxRate], [NatId], []),
-  'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'deleteBusinessRecord' : IDL.Func([IDL.Text], [], []),
+  'deleteCloudData' : IDL.Func([IDL.Text], [], []),
+  'deleteEntityRecord' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'deleteItem' : IDL.Func([NatId], [], []),
   'deleteParty' : IDL.Func([NatId], [], []),
   'deleteTaxRate' : IDL.Func([NatId], [], []),
+  'getAllBusinessRecords' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+  'getAllCloudData' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
+      ['query'],
+    ),
+  'getAllEntityRecords' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Vec(IDL.Text)],
+      ['query'],
+    ),
   'getAllItems' : IDL.Func([], [IDL.Vec(Item)], ['query']),
   'getAllParties' : IDL.Func([], [IDL.Vec(Party)], ['query']),
   'getAllTaxRates' : IDL.Func([], [IDL.Vec(TaxRate)], ['query']),
+  'getBizConfig' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Opt(IDL.Text)],
+      ['query'],
+    ),
   'getBusinessProfile' : IDL.Func([], [IDL.Opt(BusinessProfile)], ['query']),
+  'getBusinessRecord' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-  'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getCloudData' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+  'getEntityRecord' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Opt(IDL.Text)],
+      ['query'],
+    ),
   'getItem' : IDL.Func([NatId], [IDL.Opt(Item)], ['query']),
+  'getLastSyncTime' : IDL.Func([], [IDL.Opt(IDL.Int)], ['query']),
+  'getNextInvoiceNumber' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text],
+      [],
+    ),
   'getParty' : IDL.Func([NatId], [IDL.Opt(Party)], ['query']),
   'getTaxRate' : IDL.Func([NatId], [IDL.Opt(TaxRate)], ['query']),
   'getUserProfile' : IDL.Func(
@@ -101,8 +125,15 @@ export const idlService = IDL.Service({
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
-  'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'saveBizConfig' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  'saveBusinessRecord' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'saveCloudData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'saveEntityRecord' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
   'setBusinessProfile' : IDL.Func([BusinessProfile], [], []),
   'updateItem' : IDL.Func([NatId, Item], [], []),
   'updateParty' : IDL.Func([NatId, Party], [], []),
@@ -155,11 +186,6 @@ export const idlFactory = ({ IDL }) => {
     'description' : IDL.Text,
     'cessPercent' : IDL.Nat,
   });
-  const UserRole = IDL.Variant({
-    'admin' : IDL.Null,
-    'user' : IDL.Null,
-    'guest' : IDL.Null,
-  });
   const RegistrationType = IDL.Variant({
     'unregistered' : IDL.Null,
     'regular' : IDL.Null,
@@ -180,21 +206,50 @@ export const idlFactory = ({ IDL }) => {
   });
   
   return IDL.Service({
-    '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addItem' : IDL.Func([Item], [NatId], []),
     'addParty' : IDL.Func([Party], [NatId], []),
     'addTaxRate' : IDL.Func([TaxRate], [NatId], []),
-    'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'deleteBusinessRecord' : IDL.Func([IDL.Text], [], []),
+    'deleteCloudData' : IDL.Func([IDL.Text], [], []),
+    'deleteEntityRecord' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'deleteItem' : IDL.Func([NatId], [], []),
     'deleteParty' : IDL.Func([NatId], [], []),
     'deleteTaxRate' : IDL.Func([NatId], [], []),
+    'getAllBusinessRecords' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+    'getAllCloudData' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
+        ['query'],
+      ),
+    'getAllEntityRecords' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Vec(IDL.Text)],
+        ['query'],
+      ),
     'getAllItems' : IDL.Func([], [IDL.Vec(Item)], ['query']),
     'getAllParties' : IDL.Func([], [IDL.Vec(Party)], ['query']),
     'getAllTaxRates' : IDL.Func([], [IDL.Vec(TaxRate)], ['query']),
+    'getBizConfig' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Opt(IDL.Text)],
+        ['query'],
+      ),
     'getBusinessProfile' : IDL.Func([], [IDL.Opt(BusinessProfile)], ['query']),
+    'getBusinessRecord' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-    'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getCloudData' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+    'getEntityRecord' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Opt(IDL.Text)],
+        ['query'],
+      ),
     'getItem' : IDL.Func([NatId], [IDL.Opt(Item)], ['query']),
+    'getLastSyncTime' : IDL.Func([], [IDL.Opt(IDL.Int)], ['query']),
+    'getNextInvoiceNumber' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text],
+        [],
+      ),
     'getParty' : IDL.Func([NatId], [IDL.Opt(Party)], ['query']),
     'getTaxRate' : IDL.Func([NatId], [IDL.Opt(TaxRate)], ['query']),
     'getUserProfile' : IDL.Func(
@@ -202,8 +257,15 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
-    'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'saveBizConfig' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    'saveBusinessRecord' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'saveCloudData' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'saveEntityRecord' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [],
+        [],
+      ),
     'setBusinessProfile' : IDL.Func([BusinessProfile], [], []),
     'updateItem' : IDL.Func([NatId, Item], [], []),
     'updateParty' : IDL.Func([NatId, Party], [], []),

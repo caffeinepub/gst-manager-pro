@@ -1,11 +1,9 @@
 import { useCallback } from "react";
+import { useBizConfig } from "./useBackendStore";
 import { useBusinessContext } from "./useBusinessContext";
-import { useLocalStorage } from "./useLocalStorage";
-
-const EXTENDED_PROFILE_KEY = "gst_extended_profile";
-const LOCAL_BUSINESS_NAME_KEY = "gst_local_business_name";
 
 const DEFAULT_LOGO = "/assets/MILITIS-Logo-1M-1.JPG";
+const LOCAL_BUSINESS_NAME_KEY = "gst_local_business_name";
 
 export interface ExtendedBusinessProfile {
   tradeName: string;
@@ -72,51 +70,44 @@ export function useBusinessLogo() {
   return { logo: logo || DEFAULT_LOGO, saveLogo, clearLogo };
 }
 
+/**
+ * Extended business profile — now backed by useBizConfig (per-business ICP storage).
+ * Fields: tradeName, PAN, bank details, invoicePrefix are all stored in the canister.
+ */
 export function useExtendedProfile() {
-  const { activeBizId } = useBusinessContext();
-  // Namespace the extended profile key per business
-  const key = activeBizId
-    ? `gst_${activeBizId}_extended_profile`
-    : EXTENDED_PROFILE_KEY;
-
-  const [profile, setProfile] = useLocalStorage<ExtendedBusinessProfile>(
-    key,
+  const [profile, setProfileRaw] = useBizConfig<ExtendedBusinessProfile>(
+    "extended_profile",
     DEFAULT_EXTENDED,
   );
 
   const saveProfile = useCallback(
     (updates: Partial<ExtendedBusinessProfile>) => {
-      setProfile((prev) => ({ ...prev, ...updates }));
+      setProfileRaw({ ...profile, ...updates });
     },
-    [setProfile],
+    [profile, setProfileRaw],
   );
 
   return { profile, saveProfile };
 }
 
-/** Cached business name in localStorage so it shows immediately without waiting for the canister */
+/** Cached business name — prefer live context, fallback to localStorage cache */
 export function useLocalBusinessName() {
-  const { activeBusiness } = useBusinessContext();
+  const { activeBusiness, activeBizId } = useBusinessContext();
   // Prefer the live business name from the business context
   const liveNameFromContext = activeBusiness?.name || "";
 
-  const { activeBizId } = useBusinessContext();
   const key = activeBizId
     ? `gst_${activeBizId}_local_business_name`
     : LOCAL_BUSINESS_NAME_KEY;
 
-  const [localName, setLocalName] = useLocalStorage<string>(key, "");
-
   const saveLocalBusinessName = useCallback(
     (name: string) => {
-      setLocalName(name);
+      localStorage.setItem(key, name);
     },
-    [setLocalName],
+    [key],
   );
 
-  // Return the live context name if available, else fall back to the cached key
-  return {
-    localName: liveNameFromContext || localName,
-    saveLocalBusinessName,
-  };
+  const localName = liveNameFromContext || localStorage.getItem(key) || "";
+
+  return { localName, saveLocalBusinessName };
 }

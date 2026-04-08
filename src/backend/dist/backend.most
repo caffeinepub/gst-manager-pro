@@ -1,0 +1,148 @@
+// Version: 3.0.0
+type BusinessProfile__999247773 =
+  {
+    address : Text;
+    businessName : Text;
+    contactDetails : Text;
+    gstin : Text;
+    registrationType : RegistrationType__679175560;
+    stateCode : Nat
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type ItemType__45368782 = {#goods; #service};
+type Item__751671943 =
+  {
+    cessPercent : Nat;
+    description : Text;
+    gstRate : Nat;
+    hsnSacCode : Text;
+    id : NatId__266071452;
+    isActive : Bool;
+    itemType : ItemType__45368782;
+    name : Text;
+    openingStock : Nat;
+    purchasePrice : Nat;
+    sellingPrice : Nat;
+    unit : Nat
+  };
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type NatId__266071452 = Nat;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type PartyType__943358374 = {#both; #customer; #vendor};
+type Party__567927938 =
+  {
+    billingAddress : Text;
+    email : Text;
+    gstin : Text;
+    id : NatId__266071452;
+    isActive : Bool;
+    name : Text;
+    pan : Text;
+    partyType : PartyType__943358374;
+    phone : Text;
+    shippingAddress : Text;
+    stateCode : Int
+  };
+type RegistrationType__679175560 = {#composition; #regular; #unregistered};
+type TaxRate__559935750 =
+  {
+    cessPercent : Nat;
+    description : Text;
+    gstRatePercent : Nat;
+    id : NatId__266071452;
+    isExempt : Bool;
+    isRcmApplicable : Bool;
+    name : Text
+  };
+type UserProfile__491224006 = {email : Text; name : Text; role : Text};
+type UserRole__717262347 = {#admin; #guest; #user};
+actor ({
+  in accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__717262347>
+    };
+  stable var businessProfile : ?BusinessProfile__999247773;
+  stable cloudData :
+    {
+      var root : Node__46230540<Principal, Map__605269027<Text, Text>>;
+      var size : Nat__490723111
+    };
+  stable dataStore :
+    {
+      var root : Node__46230540<Principal, Map__605269027<Text, Text>>;
+      var size : Nat__490723111
+    };
+  stable items :
+    {
+      var root : Node__46230540<NatId__266071452, Item__751671943>;
+      var size : Nat__490723111
+    };
+  stable lastSyncTimes :
+    {var root : Node__46230540<Principal, Int>; var size : Nat__490723111};
+  stable var nextItemId : Nat;
+  stable var nextPartyId : Nat;
+  stable var nextTaxRateId : Nat;
+  stable parties :
+    {
+      var root : Node__46230540<NatId__266071452, Party__567927938>;
+      var size : Nat__490723111
+    };
+  stable taxRates :
+    {
+      var root : Node__46230540<NatId__266071452, TaxRate__559935750>;
+      var size : Nat__490723111
+    };
+  stable userProfiles :
+    {
+      var root : Node__46230540<Principal, UserProfile__491224006>;
+      var size : Nat__490723111
+    }
+}, {
+  stable var businessProfile : ?BusinessProfile__999247773;
+  stable cloudData :
+    {
+      var root : Node__46230540<Principal, Map__605269027<Text, Text>>;
+      var size : Nat__490723111
+    };
+  stable dataStore :
+    {
+      var root : Node__46230540<Principal, Map__605269027<Text, Text>>;
+      var size : Nat__490723111
+    };
+  stable items :
+    {
+      var root : Node__46230540<NatId__266071452, Item__751671943>;
+      var size : Nat__490723111
+    };
+  stable lastSyncTimes :
+    {var root : Node__46230540<Principal, Int>; var size : Nat__490723111};
+  stable var nextItemId : Nat;
+  stable var nextPartyId : Nat;
+  stable var nextTaxRateId : Nat;
+  stable parties :
+    {
+      var root : Node__46230540<NatId__266071452, Party__567927938>;
+      var size : Nat__490723111
+    };
+  stable taxRates :
+    {
+      var root : Node__46230540<NatId__266071452, TaxRate__559935750>;
+      var size : Nat__490723111
+    };
+  stable userProfiles :
+    {
+      var root : Node__46230540<Principal, UserProfile__491224006>;
+      var size : Nat__490723111
+    }
+}) ;

@@ -39,14 +39,6 @@ interface FilingRecord {
   arn?: string;
 }
 
-function randomArn() {
-  return `GST${Array.from(
-    { length: 14 },
-    () =>
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)],
-  ).join("")}`;
-}
-
 export function GSTR1() {
   const { invoices } = useInvoices();
   const { start: defStart, end: defEnd } = getCurrentMonth();
@@ -73,12 +65,21 @@ export function GSTR1() {
 
   const businessGstin = activeBusiness?.gstin ?? "";
 
-  // Determine if business is high-turnover (>₹5 Crore) for HSN 6-digit requirement
-  const highTurnover = false; // annualTurnover not stored in Business record yet
+  // Read annual turnover from bizConfig — set in Business Profile
+  // If not configured, default to false. Users can set it in Masters > Business Profile.
+  const [annualTurnoverCr] = useBizConfig<number>("annualTurnover", 0);
+  const highTurnover = annualTurnoverCr > 5; // true when turnover > ₹5 Crore
 
   const handleFilingAction = () => {
     if (periodStatus.status === "not_filed") {
-      const arn = randomArn();
+      // Generate ARN once and persist it in filingStatus via useBizConfig
+      const arn = `GST${Array.from(
+        { length: 14 },
+        () =>
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[
+            Math.floor(Math.random() * 36)
+          ],
+      ).join("")}`;
       setFilingStatus({
         ...filingStatus,
         [currentPeriod]: { status: "filed", arn },

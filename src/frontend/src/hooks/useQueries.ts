@@ -329,7 +329,15 @@ export function useIsAdmin() {
     queryKey: ["isAdmin"],
     queryFn: async () => {
       if (!actor) return false;
-      return actor.isCallerAdmin();
+      // isCallerAdmin may not be available in all backend versions
+      const actorAny = actor as unknown as Record<
+        string,
+        () => Promise<boolean>
+      >;
+      if (typeof actorAny.isCallerAdmin === "function") {
+        return actorAny.isCallerAdmin();
+      }
+      return false;
     },
     enabled: !!actor && !isFetching,
   });

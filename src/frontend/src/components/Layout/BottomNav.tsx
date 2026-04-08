@@ -111,15 +111,17 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-sidebar border-t border-sidebar-border"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {/* Horizontally scrollable, hidden scrollbar, allows vertical scroll on page */}
+      {/* Horizontally scrollable, hidden scrollbar — vertical scroll handled by page content, not this nav */}
       <div
-        className="flex items-stretch overflow-x-auto"
+        className="flex items-stretch overflow-x-scroll"
         style={{
-          touchAction: "pan-x pan-y",
+          /* Allow horizontal pan on this element, but still allow vertical pan to pass through to page */
+          touchAction: "pan-x",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
+          overscrollBehaviorX: "contain",
           WebkitOverflowScrolling: "touch",
         }}
       >

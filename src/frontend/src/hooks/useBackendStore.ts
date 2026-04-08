@@ -225,7 +225,23 @@ export function useBusinessBackend() {
 export function useEntityList<T extends { id: string }>(entityType: string) {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
-  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+  // Read bizId reactively via a state that updates on business switch events.
+  // We still seed from localStorage so it's synchronous on first render.
+  const [bizId, setBizId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_BIZ_KEY) ?? "",
+  );
+
+  // Keep bizId in sync whenever the user switches business
+  useEffect(() => {
+    const handleSwitch = () => {
+      const next = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+      setBizId(next);
+    };
+    window.addEventListener("gst-business-switched", handleSwitch);
+    return () => {
+      window.removeEventListener("gst-business-switched", handleSwitch);
+    };
+  }, []);
 
   const listQuery = useQuery<T[]>({
     queryKey: ["entities", bizId, entityType],
@@ -651,7 +667,19 @@ export interface InvoiceDefaults {
 export function useInvoiceDefaults() {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
-  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+  const [bizId, setBizId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_BIZ_KEY) ?? "",
+  );
+
+  useEffect(() => {
+    const handleSwitch = () => {
+      setBizId(localStorage.getItem(ACTIVE_BIZ_KEY) ?? "");
+    };
+    window.addEventListener("gst-business-switched", handleSwitch);
+    return () => {
+      window.removeEventListener("gst-business-switched", handleSwitch);
+    };
+  }, []);
 
   const defaultsQuery = useQuery<InvoiceDefaults>({
     queryKey: ["bizConfig", bizId, "invoice_defaults"],
@@ -715,7 +743,9 @@ export function useInvoiceDefaults() {
 
 export function useInvoiceCounter() {
   const { actor } = useActor();
-  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+  const [bizId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_BIZ_KEY) ?? "",
+  );
 
   // Synchronous counter using localStorage (same API as old useGSTStore)
   const getNextNumber = useCallback(
@@ -961,7 +991,19 @@ export type ApiSettingsState = typeof DEFAULT_API_SETTINGS;
 export function useApiSettings() {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
-  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+  const [bizId, setBizId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_BIZ_KEY) ?? "",
+  );
+
+  useEffect(() => {
+    const handleSwitch = () => {
+      setBizId(localStorage.getItem(ACTIVE_BIZ_KEY) ?? "");
+    };
+    window.addEventListener("gst-business-switched", handleSwitch);
+    return () => {
+      window.removeEventListener("gst-business-switched", handleSwitch);
+    };
+  }, []);
 
   const settingsQuery = useQuery({
     queryKey: ["bizConfig", bizId, "api_settings"],
@@ -1167,7 +1209,19 @@ export function useBizConfig<T>(
 ): [T, (v: T) => void] {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
-  const bizId = localStorage.getItem(ACTIVE_BIZ_KEY) ?? "";
+  const [bizId, setBizId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_BIZ_KEY) ?? "",
+  );
+
+  useEffect(() => {
+    const handleSwitch = () => {
+      setBizId(localStorage.getItem(ACTIVE_BIZ_KEY) ?? "");
+    };
+    window.addEventListener("gst-business-switched", handleSwitch);
+    return () => {
+      window.removeEventListener("gst-business-switched", handleSwitch);
+    };
+  }, []);
 
   const { data } = useQuery<T>({
     queryKey: ["bizConfig", bizId, configKey],

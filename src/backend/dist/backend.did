@@ -1,0 +1,116 @@
+type UserProfile = 
+ record {
+   email: text;
+   name: text;
+   role: text;
+ };
+type TaxRate = 
+ record {
+   cessPercent: nat;
+   description: text;
+   gstRatePercent: nat;
+   id: NatId;
+   isExempt: bool;
+   isRcmApplicable: bool;
+   name: text;
+ };
+type RegistrationType = 
+ variant {
+   composition;
+   regular;
+   unregistered;
+ };
+type PartyType = 
+ variant {
+   both;
+   customer;
+   vendor;
+ };
+type Party = 
+ record {
+   billingAddress: text;
+   email: text;
+   gstin: text;
+   id: NatId;
+   isActive: bool;
+   name: text;
+   pan: text;
+   partyType: PartyType;
+   phone: text;
+   shippingAddress: text;
+   stateCode: int;
+ };
+type NatId = nat;
+type ItemType = 
+ variant {
+   goods;
+   "service";
+ };
+type Item = 
+ record {
+   cessPercent: nat;
+   description: text;
+   gstRate: nat;
+   hsnSacCode: text;
+   id: NatId;
+   isActive: bool;
+   itemType: ItemType;
+   name: text;
+   openingStock: nat;
+   purchasePrice: nat;
+   sellingPrice: nat;
+   unit: nat;
+ };
+type BusinessProfile = 
+ record {
+   address: text;
+   businessName: text;
+   contactDetails: text;
+   gstin: text;
+   registrationType: RegistrationType;
+   stateCode: nat;
+ };
+service : {
+  addItem: (item: Item) -> (NatId);
+  addParty: (party: Party) -> (NatId);
+  addTaxRate: (taxRate: TaxRate) -> (NatId);
+  deleteBusinessRecord: (id: text) -> ();
+  deleteCloudData: (key: text) -> ();
+  deleteEntityRecord: (bizId: text, entityType: text, id: text) -> ();
+  deleteItem: (id: NatId) -> ();
+  deleteParty: (id: NatId) -> ();
+  deleteTaxRate: (id: NatId) -> ();
+  getAllBusinessRecords: () -> (vec text) query;
+  getAllCloudData: () -> (vec record {
+                                text;
+                                text;
+                              }) query;
+  getAllEntityRecords: (bizId: text, entityType: text) -> (vec text) query;
+  getAllItems: () -> (vec Item) query;
+  getAllParties: () -> (vec Party) query;
+  getAllTaxRates: () -> (vec TaxRate) query;
+  getBizConfig: (bizId: text, configKey: text) -> (opt text) query;
+  getBusinessProfile: () -> (opt BusinessProfile) query;
+  getBusinessRecord: (id: text) -> (opt text) query;
+  getCallerUserProfile: () -> (opt UserProfile) query;
+  getCloudData: (key: text) -> (opt text) query;
+  getEntityRecord: (bizId: text, entityType: text, id: text) ->
+   (opt text) query;
+  getItem: (id: NatId) -> (opt Item) query;
+  getLastSyncTime: () -> (opt int) query;
+  getNextInvoiceNumber: (bizId: text, counterType: text, prefix: text) ->
+   (text);
+  getParty: (id: NatId) -> (opt Party) query;
+  getTaxRate: (id: NatId) -> (opt TaxRate) query;
+  getUserProfile: (user: principal) -> (opt UserProfile) query;
+  saveBizConfig: (bizId: text, configKey: text, value: text) -> ();
+  saveBusinessRecord: (id: text, recordJson: text) -> ();
+  saveCallerUserProfile: (profile: UserProfile) -> ();
+  saveCloudData: (key: text, value: text) -> ();
+  saveEntityRecord: (bizId: text, entityType: text, id: text, recordJson:
+   text) -> ();
+  setBusinessProfile: (profile: BusinessProfile) -> ();
+  updateItem: (id: NatId, updatedItem: Item) -> ();
+  updateParty: (id: NatId, updatedParty: Party) -> ();
+  updateTaxRate: (id: NatId, updatedTaxRate: TaxRate) -> ();
+}

@@ -270,29 +270,8 @@ function applyBusinessTheme(
 export function useBusinessTheme() {
   const { activeBusiness } = useBusinessContext();
 
+  // Apply theme whenever activeBusiness changes (covers business switch too)
   useEffect(() => {
     applyBusinessTheme(activeBusiness);
   }, [activeBusiness]);
-
-  useEffect(() => {
-    const handleSwitch = () => {
-      // Re-read from localStorage on business switch since state might lag
-      const stored = localStorage.getItem("gst_businesses");
-      const activeId = localStorage.getItem("gst_active_business");
-      if (stored && activeId) {
-        const businesses = JSON.parse(stored);
-        const cleanId = activeId.replace(/^"|"$/g, "");
-        const biz =
-          businesses.find((b: { id: string }) => b.id === cleanId) ??
-          businesses[0] ??
-          null;
-        applyBusinessTheme(biz);
-      }
-    };
-
-    window.addEventListener("gst-business-switched", handleSwitch);
-    return () => {
-      window.removeEventListener("gst-business-switched", handleSwitch);
-    };
-  }, []);
 }

@@ -21,11 +21,15 @@ export function AppLayout({
   return (
     <SidebarProvider defaultOpen={!isMobile}>
       <AppSidebar currentPage={currentPage} onNavigate={onNavigate} />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col min-h-0">
         <Header currentPage={currentPage} onNavigate={onNavigate} />
+        {/* Main content scrolls independently; bottom nav is fixed so we add bottom padding equal to nav height + safe area */}
         <main
-          className="flex-1 overflow-auto overscroll-y-auto px-4 py-4 sm:p-6 animate-fade-in pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-6"
-          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+          className="flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:p-6 animate-fade-in"
+          style={{
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4rem)",
+            WebkitOverflowScrolling: "touch",
+          }}
         >
           {children}
         </main>
